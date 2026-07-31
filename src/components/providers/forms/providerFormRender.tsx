@@ -8,6 +8,13 @@ import JsonEditor from "@/components/JsonEditor";
 import CodexConfigEditor from "./CodexConfigEditor";
 import GeminiConfigEditor from "./GeminiConfigEditor";
 import { CommonConfigEditor } from "./CommonConfigEditor";
+import { ClaudeFormFields } from "./ClaudeFormFields";
+import { CodexFormFields } from "./CodexFormFields";
+import { GeminiFormFields } from "./GeminiFormFields";
+import { OpenCodeFormFields } from "./OpenCodeFormFields";
+import { OpenClawFormFields } from "./OpenClawFormFields";
+import { HermesFormFields } from "./HermesFormFields";
+import { OmoFormFields } from "./OmoFormFields";
 import type { ProviderFormRenderContext } from "./ProviderFormRenderContext";
 
 const OPENCODE_CONFIG_EDITOR_PLACEHOLDER = `{
@@ -31,6 +38,52 @@ const HERMES_CONFIG_EDITOR_PLACEHOLDER = `{
   "base_url": "https://api.example.com/v1",
   "api_key": ""
 }`;
+
+/** Claude 专属字段 */
+export function renderClaudeFormFields(
+  ctx: ProviderFormRenderContext,
+): ReactNode {
+  return <ClaudeFormFields {...ctx.claude} />;
+}
+
+/** Codex 专属字段 */
+export function renderCodexFormFields(
+  ctx: ProviderFormRenderContext,
+): ReactNode {
+  return <CodexFormFields {...ctx.codex} />;
+}
+
+/** Gemini 专属字段 */
+export function renderGeminiFormFields(
+  ctx: ProviderFormRenderContext,
+): ReactNode {
+  return <GeminiFormFields {...ctx.gemini} />;
+}
+
+/** OpenCode 专属字段：OMO 类目渲染 OmoFormFields，否则渲染 OpenCodeFormFields */
+export function renderOpenCodeFormFields(
+  ctx: ProviderFormRenderContext,
+): ReactNode {
+  const { category } = ctx;
+  if (category === "omo" || category === "omo-slim") {
+    return <OmoFormFields {...ctx.omo} />;
+  }
+  return <OpenCodeFormFields {...ctx.opencode} />;
+}
+
+/** OpenClaw 专属字段 */
+export function renderOpenclawFormFields(
+  ctx: ProviderFormRenderContext,
+): ReactNode {
+  return <OpenClawFormFields {...ctx.openclaw} />;
+}
+
+/** Hermes 专属字段 */
+export function renderHermesFormFields(
+  ctx: ProviderFormRenderContext,
+): ReactNode {
+  return <HermesFormFields {...ctx.hermes} />;
+}
 
 /** Codex 配置编辑器（带 settingsConfig 错误插槽） */
 export function renderCodexConfigEditor(

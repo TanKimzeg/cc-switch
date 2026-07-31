@@ -43,7 +43,7 @@ import {
 import { openclawApiProtocols } from "@/config/openclawProviderPresets";
 import type { ProviderCategory, OpenClawModel } from "@/types";
 
-interface OpenClawFormFieldsProps {
+export interface OpenClawFormFieldsProps {
   // Base URL
   baseUrl: string;
   onBaseUrlChange: (value: string) => void;

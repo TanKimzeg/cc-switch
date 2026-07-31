@@ -17,7 +17,7 @@ interface EndpointCandidate {
   url: string;
 }
 
-interface GeminiFormFieldsProps {
+export interface GeminiFormFieldsProps {
   providerId?: string;
   // API Key
   shouldShowApiKey: boolean;

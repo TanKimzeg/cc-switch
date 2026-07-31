@@ -7,6 +7,13 @@ import type { UseFormReturn } from "react-hook-form";
 import type { TFunction } from "i18next";
 import type { ProviderFormData } from "@/lib/schemas/provider";
 import type { ProviderCategory } from "@/types";
+import type { ClaudeFormFieldsProps } from "./ClaudeFormFields";
+import type { CodexFormFieldsProps } from "./CodexFormFields";
+import type { GeminiFormFieldsProps } from "./GeminiFormFields";
+import type { OpenCodeFormFieldsProps } from "./OpenCodeFormFields";
+import type { OpenClawFormFieldsProps } from "./OpenClawFormFields";
+import type { HermesFormFieldsProps } from "./HermesFormFields";
+import type { OmoFormFieldsProps } from "./OmoFormFields";
 
 /** Codex 配置编辑器所需状态（对应 CodexConfigEditorProps，减去表单通用字段） */
 export interface CodexConfigEditorState {
@@ -77,4 +84,12 @@ export interface ProviderFormRenderContext {
     gemini: GeminiConfigEditorState;
     claude: ClaudeConfigEditorState;
   };
+  /** 各 app 专属字段 props（由 ProviderFormFull 组装；渲染函数原样透传） */
+  claude: ClaudeFormFieldsProps;
+  codex: CodexFormFieldsProps;
+  gemini: GeminiFormFieldsProps;
+  opencode: OpenCodeFormFieldsProps;
+  openclaw: OpenClawFormFieldsProps;
+  hermes: HermesFormFieldsProps;
+  omo: OmoFormFieldsProps;
 }

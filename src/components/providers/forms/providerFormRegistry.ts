@@ -19,6 +19,14 @@ import {
   renderOpenCodeConfigEditor,
 } from "./providerFormRender";
 import {
+  renderClaudeFormFields,
+  renderCodexFormFields,
+  renderGeminiFormFields,
+  renderHermesFormFields,
+  renderOpenclawFormFields,
+  renderOpenCodeFormFields,
+} from "./providerFormRender";
+import {
   providerPresets,
   type ProviderPreset,
 } from "@/config/claudeProviderPresets";
@@ -110,6 +118,8 @@ export interface ProviderFormAppDescriptor {
   providerKeyField?: ProviderKeyFieldConfig;
   /** 配置编辑器渲染（ProviderFormFull 通过该槽位派发） */
   renderConfigEditor(ctx: ProviderFormRenderContext): ReactNode;
+  /** 专属字段渲染（ProviderFormFull 通过该槽位派发） */
+  renderFormFields(ctx: ProviderFormRenderContext): ReactNode;
   /** 构建该 app 的预设列表 */
   buildPresetEntries(): PresetEntry[];
 }
@@ -127,6 +137,7 @@ export const PROVIDER_FORM_REGISTRY: Record<AppId, ProviderFormAppDescriptor> =
       isAdditive: false,
       hasOmoCategories: false,
       renderConfigEditor: (ctx) => renderClaudeConfigEditor(ctx),
+      renderFormFields: (ctx) => renderClaudeFormFields(ctx),
       buildPresetEntries: () =>
         providerPresets
           .filter((p) => !p.hidden)
@@ -146,6 +157,7 @@ export const PROVIDER_FORM_REGISTRY: Record<AppId, ProviderFormAppDescriptor> =
       isAdditive: false,
       hasOmoCategories: false,
       renderConfigEditor: () => null,
+      renderFormFields: () => null,
       buildPresetEntries: () => [],
     },
     codex: {
@@ -159,6 +171,7 @@ export const PROVIDER_FORM_REGISTRY: Record<AppId, ProviderFormAppDescriptor> =
       isAdditive: false,
       hasOmoCategories: false,
       renderConfigEditor: (ctx) => renderCodexConfigEditor(ctx),
+      renderFormFields: (ctx) => renderCodexFormFields(ctx),
       buildPresetEntries: () =>
         codexProviderPresets.map<PresetEntry>((preset, index) => ({
           id: `codex-${index}`,
@@ -176,6 +189,7 @@ export const PROVIDER_FORM_REGISTRY: Record<AppId, ProviderFormAppDescriptor> =
       isAdditive: false,
       hasOmoCategories: false,
       renderConfigEditor: (ctx) => renderGeminiConfigEditor(ctx),
+      renderFormFields: (ctx) => renderGeminiFormFields(ctx),
       buildPresetEntries: () =>
         geminiProviderPresets.map<PresetEntry>((preset, index) => ({
           id: `gemini-${index}`,
@@ -193,6 +207,7 @@ export const PROVIDER_FORM_REGISTRY: Record<AppId, ProviderFormAppDescriptor> =
       isAdditive: false,
       hasOmoCategories: false,
       renderConfigEditor: () => null,
+      renderFormFields: () => null,
       buildPresetEntries: () => [],
     },
     opencode: {
@@ -218,6 +233,7 @@ export const PROVIDER_FORM_REGISTRY: Record<AppId, ProviderFormAppDescriptor> =
         },
       },
       renderConfigEditor: (ctx) => renderOpenCodeConfigEditor(ctx),
+      renderFormFields: (ctx) => renderOpenCodeFormFields(ctx),
       buildPresetEntries: () =>
         opencodeProviderPresets.map<PresetEntry>((preset, index) => ({
           id: `opencode-${index}`,
@@ -247,6 +263,7 @@ export const PROVIDER_FORM_REGISTRY: Record<AppId, ProviderFormAppDescriptor> =
         },
       },
       renderConfigEditor: (ctx) => renderOpenclawConfigEditor(ctx),
+      renderFormFields: (ctx) => renderOpenclawFormFields(ctx),
       buildPresetEntries: () =>
         openclawProviderPresets.map<PresetEntry>((preset, index) => ({
           id: `openclaw-${index}`,
@@ -281,6 +298,7 @@ export const PROVIDER_FORM_REGISTRY: Record<AppId, ProviderFormAppDescriptor> =
         },
       },
       renderConfigEditor: (ctx) => renderHermesConfigEditor(ctx),
+      renderFormFields: (ctx) => renderHermesFormFields(ctx),
       buildPresetEntries: () =>
         hermesProviderPresets.map<PresetEntry>((preset, index) => ({
           id: `hermes-${index}`,
