@@ -45,11 +45,6 @@ import {
 } from "@/utils/providerConfigUtils";
 import { isNonNegativeDecimalString } from "@/types/usage";
 import { getCodexCustomTemplate } from "@/config/codexTemplates";
-import CodexConfigEditor from "./CodexConfigEditor";
-import { CommonConfigEditor } from "./CommonConfigEditor";
-import GeminiConfigEditor from "./GeminiConfigEditor";
-import JsonEditor from "@/components/JsonEditor";
-import { Label } from "@/components/ui/label";
 import { ProviderPresetSelector } from "./ProviderPresetSelector";
 import { BasicFormFields } from "./BasicFormFields";
 import { AdditiveProviderKeyField } from "./AdditiveProviderKeyField";
@@ -2199,152 +2194,64 @@ function ProviderFormFull({
             />
           )}
 
-          {/* 配置编辑器：Codex、Claude、Gemini 分别使用不同的编辑器 */}
-          {appId === "codex" ? (
-            <>
-              <CodexConfigEditor
-                authValue={codexAuth}
-                configValue={codexConfig}
-                providerName={form.watch("name")}
-                showRemoteCompaction={category !== "official"}
-                isProxyTakeover={isProxyTakeover}
-                onAuthChange={setCodexAuth}
-                onConfigChange={handleCodexConfigChange}
-                useCommonConfig={useCodexCommonConfigFlag}
-                onCommonConfigToggle={handleCodexCommonConfigToggle}
-                commonConfigSnippet={codexCommonConfigSnippet}
-                onCommonConfigSnippetChange={
-                  handleCodexCommonConfigSnippetChange
-                }
-                onCommonConfigErrorClear={clearCodexCommonConfigError}
-                commonConfigError={codexCommonConfigError}
-                authError={codexAuthError}
-                configError={codexConfigError}
-                onExtract={handleCodexExtract}
-                isExtracting={isCodexExtracting}
-              />
-              {settingsConfigErrorField}
-            </>
-          ) : appId === "gemini" ? (
-            <>
-              <GeminiConfigEditor
-                envValue={geminiEnv}
-                configValue={geminiConfig}
-                onEnvChange={handleGeminiEnvChange}
-                onConfigChange={handleGeminiConfigChange}
-                useCommonConfig={useGeminiCommonConfigFlag}
-                onCommonConfigToggle={handleGeminiCommonConfigToggle}
-                commonConfigSnippet={geminiCommonConfigSnippet}
-                onCommonConfigSnippetChange={
-                  handleGeminiCommonConfigSnippetChange
-                }
-                onCommonConfigErrorClear={clearGeminiCommonConfigError}
-                commonConfigError={geminiCommonConfigError}
-                envError={envError}
-                configError={geminiConfigError}
-                onExtract={handleGeminiExtract}
-                isExtracting={isGeminiExtracting}
-              />
-              {settingsConfigErrorField}
-            </>
-          ) : appId === "opencode" &&
-            (category === "omo" || category === "omo-slim") ? (
-            <div className="space-y-2">
-              <Label>{t("provider.configJson")}</Label>
-              <JsonEditor
-                value={omoDraft.mergedOmoJsonPreview}
-                onChange={() => {}}
-                rows={14}
-                showValidation={false}
-                language="json"
-                darkMode={isDarkMode}
-              />
-            </div>
-          ) : appId === "opencode" &&
-            category !== "omo" &&
-            category !== "omo-slim" ? (
-            <>
-              <div className="space-y-2">
-                <Label htmlFor="settingsConfig">
-                  {t("provider.configJson")}
-                </Label>
-                <JsonEditor
-                  value={form.getValues("settingsConfig")}
-                  onChange={(config) => form.setValue("settingsConfig", config)}
-                  placeholder={`{
-  "npm": "@ai-sdk/openai-compatible",
-  "options": {
-    "baseURL": "https://your-api-endpoint.com",
-    "apiKey": "your-api-key-here"
-  },
-  "models": {}
-}`}
-                  rows={14}
-                  showValidation={true}
-                  language="json"
-                  darkMode={isDarkMode}
-                />
-              </div>
-              {settingsConfigErrorField}
-            </>
-          ) : appId === "openclaw" || appId === "hermes" ? (
-            <>
-              <div className="space-y-2">
-                <Label htmlFor="settingsConfig">
-                  {t("provider.configJson")}
-                </Label>
-                <JsonEditor
-                  value={form.getValues("settingsConfig")}
-                  onChange={(config) => form.setValue("settingsConfig", config)}
-                  placeholder={
-                    appId === "hermes"
-                      ? `{
-  "name": "my-provider",
-  "base_url": "https://api.example.com/v1",
-  "api_key": ""
-}`
-                      : `{
-  "baseUrl": "https://api.example.com/v1",
-  "apiKey": "your-api-key-here",
-  "api": "openai-completions",
-  "models": []
-}`
-                  }
-                  rows={14}
-                  showValidation={true}
-                  language="json"
-                  darkMode={isDarkMode}
-                />
-              </div>
-              <FormField
-                control={form.control}
-                name="settingsConfig"
-                render={() => (
-                  <FormItem className="space-y-0">
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            </>
-          ) : (
-            <>
-              <CommonConfigEditor
-                value={form.getValues("settingsConfig")}
-                onChange={(value) => form.setValue("settingsConfig", value)}
-                useCommonConfig={useCommonConfig}
-                onCommonConfigToggle={handleCommonConfigToggle}
-                commonConfigSnippet={commonConfigSnippet}
-                onCommonConfigSnippetChange={handleCommonConfigSnippetChange}
-                commonConfigError={commonConfigError}
-                onEditClick={() => setIsCommonConfigModalOpen(true)}
-                isModalOpen={isCommonConfigModalOpen}
-                onModalClose={() => setIsCommonConfigModalOpen(false)}
-                onExtract={handleClaudeExtract}
-                isExtracting={isClaudeExtracting}
-              />
-              {settingsConfigErrorField}
-            </>
-          )}
+          {/* 配置编辑器：由描述符按 app 派发 */}
+          {descriptor.renderConfigEditor({
+            t,
+            form,
+            category,
+            isDarkMode,
+            isProxyTakeover,
+            settingsConfigErrorField,
+            omoJsonPreview: omoDraft.mergedOmoJsonPreview,
+            configEditor: {
+              codex: {
+                authValue: codexAuth,
+                configValue: codexConfig,
+                onAuthChange: setCodexAuth,
+                onConfigChange: handleCodexConfigChange,
+                useCommonConfig: useCodexCommonConfigFlag,
+                onCommonConfigToggle: handleCodexCommonConfigToggle,
+                commonConfigSnippet: codexCommonConfigSnippet,
+                onCommonConfigSnippetChange:
+                  handleCodexCommonConfigSnippetChange,
+                onCommonConfigErrorClear: clearCodexCommonConfigError,
+                commonConfigError: codexCommonConfigError,
+                authError: codexAuthError,
+                configError: codexConfigError,
+                onExtract: handleCodexExtract,
+                isExtracting: isCodexExtracting,
+              },
+              gemini: {
+                envValue: geminiEnv,
+                configValue: geminiConfig,
+                onEnvChange: handleGeminiEnvChange,
+                onConfigChange: handleGeminiConfigChange,
+                useCommonConfig: useGeminiCommonConfigFlag,
+                onCommonConfigToggle: handleGeminiCommonConfigToggle,
+                commonConfigSnippet: geminiCommonConfigSnippet,
+                onCommonConfigSnippetChange:
+                  handleGeminiCommonConfigSnippetChange,
+                onCommonConfigErrorClear: clearGeminiCommonConfigError,
+                commonConfigError: geminiCommonConfigError,
+                envError,
+                configError: geminiConfigError,
+                onExtract: handleGeminiExtract,
+                isExtracting: isGeminiExtracting,
+              },
+              claude: {
+                useCommonConfig,
+                onCommonConfigToggle: handleCommonConfigToggle,
+                commonConfigSnippet,
+                onCommonConfigSnippetChange: handleCommonConfigSnippetChange,
+                commonConfigError,
+                onEditClick: () => setIsCommonConfigModalOpen(true),
+                isModalOpen: isCommonConfigModalOpen,
+                onModalClose: () => setIsCommonConfigModalOpen(false),
+                onExtract: handleClaudeExtract,
+                isExtracting: isClaudeExtracting,
+              },
+            },
+          })}
 
           {descriptor.supportsPricingConfig && !isAnyOmoCategory && (
             <ProviderAdvancedConfig

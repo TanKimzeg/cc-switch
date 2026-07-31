@@ -8,6 +8,16 @@
 // 陆续迁入。
 
 import type { AppId } from "@/lib/api/types";
+import type { ReactNode } from "react";
+import type { ProviderFormRenderContext } from "./ProviderFormRenderContext";
+import {
+  renderClaudeConfigEditor,
+  renderCodexConfigEditor,
+  renderGeminiConfigEditor,
+  renderHermesConfigEditor,
+  renderOpenclawConfigEditor,
+  renderOpenCodeConfigEditor,
+} from "./providerFormRender";
 import {
   providerPresets,
   type ProviderPreset,
@@ -98,6 +108,8 @@ export interface ProviderFormAppDescriptor {
   hasOmoCategories: boolean;
   /** additive app 的 providerKey 主键字段（非 additive 无此槽位） */
   providerKeyField?: ProviderKeyFieldConfig;
+  /** 配置编辑器渲染（ProviderFormFull 通过该槽位派发） */
+  renderConfigEditor(ctx: ProviderFormRenderContext): ReactNode;
   /** 构建该 app 的预设列表 */
   buildPresetEntries(): PresetEntry[];
 }
@@ -114,6 +126,7 @@ export const PROVIDER_FORM_REGISTRY: Record<AppId, ProviderFormAppDescriptor> =
       supportsTemplateValues: true,
       isAdditive: false,
       hasOmoCategories: false,
+      renderConfigEditor: (ctx) => renderClaudeConfigEditor(ctx),
       buildPresetEntries: () =>
         providerPresets
           .filter((p) => !p.hidden)
@@ -132,6 +145,7 @@ export const PROVIDER_FORM_REGISTRY: Record<AppId, ProviderFormAppDescriptor> =
       supportsTemplateValues: false,
       isAdditive: false,
       hasOmoCategories: false,
+      renderConfigEditor: () => null,
       buildPresetEntries: () => [],
     },
     codex: {
@@ -144,6 +158,7 @@ export const PROVIDER_FORM_REGISTRY: Record<AppId, ProviderFormAppDescriptor> =
       supportsTemplateValues: false,
       isAdditive: false,
       hasOmoCategories: false,
+      renderConfigEditor: (ctx) => renderCodexConfigEditor(ctx),
       buildPresetEntries: () =>
         codexProviderPresets.map<PresetEntry>((preset, index) => ({
           id: `codex-${index}`,
@@ -160,6 +175,7 @@ export const PROVIDER_FORM_REGISTRY: Record<AppId, ProviderFormAppDescriptor> =
       supportsTemplateValues: false,
       isAdditive: false,
       hasOmoCategories: false,
+      renderConfigEditor: (ctx) => renderGeminiConfigEditor(ctx),
       buildPresetEntries: () =>
         geminiProviderPresets.map<PresetEntry>((preset, index) => ({
           id: `gemini-${index}`,
@@ -176,6 +192,7 @@ export const PROVIDER_FORM_REGISTRY: Record<AppId, ProviderFormAppDescriptor> =
       supportsTemplateValues: false,
       isAdditive: false,
       hasOmoCategories: false,
+      renderConfigEditor: () => null,
       buildPresetEntries: () => [],
     },
     opencode: {
@@ -200,6 +217,7 @@ export const PROVIDER_FORM_REGISTRY: Record<AppId, ProviderFormAppDescriptor> =
           lockedHintDefault: "该供应商已添加到应用配置中，供应商标识不可修改",
         },
       },
+      renderConfigEditor: (ctx) => renderOpenCodeConfigEditor(ctx),
       buildPresetEntries: () =>
         opencodeProviderPresets.map<PresetEntry>((preset, index) => ({
           id: `opencode-${index}`,
@@ -228,6 +246,7 @@ export const PROVIDER_FORM_REGISTRY: Record<AppId, ProviderFormAppDescriptor> =
           lockedHintDefault: "该供应商已添加到应用配置中，供应商标识不可修改",
         },
       },
+      renderConfigEditor: (ctx) => renderOpenclawConfigEditor(ctx),
       buildPresetEntries: () =>
         openclawProviderPresets.map<PresetEntry>((preset, index) => ({
           id: `openclaw-${index}`,
@@ -261,6 +280,7 @@ export const PROVIDER_FORM_REGISTRY: Record<AppId, ProviderFormAppDescriptor> =
             "This provider is in Hermes config; key is locked.",
         },
       },
+      renderConfigEditor: (ctx) => renderHermesConfigEditor(ctx),
       buildPresetEntries: () =>
         hermesProviderPresets.map<PresetEntry>((preset, index) => ({
           id: `hermes-${index}`,
