@@ -3,7 +3,6 @@ use std::collections::HashMap;
 
 use crate::app_config::{AppType, McpServer};
 use crate::error::AppError;
-use crate::mcp;
 use crate::store::AppState;
 
 /// MCP 相关业务逻辑（v3.7.0 统一结构）
@@ -27,24 +26,12 @@ impl McpService {
 
         state.db.save_mcp_server(&server)?;
 
-        // 处理禁用：若旧版本启用但新版本取消，则需要从该应用的 live 配置移除
-        if prev_apps.claude && !server.apps.claude {
-            Self::remove_server_from_app(state, &server.id, &AppType::Claude)?;
-        }
-        if prev_apps.codex && !server.apps.codex {
-            Self::remove_server_from_app(state, &server.id, &AppType::Codex)?;
-        }
-        if prev_apps.gemini && !server.apps.gemini {
-            Self::remove_server_from_app(state, &server.id, &AppType::Gemini)?;
-        }
-        if prev_apps.grokbuild && !server.apps.grokbuild {
-            Self::remove_server_from_app(state, &server.id, &AppType::GrokBuild)?;
-        }
-        if prev_apps.opencode && !server.apps.opencode {
-            Self::remove_server_from_app(state, &server.id, &AppType::OpenCode)?;
-        }
-        if prev_apps.hermes && !server.apps.hermes {
-            Self::remove_server_from_app(state, &server.id, &AppType::Hermes)?;
+        // 处理禁用：若旧版本启用但新版本取消，则需要从该应用的 live 配置移除。
+        // McpApps 对 OpenClaw / ClaudeDesktop 恒为 false，因此只覆盖支持 MCP 的应用。
+        for app in prev_apps.enabled_apps() {
+            if !server.apps.is_enabled_for(&app) {
+                Self::remove_server_from_app(state, &server.id, &app)?;
+            }
         }
 
         // 同步到各个启用的应用
@@ -111,44 +98,8 @@ impl McpService {
     }
 
     fn sync_server_to_app_no_config(server: &McpServer, app: &AppType) -> Result<(), AppError> {
-        match app {
-            AppType::Claude => {
-                mcp::sync_single_server_to_claude(&Default::default(), &server.id, &server.server)?;
-            }
-            AppType::ClaudeDesktop => {
-                log::debug!("Claude Desktop 3P profiles do not use CC Switch MCP sync, skipping");
-            }
-            AppType::Codex => {
-                // Codex uses TOML format, must use the correct function
-                mcp::sync_single_server_to_codex(&Default::default(), &server.id, &server.server)?;
-            }
-            AppType::Gemini => {
-                mcp::sync_single_server_to_gemini(&Default::default(), &server.id, &server.server)?;
-            }
-            AppType::GrokBuild => {
-                mcp::sync_single_server_to_grokbuild(
-                    &Default::default(),
-                    &server.id,
-                    &server.server,
-                )?;
-            }
-            AppType::OpenCode => {
-                mcp::sync_single_server_to_opencode(
-                    &Default::default(),
-                    &server.id,
-                    &server.server,
-                )?;
-            }
-            AppType::OpenClaw => {
-                // OpenClaw MCP support is still in development (Issue #4834)
-                // Skip for now
-                log::debug!("OpenClaw MCP support is still in development, skipping sync");
-            }
-            AppType::Hermes => {
-                mcp::sync_single_server_to_hermes(&Default::default(), &server.id, &server.server)?;
-            }
-        }
-        Ok(())
+        app.descriptor()
+            .sync_single_mcp_server(&server.id, &server.server)
     }
 
     /// 从所有曾启用过该服务器的应用中移除
@@ -165,26 +116,7 @@ impl McpService {
     }
 
     fn remove_server_from_app(_state: &AppState, id: &str, app: &AppType) -> Result<(), AppError> {
-        match app {
-            AppType::Claude => mcp::remove_server_from_claude(id)?,
-            AppType::ClaudeDesktop => {
-                log::debug!("Claude Desktop 3P profiles do not use CC Switch MCP sync, skipping");
-            }
-            AppType::Codex => mcp::remove_server_from_codex(id)?,
-            AppType::Gemini => mcp::remove_server_from_gemini(id)?,
-            AppType::GrokBuild => mcp::remove_server_from_grokbuild(id)?,
-            AppType::OpenCode => {
-                mcp::remove_server_from_opencode(id)?;
-            }
-            AppType::OpenClaw => {
-                // OpenClaw MCP support is still in development
-                log::debug!("OpenClaw MCP support is still in development, skipping remove");
-            }
-            AppType::Hermes => {
-                mcp::remove_server_from_hermes(id)?;
-            }
-        }
-        Ok(())
+        app.descriptor().remove_mcp_server(id)
     }
 
     /// 手动同步所有启用的 MCP 服务器到对应的应用。
@@ -227,7 +159,7 @@ impl McpService {
         servers: &IndexMap<String, McpServer>,
         app: &AppType,
     ) -> Result<(), AppError> {
-        if matches!(app, AppType::OpenClaw | AppType::ClaudeDesktop) {
+        if !app.descriptor().supports_mcp() {
             return Ok(());
         }
 

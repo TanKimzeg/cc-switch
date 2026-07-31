@@ -1,5 +1,6 @@
 mod app_config;
 mod app_store;
+pub mod apps;
 mod auto_launch;
 mod claude_desktop_config;
 mod claude_mcp;
@@ -685,14 +686,15 @@ pub fn run() {
             let fresh_install_at_startup =
                 app_state.db.is_providers_empty().unwrap_or(false);
 
-            for app_type in
-                crate::app_config::AppType::all().filter(|t| !t.is_additive_mode())
-            {
-                if !crate::services::provider::should_import_default_config_on_startup(
-                    &app_state,
-                    &app_type,
-                )
-                .unwrap_or(false)
+            for app_type in crate::app_config::AppType::all() {
+                let descriptor = app_type.descriptor();
+                if descriptor.is_additive() {
+                    continue;
+                }
+
+                if !descriptor
+                    .should_import_default_config_on_startup(&app_state)
+                    .unwrap_or(false)
                 {
                     log::debug!(
                         "○ {} already has providers; live import skipped",
@@ -701,10 +703,7 @@ pub fn run() {
                     continue;
                 }
 
-                match crate::services::provider::import_default_config(
-                    &app_state,
-                    app_type.clone(),
-                ) {
+                match descriptor.import_default_config(&app_state) {
                     Ok(true) => log::info!(
                         "✓ Imported live config for {} as default provider",
                         app_type.as_str()
@@ -806,26 +805,25 @@ pub fn run() {
             //
             // 底层 read_*_config 在文件不存在时返回默认空配置，因此新装且无
             // live 文件的用户走 Ok(0) 路径，不会产生错误日志噪音。
-            match crate::services::provider::import_opencode_providers_from_live(&app_state) {
-                Ok(count) if count > 0 => {
-                    log::info!("✓ Synced {count} OpenCode provider(s) from live config");
+            for app_type in crate::app_config::AppType::all() {
+                let descriptor = app_type.descriptor();
+                if !descriptor.is_additive() {
+                    continue;
                 }
-                Ok(_) => log::debug!("○ No OpenCode provider changes from live config"),
-                Err(e) => log::warn!("✗ Failed to import OpenCode providers: {e}"),
-            }
-            match crate::services::provider::import_openclaw_providers_from_live(&app_state) {
-                Ok(count) if count > 0 => {
-                    log::info!("✓ Synced {count} OpenClaw provider(s) from live config");
+                match descriptor.import_from_live(&app_state) {
+                    Ok(count) if count > 0 => log::info!(
+                        "✓ Synced {count} {} provider(s) from live config",
+                        descriptor.display_name()
+                    ),
+                    Ok(_) => log::debug!(
+                        "○ No {} provider changes from live config",
+                        descriptor.display_name()
+                    ),
+                    Err(e) => log::warn!(
+                        "✗ Failed to import {} providers: {e}",
+                        descriptor.display_name()
+                    ),
                 }
-                Ok(_) => log::debug!("○ No OpenClaw provider changes from live config"),
-                Err(e) => log::warn!("✗ Failed to import OpenClaw providers: {e}"),
-            }
-            match crate::services::provider::import_hermes_providers_from_live(&app_state) {
-                Ok(count) if count > 0 => {
-                    log::info!("✓ Synced {count} Hermes provider(s) from live config");
-                }
-                Ok(_) => log::debug!("○ No Hermes provider changes from live config"),
-                Err(e) => log::warn!("✗ Failed to import Hermes providers: {e}"),
             }
 
             // 2. OMO 配置导入（当数据库中无 OMO provider 时，从本地文件导入）
@@ -883,52 +881,25 @@ pub fn run() {
             if app_state.db.is_mcp_table_empty().unwrap_or(false) {
                 log::info!("MCP table empty, importing from live configurations...");
 
-                match crate::services::mcp::McpService::import_from_claude(&app_state) {
-                    Ok(count) if count > 0 => {
-                        log::info!("✓ Imported {count} MCP server(s) from Claude");
+                for app_type in crate::app_config::AppType::all() {
+                    let descriptor = app_type.descriptor();
+                    if !descriptor.supports_mcp() {
+                        continue;
                     }
-                    Ok(_) => log::debug!("○ No Claude MCP servers found to import"),
-                    Err(e) => log::warn!("✗ Failed to import Claude MCP: {e}"),
-                }
-
-                match crate::services::mcp::McpService::import_from_codex(&app_state) {
-                    Ok(count) if count > 0 => {
-                        log::info!("✓ Imported {count} MCP server(s) from Codex");
+                    match descriptor.import_mcp(&app_state) {
+                        Ok(count) if count > 0 => log::info!(
+                            "✓ Imported {count} MCP server(s) from {}",
+                            descriptor.display_name()
+                        ),
+                        Ok(_) => log::debug!(
+                            "○ No {} MCP servers found to import",
+                            descriptor.display_name()
+                        ),
+                        Err(e) => log::warn!(
+                            "✗ Failed to import {} MCP: {e}",
+                            descriptor.display_name()
+                        ),
                     }
-                    Ok(_) => log::debug!("○ No Codex MCP servers found to import"),
-                    Err(e) => log::warn!("✗ Failed to import Codex MCP: {e}"),
-                }
-
-                match crate::services::mcp::McpService::import_from_gemini(&app_state) {
-                    Ok(count) if count > 0 => {
-                        log::info!("✓ Imported {count} MCP server(s) from Gemini");
-                    }
-                    Ok(_) => log::debug!("○ No Gemini MCP servers found to import"),
-                    Err(e) => log::warn!("✗ Failed to import Gemini MCP: {e}"),
-                }
-
-                match crate::services::mcp::McpService::import_from_grokbuild(&app_state) {
-                    Ok(count) if count > 0 => {
-                        log::info!("✓ Imported {count} MCP server(s) from Grok Build");
-                    }
-                    Ok(_) => log::debug!("○ No Grok Build MCP servers found to import"),
-                    Err(e) => log::warn!("✗ Failed to import Grok Build MCP: {e}"),
-                }
-
-                match crate::services::mcp::McpService::import_from_opencode(&app_state) {
-                    Ok(count) if count > 0 => {
-                        log::info!("✓ Imported {count} MCP server(s) from OpenCode");
-                    }
-                    Ok(_) => log::debug!("○ No OpenCode MCP servers found to import"),
-                    Err(e) => log::warn!("✗ Failed to import OpenCode MCP: {e}"),
-                }
-
-                match crate::services::mcp::McpService::import_from_hermes(&app_state) {
-                    Ok(count) if count > 0 => {
-                        log::info!("✓ Imported {count} MCP server(s) from Hermes");
-                    }
-                    Ok(_) => log::debug!("○ No Hermes MCP servers found to import"),
-                    Err(e) => log::warn!("✗ Failed to import Hermes MCP: {e}"),
                 }
             }
 
@@ -936,24 +907,22 @@ pub fn run() {
             if app_state.db.is_prompts_table_empty().unwrap_or(false) {
                 log::info!("Prompts table empty, importing from live configurations...");
 
-                for app in [
-                    crate::app_config::AppType::Claude,
-                    crate::app_config::AppType::Codex,
-                    crate::app_config::AppType::Gemini,
-                    crate::app_config::AppType::GrokBuild,
-                    crate::app_config::AppType::OpenCode,
-                    crate::app_config::AppType::OpenClaw,
-                    crate::app_config::AppType::Hermes,
-                ] {
+                for app_type in crate::app_config::AppType::all() {
+                    let descriptor = app_type.descriptor();
+                    if !descriptor.supports_prompts() {
+                        continue;
+                    }
                     match crate::services::prompt::PromptService::import_from_file_on_first_launch(
                         &app_state,
-                        app.clone(),
+                        app_type.clone(),
                     ) {
                         Ok(count) if count > 0 => {
-                            log::info!("✓ Imported {count} prompt(s) for {}", app.as_str());
+                            log::info!("✓ Imported {count} prompt(s) for {}", app_type.as_str());
                         }
-                        Ok(_) => log::debug!("○ No prompt file found for {}", app.as_str()),
-                        Err(e) => log::warn!("✗ Failed to import prompt for {}: {e}", app.as_str()),
+                        Ok(_) => log::debug!("○ No prompt file found for {}", app_type.as_str()),
+                        Err(e) => {
+                            log::warn!("✗ Failed to import prompt for {}: {e}", app_type.as_str())
+                        }
                     }
                 }
             }

@@ -6,6 +6,7 @@ use chrono::Utc;
 use serde_json::Value;
 use std::fs;
 use std::path::Path;
+use std::str::FromStr;
 
 const MAX_BACKUPS: usize = 10;
 
@@ -85,65 +86,41 @@ impl ConfigService {
 
     /// 同步当前供应商到对应的 live 配置。
     pub fn sync_current_providers_to_live(config: &mut MultiAppConfig) -> Result<(), AppError> {
-        Self::sync_current_provider_for_app(config, &AppType::Claude)?;
-        Self::sync_current_provider_for_app(config, &AppType::Codex)?;
-        Self::sync_current_provider_for_app(config, &AppType::Gemini)?;
-        Self::sync_current_provider_for_app(config, &AppType::GrokBuild)?;
-        Ok(())
-    }
-
-    fn sync_current_provider_for_app(
-        config: &mut MultiAppConfig,
-        app_type: &AppType,
-    ) -> Result<(), AppError> {
-        let (current_id, provider) = {
-            let manager = match config.get_manager(app_type) {
-                Some(manager) => manager,
-                None => return Ok(()),
-            };
-
-            if manager.current.is_empty() {
-                return Ok(());
+        for descriptor in crate::apps::all() {
+            if descriptor.is_additive() {
+                continue;
             }
+            let app_type = AppType::from_str(descriptor.id())?;
+            let (current_id, provider) = {
+                let manager = match config.get_manager(&app_type) {
+                    Some(manager) => manager,
+                    None => continue,
+                };
 
-            let current_id = manager.current.clone();
-            let provider = match manager.providers.get(&current_id) {
-                Some(provider) => provider.clone(),
-                None => {
-                    log::warn!(
-                        "当前应用 {app_type:?} 的供应商 {current_id} 不存在，跳过 live 同步"
-                    );
-                    return Ok(());
+                if manager.current.is_empty() {
+                    continue;
                 }
-            };
-            (current_id, provider)
-        };
 
-        match app_type {
-            AppType::Codex => Self::sync_codex_live(config, &current_id, &provider)?,
-            AppType::Claude => Self::sync_claude_live(config, &current_id, &provider)?,
-            AppType::ClaudeDesktop => {
-                // Claude Desktop 3P profiles are managed by claude_desktop_config.
-            }
-            AppType::Gemini => Self::sync_gemini_live(config, &current_id, &provider)?,
-            AppType::GrokBuild => crate::grok_config::write_grok_provider_live(&provider)?,
-            AppType::OpenCode => {
-                // OpenCode uses additive mode, no live sync needed
-                // OpenCode providers are managed directly in the config file
-            }
-            AppType::OpenClaw => {
-                // OpenClaw uses additive mode, no live sync needed
-                // OpenClaw providers are managed directly in the config file
-            }
-            AppType::Hermes => {
-                // Hermes uses additive mode, no live sync needed
-            }
+                let current_id = manager.current.clone();
+                let provider = match manager.providers.get(&current_id) {
+                    Some(provider) => provider.clone(),
+                    None => {
+                        log::warn!(
+                            "当前应用 {app_type:?} 的供应商 {current_id} 不存在，跳过 live 同步"
+                        );
+                        continue;
+                    }
+                };
+                (current_id, provider)
+            };
+
+            descriptor.sync_current_provider_to_live(config, &current_id, &provider)?;
         }
 
         Ok(())
     }
 
-    fn sync_codex_live(
+    pub(crate) fn sync_codex_live(
         config: &mut MultiAppConfig,
         provider_id: &str,
         provider: &Provider,
@@ -209,7 +186,7 @@ impl ConfigService {
         Ok(())
     }
 
-    fn sync_claude_live(
+    pub(crate) fn sync_claude_live(
         config: &mut MultiAppConfig,
         provider_id: &str,
         provider: &Provider,
@@ -234,7 +211,7 @@ impl ConfigService {
         Ok(())
     }
 
-    fn sync_gemini_live(
+    pub(crate) fn sync_gemini_live(
         config: &mut MultiAppConfig,
         provider_id: &str,
         provider: &Provider,
