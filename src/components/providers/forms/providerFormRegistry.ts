@@ -55,6 +55,27 @@ export interface PresetEntry {
   preset: ProviderFormPreset;
 }
 
+/** additive app 的 providerKey 主键输入字段的 i18n 配置 */
+export interface ProviderKeyFieldI18n {
+  /** Input 的 htmlFor/id */
+  fieldId: string;
+  labelKey: string;
+  labelDefault?: string;
+  placeholderKey: string;
+  placeholderDefault?: string;
+  duplicateKey: string;
+  invalidKey: string;
+  hintKey: string;
+  hintDefault?: string;
+  lockedHintKey: string;
+  lockedHintDefault?: string;
+}
+
+/** additive app 的 providerKey 主键字段槽位（渲染由共享 AdditiveProviderKeyField 承担） */
+export interface ProviderKeyFieldConfig {
+  i18n: ProviderKeyFieldI18n;
+}
+
 /** ProviderForm 各 app 的描述信息（纯数据；渲染与逻辑在 F1b/F1c 追加）。 */
 export interface ProviderFormAppDescriptor {
   /** 与 `AppId` 一致 */
@@ -75,6 +96,8 @@ export interface ProviderFormAppDescriptor {
   isAdditive: boolean;
   /** 是否支持 OMO 类目（OpenCode 专属） */
   hasOmoCategories: boolean;
+  /** additive app 的 providerKey 主键字段（非 additive 无此槽位） */
+  providerKeyField?: ProviderKeyFieldConfig;
   /** 构建该 app 的预设列表 */
   buildPresetEntries(): PresetEntry[];
 }
@@ -165,6 +188,18 @@ export const PROVIDER_FORM_REGISTRY: Record<AppId, ProviderFormAppDescriptor> =
       supportsTemplateValues: false,
       isAdditive: true,
       hasOmoCategories: true,
+      providerKeyField: {
+        i18n: {
+          fieldId: "opencode-key",
+          labelKey: "opencode.providerKey",
+          placeholderKey: "opencode.providerKeyPlaceholder",
+          duplicateKey: "opencode.providerKeyDuplicate",
+          invalidKey: "opencode.providerKeyInvalid",
+          hintKey: "opencode.providerKeyHint",
+          lockedHintKey: "opencode.providerKeyLockedHint",
+          lockedHintDefault: "该供应商已添加到应用配置中，供应商标识不可修改",
+        },
+      },
       buildPresetEntries: () =>
         opencodeProviderPresets.map<PresetEntry>((preset, index) => ({
           id: `opencode-${index}`,
@@ -181,6 +216,18 @@ export const PROVIDER_FORM_REGISTRY: Record<AppId, ProviderFormAppDescriptor> =
       supportsTemplateValues: false,
       isAdditive: true,
       hasOmoCategories: false,
+      providerKeyField: {
+        i18n: {
+          fieldId: "openclaw-key",
+          labelKey: "openclaw.providerKey",
+          placeholderKey: "openclaw.providerKeyPlaceholder",
+          duplicateKey: "openclaw.providerKeyDuplicate",
+          invalidKey: "openclaw.providerKeyInvalid",
+          hintKey: "openclaw.providerKeyHint",
+          lockedHintKey: "openclaw.providerKeyLockedHint",
+          lockedHintDefault: "该供应商已添加到应用配置中，供应商标识不可修改",
+        },
+      },
       buildPresetEntries: () =>
         openclawProviderPresets.map<PresetEntry>((preset, index) => ({
           id: `openclaw-${index}`,
@@ -197,6 +244,23 @@ export const PROVIDER_FORM_REGISTRY: Record<AppId, ProviderFormAppDescriptor> =
       supportsTemplateValues: false,
       isAdditive: true,
       hasOmoCategories: false,
+      providerKeyField: {
+        i18n: {
+          fieldId: "hermes-key",
+          labelKey: "hermes.form.providerKey",
+          labelDefault: "Provider Key",
+          placeholderKey: "hermes.form.providerKeyPlaceholder",
+          placeholderDefault: "my-provider",
+          duplicateKey: "hermes.form.providerKeyDuplicate",
+          invalidKey: "hermes.form.providerKeyInvalid",
+          hintKey: "hermes.form.providerKeyHint",
+          hintDefault:
+            "Lowercase letters, numbers, and hyphens only. Used as the provider name in config.yaml.",
+          lockedHintKey: "hermes.form.providerKeyLockedHint",
+          lockedHintDefault:
+            "This provider is in Hermes config; key is locked.",
+        },
+      },
       buildPresetEntries: () =>
         hermesProviderPresets.map<PresetEntry>((preset, index) => ({
           id: `hermes-${index}`,
