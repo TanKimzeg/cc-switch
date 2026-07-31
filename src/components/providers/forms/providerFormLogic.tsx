@@ -12,9 +12,59 @@ import { getCodexCustomTemplate } from "@/config/codexTemplates";
 import {
   applyTemplateValues,
   codexApiFormatFromWireApi,
+  extractCodexModelName,
   extractCodexWireApi,
+  setCodexModelName as setCodexModelNameInConfig,
+  setCodexWireApi,
 } from "@/utils/providerConfigUtils";
+import { parseOmoOtherFieldsObject } from "@/types/omo";
+import type { CodexCatalogModel } from "@/types";
+import type { ProviderFormData } from "@/lib/schemas/provider";
 import type { ProviderFormLogicContext } from "./ProviderFormLogicContext";
+
+export const normalizeCodexCatalogModelsForSave = (
+  models: CodexCatalogModel[],
+): CodexCatalogModel[] => {
+  const seen = new Set<string>();
+  const normalized: CodexCatalogModel[] = [];
+
+  for (const item of models) {
+    const model = item.model.trim();
+    if (!model || seen.has(model)) continue;
+    seen.add(model);
+
+    const displayName = item.displayName?.trim();
+    const rawContextWindow = String(item.contextWindow ?? "").replace(
+      /[^\d]/g,
+      "",
+    );
+    const contextWindow = rawContextWindow
+      ? Number.parseInt(rawContextWindow, 10)
+      : undefined;
+
+    const inputModalities = item.inputModalities?.filter(
+      (m) => typeof m === "string" && m.trim(),
+    );
+
+    const baseInstructions = item.baseInstructions?.trim();
+
+    normalized.push({
+      model,
+      ...(displayName ? { displayName } : {}),
+      ...(contextWindow && contextWindow > 0 ? { contextWindow } : {}),
+      // Native Responses profile overrides (ignored by the chat/proxy profile).
+      ...(typeof item.supportsParallelToolCalls === "boolean"
+        ? { supportsParallelToolCalls: item.supportsParallelToolCalls }
+        : {}),
+      ...(inputModalities && inputModalities.length > 0
+        ? { inputModalities }
+        : {}),
+      ...(baseInstructions ? { baseInstructions } : {}),
+    });
+  }
+
+  return normalized;
+};
 
 export function resetCodexCustomState(ctx: ProviderFormLogicContext): void {
   const template = getCodexCustomTemplate();
@@ -92,10 +142,105 @@ export function applyCodexPreset(
   form.reset({
     name: preset.nameKey ? t(preset.nameKey) : preset.name,
     websiteUrl: preset.websiteUrl ?? "",
-    settingsConfig: JSON.stringify({ auth, config }, null, 2),
+    settingsConfig: JSON.stringify(config, null, 2),
     icon: preset.icon ?? "",
     iconColor: preset.iconColor ?? "",
   });
+}
+
+export function buildCodexSettingsConfig(
+  ctx: ProviderFormLogicContext,
+  values: ProviderFormData,
+): string {
+  try {
+    const authJson = JSON.parse(ctx.codex.codexAuth);
+    let normalizedCodexConfig =
+      ctx.category !== "official" && (ctx.codex.codexConfig ?? "").trim()
+        ? setCodexWireApi(ctx.codex.codexConfig ?? "", "responses")
+        : (ctx.codex.codexConfig ?? "");
+    // 模型映射与「路由接管」解耦：对所有非官方供应商，填了就持久化
+    //（Chat 生成兼容路由、原生 Responses 生成 model-catalogs.json），
+    // 留空归一化为 [] 即不写。后端只看 modelCatalog.models 是否非空。
+    const normalizedCatalogModels =
+      ctx.category !== "official"
+        ? normalizeCodexCatalogModelsForSave(ctx.codex.codexCatalogModels)
+        : [];
+    // The default-model field writes the top-level `model` into the TOML
+    // as the user types; only when it was left empty fall back to the
+    // first catalog row so "fill mapping only" keeps its old behavior.
+    if (
+      normalizedCatalogModels.length > 0 &&
+      !extractCodexModelName(normalizedCodexConfig)
+    ) {
+      normalizedCodexConfig = setCodexModelNameInConfig(
+        normalizedCodexConfig,
+        normalizedCatalogModels[0].model,
+      );
+    }
+    const configObj = {
+      auth: authJson,
+      config: normalizedCodexConfig,
+    } as {
+      auth: unknown;
+      config: string;
+      modelCatalog?: { models: CodexCatalogModel[] };
+    };
+    if (normalizedCatalogModels.length > 0) {
+      configObj.modelCatalog = { models: normalizedCatalogModels };
+    }
+    return JSON.stringify(configObj);
+  } catch (err) {
+    return values.settingsConfig.trim();
+  }
+}
+
+export function buildGeminiSettingsConfig(
+  ctx: ProviderFormLogicContext,
+  values: ProviderFormData,
+): string {
+  try {
+    const envObj = ctx.gemini.envStringToObj(ctx.gemini.geminiEnv);
+    const configObj = ctx.gemini.geminiConfig.trim()
+      ? JSON.parse(ctx.gemini.geminiConfig)
+      : {};
+    const combined = {
+      env: envObj,
+      config: configObj,
+    };
+    return JSON.stringify(combined);
+  } catch (err) {
+    return values.settingsConfig.trim();
+  }
+}
+
+export function buildOpenCodeSettingsConfig(
+  ctx: ProviderFormLogicContext,
+  values: ProviderFormData,
+): string {
+  if (ctx.category !== "omo" && ctx.category !== "omo-slim") {
+    return values.settingsConfig.trim();
+  }
+
+  const omoConfig: Record<string, unknown> = {};
+  if (Object.keys(ctx.opencode.omoAgents).length > 0) {
+    omoConfig.agents = ctx.opencode.omoAgents;
+  }
+  if (
+    ctx.category === "omo" &&
+    Object.keys(ctx.opencode.omoCategories).length > 0
+  ) {
+    omoConfig.categories = ctx.opencode.omoCategories;
+  }
+  if (ctx.opencode.omoOtherFieldsStr.trim()) {
+    // 格式已在 handleSubmit 前置校验中验证过，此处可以安全解析
+    const otherFields = parseOmoOtherFieldsObject(
+      ctx.opencode.omoOtherFieldsStr,
+    );
+    if (otherFields) {
+      omoConfig.otherFields = otherFields;
+    }
+  }
+  return JSON.stringify(omoConfig);
 }
 
 export function applyGeminiPreset(

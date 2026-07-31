@@ -30,6 +30,7 @@ export interface ActivePresetState {
 
 export interface ProviderFormLogicContext {
   t: TFunction;
+  category?: ProviderCategory;
   form: UseFormReturn<ProviderFormData>;
   /** 覆盖当前选中预设（OpenClaw 需追加 suggestedDefaults） */
   setActivePreset: (preset: ActivePresetState | null) => void;
@@ -39,6 +40,9 @@ export interface ProviderFormLogicContext {
     setLocalIsFullUrl: (value: boolean) => void;
   };
   codex: {
+    codexAuth: string;
+    codexConfig: string;
+    codexCatalogModels: CodexCatalogModel[];
     resetCodexConfig: (
       auth: Record<string, unknown>,
       config: string,
@@ -49,12 +53,18 @@ export interface ProviderFormLogicContext {
     setLocalCodexApiFormat: (value: CodexApiFormat) => void;
   };
   gemini: {
+    geminiEnv: string;
+    geminiConfig: string;
+    envStringToObj: (envString: string) => Record<string, string>;
     resetGeminiConfig: (
       env: Record<string, unknown>,
       config: Record<string, unknown>,
     ) => void;
   };
   opencode: {
+    omoAgents: Record<string, Record<string, unknown>>;
+    omoCategories: Record<string, Record<string, unknown>>;
+    omoOtherFieldsStr: string;
     resetOpencodeState: (config?: OpenCodeProviderConfig) => void;
     resetOmoDraftState: () => void;
   };

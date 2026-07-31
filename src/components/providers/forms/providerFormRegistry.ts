@@ -33,6 +33,9 @@ import {
   applyHermesPreset,
   applyOpenclawPreset,
   applyOpenCodePreset,
+  buildCodexSettingsConfig,
+  buildGeminiSettingsConfig,
+  buildOpenCodeSettingsConfig,
   resetCodexCustomState,
   resetGeminiCustomState,
   resetHermesCustomState,
@@ -40,6 +43,7 @@ import {
   resetOpenCodeCustomState,
 } from "./providerFormLogic";
 import type { ProviderFormLogicContext } from "./ProviderFormLogicContext";
+import type { ProviderFormData } from "@/lib/schemas/provider";
 import {
   providerPresets,
   type ProviderPreset,
@@ -145,6 +149,11 @@ export interface ProviderFormAppDescriptor {
   ) => void;
   /** 切到「自定义」时重置该 app 专属状态（claude 无需实现，核心 defaultValues 重置已覆盖） */
   resetCustom?: (ctx: ProviderFormLogicContext) => void;
+  /** 从该 app 表单状态构建持久化的 settingsConfig 字符串（默认取 values.settingsConfig.trim()） */
+  buildSettingsConfig?: (
+    ctx: ProviderFormLogicContext,
+    values: ProviderFormData,
+  ) => string;
   /** 构建该 app 的预设列表 */
   buildPresetEntries(): PresetEntry[];
 }
@@ -202,6 +211,8 @@ export const PROVIDER_FORM_REGISTRY: Record<AppId, ProviderFormAppDescriptor> =
       applyPreset: (_id, preset, ctx) =>
         applyCodexPreset(preset as CodexProviderPreset, ctx),
       resetCustom: (ctx) => resetCodexCustomState(ctx),
+      buildSettingsConfig: (ctx, values) =>
+        buildCodexSettingsConfig(ctx, values),
       buildPresetEntries: () =>
         codexProviderPresets.map<PresetEntry>((preset, index) => ({
           id: `codex-${index}`,
@@ -223,6 +234,8 @@ export const PROVIDER_FORM_REGISTRY: Record<AppId, ProviderFormAppDescriptor> =
       applyPreset: (_id, preset, ctx) =>
         applyGeminiPreset(preset as GeminiProviderPreset, ctx),
       resetCustom: (ctx) => resetGeminiCustomState(ctx),
+      buildSettingsConfig: (ctx, values) =>
+        buildGeminiSettingsConfig(ctx, values),
       buildPresetEntries: () =>
         geminiProviderPresets.map<PresetEntry>((preset, index) => ({
           id: `gemini-${index}`,
@@ -272,6 +285,8 @@ export const PROVIDER_FORM_REGISTRY: Record<AppId, ProviderFormAppDescriptor> =
       applyPreset: (_id, preset, ctx) =>
         applyOpenCodePreset(preset as OpenCodeProviderPreset, ctx),
       resetCustom: (ctx) => resetOpenCodeCustomState(ctx),
+      buildSettingsConfig: (ctx, values) =>
+        buildOpenCodeSettingsConfig(ctx, values),
       buildPresetEntries: () =>
         opencodeProviderPresets.map<PresetEntry>((preset, index) => ({
           id: `opencode-${index}`,

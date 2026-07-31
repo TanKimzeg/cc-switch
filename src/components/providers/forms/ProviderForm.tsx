@@ -18,7 +18,6 @@ import type {
   ProviderMeta,
   ClaudeApiFormat,
   CodexApiFormat,
-  CodexCatalogModel,
   CodexChatReasoning,
   PromptCacheRoutingMode,
   ClaudeApiKeyField,
@@ -34,8 +33,6 @@ import {
   codexApiFormatFromWireApi,
   extractCodexWireApi,
   setCodexWireApi,
-  extractCodexModelName,
-  setCodexModelName as setCodexModelNameInConfig,
 } from "@/utils/providerConfigUtils";
 import { isNonNegativeDecimalString } from "@/types/usage";
 import { getCodexCustomTemplate } from "@/config/codexTemplates";
@@ -83,50 +80,6 @@ import { useHermesLiveProviderIds } from "@/hooks/useHermes";
 import { getProviderFormDescriptor } from "./providerFormRegistry";
 import type { ProviderFormRenderContext } from "./ProviderFormRenderContext";
 import type { ProviderFormLogicContext } from "./ProviderFormLogicContext";
-
-export const normalizeCodexCatalogModelsForSave = (
-  models: CodexCatalogModel[],
-): CodexCatalogModel[] => {
-  const seen = new Set<string>();
-  const normalized: CodexCatalogModel[] = [];
-
-  for (const item of models) {
-    const model = item.model.trim();
-    if (!model || seen.has(model)) continue;
-    seen.add(model);
-
-    const displayName = item.displayName?.trim();
-    const rawContextWindow = String(item.contextWindow ?? "").replace(
-      /[^\d]/g,
-      "",
-    );
-    const contextWindow = rawContextWindow
-      ? Number.parseInt(rawContextWindow, 10)
-      : undefined;
-
-    const inputModalities = item.inputModalities?.filter(
-      (m) => typeof m === "string" && m.trim(),
-    );
-
-    const baseInstructions = item.baseInstructions?.trim();
-
-    normalized.push({
-      model,
-      ...(displayName ? { displayName } : {}),
-      ...(contextWindow && contextWindow > 0 ? { contextWindow } : {}),
-      // Native Responses profile overrides (ignored by the chat/proxy profile).
-      ...(typeof item.supportsParallelToolCalls === "boolean"
-        ? { supportsParallelToolCalls: item.supportsParallelToolCalls }
-        : {}),
-      ...(inputModalities && inputModalities.length > 0
-        ? { inputModalities }
-        : {}),
-      ...(baseInstructions ? { baseInstructions } : {}),
-    });
-  }
-
-  return normalized;
-};
 
 const normalizeCodexChatReasoningForSave = (
   value?: CodexChatReasoning,
@@ -945,6 +898,7 @@ function ProviderFormFull({
 
   const logicCtx: ProviderFormLogicContext = {
     t,
+    category,
     form,
     setActivePreset: (preset) => setActivePreset(preset),
     claude: {
@@ -953,15 +907,24 @@ function ProviderFormFull({
       setLocalIsFullUrl,
     },
     codex: {
+      codexAuth,
+      codexConfig,
+      codexCatalogModels,
       resetCodexConfig,
       setCodexChatReasoning,
       setPromptCacheRouting,
       setLocalCodexApiFormat,
     },
     gemini: {
+      geminiEnv,
+      geminiConfig,
+      envStringToObj,
       resetGeminiConfig,
     },
     opencode: {
+      omoAgents: omoDraft.omoAgents,
+      omoCategories: omoDraft.omoCategories,
+      omoOtherFieldsStr: omoDraft.omoOtherFieldsStr,
       resetOpencodeState: opencodeForm.resetOpencodeState,
       resetOmoDraftState: omoDraft.resetOmoDraftState,
     },
@@ -1295,87 +1258,9 @@ function ProviderFormFull({
       presetProviderType === "xai_oauth" ||
       initialData?.meta?.providerType === "xai_oauth";
 
-    let settingsConfig: string;
-
-    if (appId === "codex") {
-      try {
-        const authJson = JSON.parse(codexAuth);
-        let normalizedCodexConfig =
-          category !== "official" && (codexConfig ?? "").trim()
-            ? setCodexWireApi(codexConfig ?? "", "responses")
-            : (codexConfig ?? "");
-        // 模型映射与「路由接管」解耦：对所有非官方供应商，填了就持久化
-        //（Chat 生成兼容路由、原生 Responses 生成 model-catalogs.json），
-        // 留空归一化为 [] 即不写。后端只看 modelCatalog.models 是否非空。
-        const normalizedCatalogModels =
-          category !== "official"
-            ? normalizeCodexCatalogModelsForSave(codexCatalogModels)
-            : [];
-        // The default-model field writes the top-level `model` into the TOML
-        // as the user types; only when it was left empty fall back to the
-        // first catalog row so "fill mapping only" keeps its old behavior.
-        if (
-          normalizedCatalogModels.length > 0 &&
-          !extractCodexModelName(normalizedCodexConfig)
-        ) {
-          normalizedCodexConfig = setCodexModelNameInConfig(
-            normalizedCodexConfig,
-            normalizedCatalogModels[0].model,
-          );
-        }
-        const configObj = {
-          auth: authJson,
-          config: normalizedCodexConfig,
-        } as {
-          auth: unknown;
-          config: string;
-          modelCatalog?: { models: CodexCatalogModel[] };
-        };
-        if (normalizedCatalogModels.length > 0) {
-          configObj.modelCatalog = { models: normalizedCatalogModels };
-        }
-        settingsConfig = JSON.stringify(configObj);
-      } catch (err) {
-        settingsConfig = values.settingsConfig.trim();
-      }
-    } else if (appId === "gemini") {
-      try {
-        const envObj = envStringToObj(geminiEnv);
-        const configObj = geminiConfig.trim() ? JSON.parse(geminiConfig) : {};
-        const combined = {
-          env: envObj,
-          config: configObj,
-        };
-        settingsConfig = JSON.stringify(combined);
-      } catch (err) {
-        settingsConfig = values.settingsConfig.trim();
-      }
-    } else if (
-      appId === "opencode" &&
-      (category === "omo" || category === "omo-slim")
-    ) {
-      const omoConfig: Record<string, unknown> = {};
-      if (Object.keys(omoDraft.omoAgents).length > 0) {
-        omoConfig.agents = omoDraft.omoAgents;
-      }
-      if (
-        category === "omo" &&
-        Object.keys(omoDraft.omoCategories).length > 0
-      ) {
-        omoConfig.categories = omoDraft.omoCategories;
-      }
-      if (omoDraft.omoOtherFieldsStr.trim()) {
-        // 格式已在 handleSubmit 前置校验中验证过，此处可以安全解析
-        const otherFields = parseOmoOtherFieldsObject(
-          omoDraft.omoOtherFieldsStr,
-        );
-        if (otherFields) {
-          omoConfig.otherFields = otherFields;
-        }
-      }
-      settingsConfig = JSON.stringify(omoConfig);
-    } else {
-      settingsConfig = values.settingsConfig.trim();
+    let settingsConfig = values.settingsConfig.trim();
+    if (descriptor.buildSettingsConfig) {
+      settingsConfig = descriptor.buildSettingsConfig(logicCtx, values);
     }
 
     const payload: ProviderFormValues = {
