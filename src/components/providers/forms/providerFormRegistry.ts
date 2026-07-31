@@ -27,6 +27,20 @@ import {
   renderOpenCodeFormFields,
 } from "./providerFormRender";
 import {
+  applyClaudePreset,
+  applyCodexPreset,
+  applyGeminiPreset,
+  applyHermesPreset,
+  applyOpenclawPreset,
+  applyOpenCodePreset,
+  resetCodexCustomState,
+  resetGeminiCustomState,
+  resetHermesCustomState,
+  resetOpenclawCustomState,
+  resetOpenCodeCustomState,
+} from "./providerFormLogic";
+import type { ProviderFormLogicContext } from "./ProviderFormLogicContext";
+import {
   providerPresets,
   type ProviderPreset,
 } from "@/config/claudeProviderPresets";
@@ -123,6 +137,14 @@ export interface ProviderFormAppDescriptor {
   renderConfigEditor(ctx: ProviderFormRenderContext): ReactNode;
   /** 专属字段渲染（ProviderFormFull 通过该槽位派发） */
   renderFormFields(ctx: ProviderFormRenderContext): ReactNode;
+  /** 选中预设时灌入该 app 表单状态（含 form.reset；新增 app 必须实现） */
+  applyPreset?: (
+    id: string,
+    preset: ProviderFormPreset,
+    ctx: ProviderFormLogicContext,
+  ) => void;
+  /** 切到「自定义」时重置该 app 专属状态（claude 无需实现，核心 defaultValues 重置已覆盖） */
+  resetCustom?: (ctx: ProviderFormLogicContext) => void;
   /** 构建该 app 的预设列表 */
   buildPresetEntries(): PresetEntry[];
 }
@@ -141,6 +163,8 @@ export const PROVIDER_FORM_REGISTRY: Record<AppId, ProviderFormAppDescriptor> =
       hasOmoCategories: false,
       renderConfigEditor: (ctx) => renderClaudeConfigEditor(ctx),
       renderFormFields: (ctx) => renderClaudeFormFields(ctx),
+      applyPreset: (_id, preset, ctx) =>
+        applyClaudePreset(preset as ProviderPreset, ctx),
       buildPresetEntries: () =>
         providerPresets
           .filter((p) => !p.hidden)
@@ -175,6 +199,9 @@ export const PROVIDER_FORM_REGISTRY: Record<AppId, ProviderFormAppDescriptor> =
       hasOmoCategories: false,
       renderConfigEditor: (ctx) => renderCodexConfigEditor(ctx),
       renderFormFields: (ctx) => renderCodexFormFields(ctx),
+      applyPreset: (_id, preset, ctx) =>
+        applyCodexPreset(preset as CodexProviderPreset, ctx),
+      resetCustom: (ctx) => resetCodexCustomState(ctx),
       buildPresetEntries: () =>
         codexProviderPresets.map<PresetEntry>((preset, index) => ({
           id: `codex-${index}`,
@@ -193,6 +220,9 @@ export const PROVIDER_FORM_REGISTRY: Record<AppId, ProviderFormAppDescriptor> =
       hasOmoCategories: false,
       renderConfigEditor: (ctx) => renderGeminiConfigEditor(ctx),
       renderFormFields: (ctx) => renderGeminiFormFields(ctx),
+      applyPreset: (_id, preset, ctx) =>
+        applyGeminiPreset(preset as GeminiProviderPreset, ctx),
+      resetCustom: (ctx) => resetGeminiCustomState(ctx),
       buildPresetEntries: () =>
         geminiProviderPresets.map<PresetEntry>((preset, index) => ({
           id: `gemini-${index}`,
@@ -239,6 +269,9 @@ export const PROVIDER_FORM_REGISTRY: Record<AppId, ProviderFormAppDescriptor> =
       },
       renderConfigEditor: (ctx) => renderOpenCodeConfigEditor(ctx),
       renderFormFields: (ctx) => renderOpenCodeFormFields(ctx),
+      applyPreset: (_id, preset, ctx) =>
+        applyOpenCodePreset(preset as OpenCodeProviderPreset, ctx),
+      resetCustom: (ctx) => resetOpenCodeCustomState(ctx),
       buildPresetEntries: () =>
         opencodeProviderPresets.map<PresetEntry>((preset, index) => ({
           id: `opencode-${index}`,
@@ -270,6 +303,9 @@ export const PROVIDER_FORM_REGISTRY: Record<AppId, ProviderFormAppDescriptor> =
       },
       renderConfigEditor: (ctx) => renderOpenclawConfigEditor(ctx),
       renderFormFields: (ctx) => renderOpenclawFormFields(ctx),
+      applyPreset: (id, preset, ctx) =>
+        applyOpenclawPreset(id, preset as OpenClawProviderPreset, ctx),
+      resetCustom: (ctx) => resetOpenclawCustomState(ctx),
       buildPresetEntries: () =>
         openclawProviderPresets.map<PresetEntry>((preset, index) => ({
           id: `openclaw-${index}`,
@@ -306,6 +342,9 @@ export const PROVIDER_FORM_REGISTRY: Record<AppId, ProviderFormAppDescriptor> =
       },
       renderConfigEditor: (ctx) => renderHermesConfigEditor(ctx),
       renderFormFields: (ctx) => renderHermesFormFields(ctx),
+      applyPreset: (id, preset, ctx) =>
+        applyHermesPreset(id, preset as HermesProviderPreset, ctx),
+      resetCustom: (ctx) => resetHermesCustomState(ctx),
       buildPresetEntries: () =>
         hermesProviderPresets.map<PresetEntry>((preset, index) => ({
           id: `hermes-${index}`,
