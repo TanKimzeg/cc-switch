@@ -46,6 +46,7 @@ import { ProviderPresetSelector } from "./ProviderPresetSelector";
 import { BasicFormFields } from "./BasicFormFields";
 import { AdditiveProviderKeyField } from "./AdditiveProviderKeyField";
 import type { AdditiveProviderKeyState } from "./AdditiveProviderKeyField";
+import { validateAdditiveProviderKey } from "./helpers/additiveValidation";
 import { ClaudeDesktopProviderForm } from "./ClaudeDesktopProviderForm";
 import { GrokBuildProviderForm } from "./GrokBuildProviderForm";
 import { parseOmoOtherFieldsObject } from "@/types/omo";
@@ -1013,87 +1014,57 @@ function ProviderFormFull({
 
     // opencode / openclaw / hermes: providerKey 相关
     // A 类（空）归到 issues；B 类（正则不合法 / 重复 / 状态加载中）仍硬拒绝
-    const keyPattern = /^[a-z0-9]+(-[a-z0-9]+)*$/;
-
     if (appId === "opencode" && !isAnyOmoCategory) {
       // providerKey 是 opencode / openclaw / hermes 的主键 ID，空或格式不合法
       // 都属于完整性约束，保留硬拒绝（mutations 层也会 throw，软化只会让错误更晦涩）
-      if (!opencodeForm.opencodeProviderKey.trim()) {
-        toast.error(t("opencode.providerKeyRequired"));
-        return;
-      }
-      if (!keyPattern.test(opencodeForm.opencodeProviderKey)) {
-        toast.error(t("opencode.providerKeyInvalid"));
-        return;
-      }
-      if (isProviderKeyLockStateLoading) {
-        toast.error(
-          t("providerForm.providerKeyStatusLoading", {
-            defaultValue: "正在加载供应商标识状态，请稍后再试",
-          }),
-        );
-        return;
-      }
       if (
-        !isProviderKeyLocked &&
-        additiveExistingProviderKeys.includes(opencodeForm.opencodeProviderKey)
+        validateAdditiveProviderKey({
+          providerKey: opencodeForm.opencodeProviderKey,
+          i18n: descriptor.providerKeyField!.i18n,
+          isProviderKeyLockStateLoading,
+          isProviderKeyLocked,
+          additiveExistingProviderKeys,
+          t,
+        })
       ) {
-        toast.error(t("opencode.providerKeyDuplicate"));
         return;
       }
-      if (Object.keys(opencodeForm.opencodeModels).length === 0) {
-        issues.push(t("opencode.modelsRequired"));
+      const modelsRequiredKey =
+        descriptor.providerKeyField!.i18n.modelsRequiredKey;
+      if (
+        modelsRequiredKey &&
+        Object.keys(opencodeForm.opencodeModels).length === 0
+      ) {
+        issues.push(t(modelsRequiredKey));
       }
     }
 
     if (appId === "openclaw") {
-      if (!openclawForm.openclawProviderKey.trim()) {
-        toast.error(t("openclaw.providerKeyRequired"));
-        return;
-      }
-      if (!keyPattern.test(openclawForm.openclawProviderKey)) {
-        toast.error(t("openclaw.providerKeyInvalid"));
-        return;
-      }
-      if (isProviderKeyLockStateLoading) {
-        toast.error(
-          t("providerForm.providerKeyStatusLoading", {
-            defaultValue: "正在加载供应商标识状态，请稍后再试",
-          }),
-        );
-        return;
-      }
       if (
-        !isProviderKeyLocked &&
-        additiveExistingProviderKeys.includes(openclawForm.openclawProviderKey)
+        validateAdditiveProviderKey({
+          providerKey: openclawForm.openclawProviderKey,
+          i18n: descriptor.providerKeyField!.i18n,
+          isProviderKeyLockStateLoading,
+          isProviderKeyLocked,
+          additiveExistingProviderKeys,
+          t,
+        })
       ) {
-        toast.error(t("openclaw.providerKeyDuplicate"));
         return;
       }
     }
 
     if (appId === "hermes") {
-      if (!hermesForm.hermesProviderKey.trim()) {
-        toast.error(t("hermes.form.providerKeyRequired"));
-        return;
-      }
-      if (!keyPattern.test(hermesForm.hermesProviderKey)) {
-        toast.error(t("hermes.form.providerKeyInvalid"));
-        return;
-      }
-      if (isProviderKeyLockStateLoading) {
-        toast.error(
-          t("providerForm.providerKeyStatusLoading", {
-            defaultValue: "正在加载供应商标识状态，请稍后再试",
-          }),
-        );
-        return;
-      }
       if (
-        !isProviderKeyLocked &&
-        additiveExistingProviderKeys.includes(hermesForm.hermesProviderKey)
+        validateAdditiveProviderKey({
+          providerKey: hermesForm.hermesProviderKey,
+          i18n: descriptor.providerKeyField!.i18n,
+          isProviderKeyLockStateLoading,
+          isProviderKeyLocked,
+          additiveExistingProviderKeys,
+          t,
+        })
       ) {
-        toast.error(t("hermes.form.providerKeyDuplicate"));
         return;
       }
     }

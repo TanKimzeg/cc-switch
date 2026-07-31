@@ -83,6 +83,9 @@ export interface ProviderKeyFieldI18n {
   placeholderDefault?: string;
   duplicateKey: string;
   invalidKey: string;
+  requiredKey: string;
+  /** 至少需要一个模型配置的软性校验（仅 opencode） */
+  modelsRequiredKey?: string;
   hintKey: string;
   hintDefault?: string;
   lockedHintKey: string;
@@ -227,6 +230,8 @@ export const PROVIDER_FORM_REGISTRY: Record<AppId, ProviderFormAppDescriptor> =
           placeholderKey: "opencode.providerKeyPlaceholder",
           duplicateKey: "opencode.providerKeyDuplicate",
           invalidKey: "opencode.providerKeyInvalid",
+          requiredKey: "opencode.providerKeyRequired",
+          modelsRequiredKey: "opencode.modelsRequired",
           hintKey: "opencode.providerKeyHint",
           lockedHintKey: "opencode.providerKeyLockedHint",
           lockedHintDefault: "该供应商已添加到应用配置中，供应商标识不可修改",
@@ -257,6 +262,7 @@ export const PROVIDER_FORM_REGISTRY: Record<AppId, ProviderFormAppDescriptor> =
           placeholderKey: "openclaw.providerKeyPlaceholder",
           duplicateKey: "openclaw.providerKeyDuplicate",
           invalidKey: "openclaw.providerKeyInvalid",
+          requiredKey: "openclaw.providerKeyRequired",
           hintKey: "openclaw.providerKeyHint",
           lockedHintKey: "openclaw.providerKeyLockedHint",
           lockedHintDefault: "该供应商已添加到应用配置中，供应商标识不可修改",
@@ -289,6 +295,7 @@ export const PROVIDER_FORM_REGISTRY: Record<AppId, ProviderFormAppDescriptor> =
           placeholderDefault: "my-provider",
           duplicateKey: "hermes.form.providerKeyDuplicate",
           invalidKey: "hermes.form.providerKeyInvalid",
+          requiredKey: "hermes.form.providerKeyRequired",
           hintKey: "hermes.form.providerKeyHint",
           hintDefault:
             "Lowercase letters, numbers, and hyphens only. Used as the provider name in config.yaml.",
