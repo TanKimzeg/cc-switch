@@ -1,0 +1,43 @@
+{
+  "app": {
+    "name": "CC Switch v2",
+    "tagline": "基于插件的 Agent 切换器"
+  },
+  "shell": {
+    "agents": "Agent",
+    "installed": "已安装",
+    "addPlugin": "添加插件",
+    "pickPluginDir": "选择插件目录",
+    "uninstall": "卸载",
+    "pluginInstalled": "插件安装成功",
+    "pluginUninstalled": "插件已卸载",
+    "noPluginsTitle": "尚未安装插件",
+    "noPluginsDesc": "安装 Agent 插件后，即可在这里管理对应的供应商配置。",
+    "noProviders": "还没有供应商，即将支持添加。",
+    "liveConfig": "Live 配置",
+    "liveProviders": "Live 供应商",
+    "liveCurrent": "当前",
+    "noLiveProviders": "live 配置中还没有供应商。",
+    "applyProvider": "应用此供应商",
+    "applied": "已写入 live 配置",
+    "importLive": "从 live 导入",
+    "importLiveHint": "把 live 配置中的供应商导入到数据库",
+    "imported": "已导入供应商",
+    "importedCount": "已导入 {count} 个供应商",
+    "sessions": "会话",
+    "noSessions": "暂无会话",
+    "resume": "恢复",
+    "noCapabilities": "该插件未声明 live 相关能力",
+    "capabilities": "能力",
+    "readLive": "读取",
+    "applyCap": "切换",
+    "importCap": "导入",
+    "sessionsCap": "会话",
+    "capabilityOff": "不支持"
+  },
+  "common": {
+    "loading": "加载中…",
+    "error": "出错了",
+    "refresh": "刷新"
+  }
+}

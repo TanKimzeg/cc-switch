@@ -1,0 +1,43 @@
+{
+  "app": {
+    "name": "CC Switch v2",
+    "tagline": "Plugin-based agent switcher"
+  },
+  "shell": {
+    "agents": "Agents",
+    "installed": "Installed",
+    "addPlugin": "Add plugin",
+    "pickPluginDir": "Select plugin directory",
+    "uninstall": "Uninstall",
+    "pluginInstalled": "Plugin installed",
+    "pluginUninstalled": "Plugin uninstalled",
+    "noPluginsTitle": "No plugins installed",
+    "noPluginsDesc": "Install an agent plugin to manage its provider configurations here.",
+    "noProviders": "No providers yet. Adding support is coming soon.",
+    "liveConfig": "Live config",
+    "liveProviders": "Live providers",
+    "liveCurrent": "Current",
+    "noLiveProviders": "No providers in live config.",
+    "applyProvider": "Apply this provider",
+    "applied": "Written to live config",
+    "importLive": "Import from live",
+    "importLiveHint": "Import live providers into the database",
+    "imported": "Providers imported",
+    "importedCount": "Imported {count} provider(s)",
+    "sessions": "Sessions",
+    "noSessions": "No sessions",
+    "resume": "Resume",
+    "noCapabilities": "This plugin declares no live capabilities",
+    "capabilities": "Capabilities",
+    "readLive": "Read",
+    "applyCap": "Apply",
+    "importCap": "Import",
+    "sessionsCap": "Sessions",
+    "capabilityOff": "Unsupported"
+  },
+  "common": {
+    "loading": "Loading…",
+    "error": "Something went wrong",
+    "refresh": "Refresh"
+  }
+}
