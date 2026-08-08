@@ -1,62 +1,19 @@
 use std::path::PathBuf;
 
 use crate::app_config::AppType;
-use crate::codex_config::get_codex_auth_path;
-use crate::config::get_claude_settings_path;
 use crate::error::AppError;
-use crate::gemini_config::get_gemini_dir;
-use crate::openclaw_config::get_openclaw_dir;
-use crate::opencode_config::get_opencode_dir;
 
 /// 返回指定应用所使用的提示词文件路径。
+///
+/// 具体路径逻辑（哪个目录、什么文件名、是否支持）由各 app 的 descriptor 提供，
+/// 这里只做委托。
 pub fn prompt_file_path(app: &AppType) -> Result<PathBuf, AppError> {
-    if matches!(app, AppType::ClaudeDesktop) {
-        return Err(AppError::localized(
-            "app.prompts_unsupported",
-            "当前应用暂不支持 Prompts",
-            "This app does not support Prompts",
-        ));
-    }
-
-    let base_dir: PathBuf = match app {
-        AppType::Claude => get_base_dir_with_fallback(get_claude_settings_path(), ".claude")?,
-        AppType::Codex => get_base_dir_with_fallback(get_codex_auth_path(), ".codex")?,
-        AppType::Gemini => get_gemini_dir(),
-        AppType::GrokBuild => crate::grok_config::get_grok_config_dir(),
-        AppType::OpenCode => get_opencode_dir(),
-        AppType::OpenClaw => get_openclaw_dir(),
-        AppType::Hermes => crate::hermes_config::get_hermes_dir(),
-        AppType::ClaudeDesktop => unreachable!("handled above"),
-    };
-
-    let filename = match app {
-        AppType::Claude => "CLAUDE.md",
-        AppType::Codex => "AGENTS.md",
-        AppType::Gemini => "GEMINI.md",
-        AppType::GrokBuild | AppType::OpenCode | AppType::OpenClaw => "AGENTS.md",
-        AppType::Hermes => "SOUL.md",
-        AppType::ClaudeDesktop => unreachable!("handled above"),
-    };
-
-    Ok(base_dir.join(filename))
+    app.descriptor().prompt_file_path()
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn hermes_prompt_file_uses_soul_md() {
-        let path = prompt_file_path(&AppType::Hermes).expect("Hermes prompt path");
-
-        assert_eq!(
-            path.file_name().and_then(|name| name.to_str()),
-            Some("SOUL.md")
-        );
-    }
-}
-
-fn get_base_dir_with_fallback(
+/// 以某个主路径（如 settings.json / auth.json）的父目录为基准，取不到时回退到
+/// `~/{fallback_dir}`。Claude / Codex 的提示词目录据此推导。
+pub(crate) fn get_base_dir_with_fallback(
     primary_path: PathBuf,
     fallback_dir: &str,
 ) -> Result<PathBuf, AppError> {
@@ -71,4 +28,21 @@ fn get_base_dir_with_fallback(
                 format!("Cannot determine {fallback_dir} config directory: user home not found"),
             )
         })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn prompt_path_delegates_to_descriptor() {
+        for app in AppType::all().filter(|a| *a != AppType::ClaudeDesktop) {
+            assert!(
+                prompt_file_path(&app).is_ok(),
+                "{} should have a prompt path",
+                app.as_str()
+            );
+        }
+        assert!(prompt_file_path(&AppType::ClaudeDesktop).is_err());
+    }
 }

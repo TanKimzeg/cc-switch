@@ -52,7 +52,7 @@ import {
 } from "@/config/hermesProviderPresets";
 import type { ProviderCategory } from "@/types";
 
-interface HermesFormFieldsProps {
+export interface HermesFormFieldsProps {
   baseUrl: string;
   onBaseUrlChange: (value: string) => void;
   apiKey: string;

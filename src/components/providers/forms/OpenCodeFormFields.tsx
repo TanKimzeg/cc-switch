@@ -156,7 +156,7 @@ function ModelOptionKeyInput({
   );
 }
 
-interface OpenCodeFormFieldsProps {
+export interface OpenCodeFormFieldsProps {
   // NPM Package
   npm: string;
   onNpmChange: (value: string) => void;
