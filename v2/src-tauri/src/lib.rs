@@ -2,6 +2,7 @@ mod commands;
 mod db;
 mod plugin;
 mod registry;
+mod services;
 mod tray;
 mod types;
 
@@ -54,6 +55,12 @@ pub fn run() {
             commands::plugins::plugin_mcp_get,
             commands::plugins::plugin_mcp_set,
             commands::plugins::plugin_mcp_remove,
+            commands::mcp::mcp_list,
+            commands::mcp::mcp_upsert,
+            commands::mcp::mcp_delete,
+            commands::mcp::mcp_toggle_app,
+            commands::mcp::import_mcp_servers_from_plugin,
+            commands::mcp::import_mcp_from_plugin,
             commands::providers::get_providers,
             commands::providers::add_provider,
             commands::providers::update_provider,
