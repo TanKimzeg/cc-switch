@@ -33,7 +33,22 @@
     "applyCap": "Apply",
     "importCap": "Import",
     "sessionsCap": "Sessions",
-    "capabilityOff": "Unsupported"
+    "capabilityOff": "Unsupported",
+    "providerAdd": "Add provider",
+    "providerEdit": "Edit provider",
+    "providerName": "Name",
+    "providerNpm": "Interface format (NPM package)",
+    "providerBaseUrl": "Base URL",
+    "providerApiKey": "API Key",
+    "providerHeaders": "Headers",
+    "providerModels": "Models",
+    "providerModelId": "Model ID",
+    "providerModelName": "Display name",
+    "editProvider": "Edit",
+    "deleteProvider": "Delete",
+    "providerDeleted": "Provider deleted",
+    "providerRemovedFromLive": "Removed from live config",
+    "addProvider": "Add provider"
   },
   "common": {
     "loading": "Loading…",

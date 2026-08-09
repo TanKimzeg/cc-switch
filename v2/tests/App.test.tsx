@@ -166,3 +166,31 @@ it("shows MCP servers when the plugin supports mcp", async () => {
   fireEvent.click(await screen.findByText("OpenCode"));
   expect(await screen.findByText("Filesystem")).toBeInTheDocument();
 });
+
+it("opens the add-provider form and saves", async () => {
+  vi.mocked(invoke).mockImplementation(async (cmd: string) => {
+    if (cmd === "get_plugins")
+      return [
+        {
+          id: "opencode",
+          name: "OpenCode",
+          version: "0.1.0",
+          apiVersion: "1",
+          source: "builtin",
+          installedAt: "2026-08-08",
+          capabilities: { apply: true },
+        },
+      ];
+    if (cmd === "get_providers") return [];
+    if (cmd === "add_provider") return { id: "p1", pluginId: "opencode", name: "New" };
+    return null;
+  });
+  renderApp();
+  fireEvent.click(await screen.findByText("OpenCode"));
+  fireEvent.click(await screen.findByText("添加供应商"));
+  fireEvent.change(screen.getAllByRole("textbox")[1], { target: { value: "New Provider" } });
+  fireEvent.click(screen.getByText("保存"));
+  await waitFor(() => {
+    expect(invoke).toHaveBeenCalledWith("add_provider", expect.anything());
+  });
+});

@@ -4,10 +4,12 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Blocks,
   Download,
+  Pencil,
   Puzzle,
   Plus,
   RefreshCw,
   Send,
+  Trash2,
   X,
 } from "lucide-react";
 import { open } from "@tauri-apps/plugin-dialog";
@@ -15,11 +17,13 @@ import { toast } from "sonner";
 import {
   addProvider,
   applyProvider,
+  deleteProvider,
   getPlugins,
   getProviders,
   importFromLive,
   installPlugin,
   readLiveConfig,
+  removeProviderFromLive,
   uninstallPlugin,
 } from "@/lib/api";
 import type { InstalledPlugin, Provider } from "@/types";
@@ -27,6 +31,7 @@ import SessionList from "@/components/SessionList";
 import McpPanel from "@/components/McpPanel";
 import UsagePanel from "@/components/UsagePanel";
 import GlobalPanels, { globalPanelTabs } from "@/components/GlobalPanels";
+import ProviderForm from "@/components/ProviderForm";
 
 export default function App() {
   const { t } = useTranslation();
@@ -233,6 +238,8 @@ function PluginDetail({
 }) {
   const { t } = useTranslation();
   const queryClient = useQueryClient();
+  const [formOpen, setFormOpen] = useState(false);
+  const [editingProvider, setEditingProvider] = useState<Provider | null>(null);
   const caps = plugin.capabilities ?? {};
   const canRead = caps.readLive ?? false;
   const canApply = caps.apply ?? false;
@@ -254,6 +261,22 @@ function PluginDetail({
       if (canRead) {
         await queryClient.invalidateQueries({ queryKey: ["live", plugin.id] });
       }
+    } catch (e) {
+      toast.error(String(e));
+    }
+  };
+
+  const handleDeleteProvider = async (provider: Provider) => {
+    try {
+      await deleteProvider(provider.id);
+      if (plugin.capabilities?.remove) {
+        await removeProviderFromLive(plugin.id, provider.id);
+      }
+      await queryClient.invalidateQueries({ queryKey: ["providers"] });
+      if (canRead) {
+        await queryClient.invalidateQueries({ queryKey: ["live", plugin.id] });
+      }
+      toast.success(t("shell.providerDeleted"));
     } catch (e) {
       toast.error(String(e));
     }
@@ -313,18 +336,42 @@ function PluginDetail({
       <section className="space-y-2">
         <div className="flex items-center justify-between">
           <h3 className="text-sm font-medium">{plugin.name}</h3>
-          {canImport && (
+          <div className="flex items-center gap-1">
             <button
               type="button"
-              onClick={handleImport}
+              onClick={() => {
+                setEditingProvider(null);
+                setFormOpen(true);
+              }}
               className="inline-flex items-center gap-1 rounded-md border border-border px-2 py-1 text-xs transition-colors hover:bg-accent"
-              title={t("shell.importLiveHint")}
             >
-              <Download className="h-3.5 w-3.5" />
-              {t("shell.importLive")}
+              <Plus className="h-3.5 w-3.5" />
+              {t("shell.addProvider")}
             </button>
-          )}
+            {canImport && (
+              <button
+                type="button"
+                onClick={handleImport}
+                className="inline-flex items-center gap-1 rounded-md border border-border px-2 py-1 text-xs transition-colors hover:bg-accent"
+                title={t("shell.importLiveHint")}
+              >
+                <Download className="h-3.5 w-3.5" />
+                {t("shell.importLive")}
+              </button>
+            )}
+          </div>
         </div>
+        {formOpen && (
+          <ProviderForm
+            pluginId={plugin.id}
+            existing={editingProvider}
+            onDone={() => {
+              setFormOpen(false);
+              setEditingProvider(null);
+              onProvidersChanged();
+            }}
+          />
+        )}
         {providers.length === 0 ? (
           <p className="text-sm text-muted-foreground">
             {t("shell.noProviders")}
@@ -336,9 +383,34 @@ function PluginDetail({
                 key={provider.id}
                 className="flex flex-col gap-2 rounded-lg border border-border p-4"
               >
-                <div className="font-medium">{provider.name}</div>
-                <div className="text-xs text-muted-foreground">
-                  {provider.category}
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <div className="truncate font-medium">{provider.name}</div>
+                    <div className="text-xs text-muted-foreground">
+                      {provider.category}
+                    </div>
+                  </div>
+                  <div className="flex shrink-0 gap-0.5">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setEditingProvider(provider);
+                        setFormOpen(true);
+                      }}
+                      className="rounded p-1 text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
+                      title={t("shell.editProvider")}
+                    >
+                      <Pencil className="h-3.5 w-3.5" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleDeleteProvider(provider)}
+                      className="rounded p-1 text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
+                      title={t("shell.deleteProvider")}
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
                 </div>
                 {canApply && (
                   <button
