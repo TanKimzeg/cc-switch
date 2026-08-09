@@ -10,8 +10,10 @@ use std::path::{Path, PathBuf};
 use serde_json::{json, Map, Value};
 
 use crate::plugin::error::PluginError;
+use crate::plugin::mcp::{self, McpPlugin, McpServerSpec};
 use crate::plugin::{
-    AgentPlugin, ImportCandidate, LiveConfig, LiveProvider, PluginCapabilities, SessionMeta,
+    AgentPlugin, ImportCandidate, LiveConfig, LiveProvider, PluginCapabilities, SessionMessage,
+    SessionMeta,
 };
 use crate::types::Provider;
 
@@ -27,19 +29,31 @@ fn home_dir() -> PathBuf {
     dirs::home_dir().unwrap_or_else(|| PathBuf::from("."))
 }
 
+/// 读取测试/配置目录 override（环境变量，非空才生效）。
+fn override_dir(name: &str) -> Option<PathBuf> {
+    std::env::var(name)
+        .ok()
+        .filter(|v| !v.trim().is_empty())
+        .map(PathBuf::from)
+}
+
 /// OpenCode 配置目录（`~/.config/opencode`）。
 fn config_dir() -> PathBuf {
-    home_dir().join(".config").join("opencode")
+    override_dir("CC_SWITCH_OPENCODE_CONFIG_DIR").unwrap_or_else(|| {
+        home_dir().join(".config").join("opencode")
+    })
 }
 
 /// OpenCode 数据目录（会话等；遵循 XDG_DATA_HOME，兜底 `~/.local/share/opencode`）。
 fn data_dir() -> PathBuf {
-    if let Ok(xdg) = std::env::var("XDG_DATA_HOME") {
-        if !xdg.is_empty() {
-            return PathBuf::from(xdg).join("opencode");
+    override_dir("CC_SWITCH_OPENCODE_DATA_DIR").unwrap_or_else(|| {
+        if let Ok(xdg) = std::env::var("XDG_DATA_HOME") {
+            if !xdg.is_empty() {
+                return PathBuf::from(xdg).join("opencode");
+            }
         }
-    }
-    home_dir().join(".local").join("share").join("opencode")
+        home_dir().join(".local").join("share").join("opencode")
+    })
 }
 
 fn config_path() -> PathBuf {
@@ -65,8 +79,11 @@ impl AgentPlugin for OpenCodePlugin {
         static CAPS: PluginCapabilities = PluginCapabilities {
             read_live: true,
             apply: true,
+            remove: true,
             import: true,
             sessions: true,
+            mcp: true,
+            plugins: true,
         };
         &CAPS
     }
@@ -118,9 +135,19 @@ impl AgentPlugin for OpenCodePlugin {
             }
         }
 
-        if current {
-            // OpenCode 顶层 `provider` 选择器：字符串形式指定默认 provider。
-            config["provider"] = json!(provider.id);
+        // OpenCode 是 additive 模式，无单一 current 选择器：
+        // provider 全部共存于 `provider` 对象，`current` 仅表示"写入即可"。
+        let _ = current;
+
+        write_config(&path, &config)
+    }
+
+    fn remove_provider(&self, id: &str) -> Result<(), PluginError> {
+        let path = config_path();
+        let mut config = read_config(&path)?;
+
+        if let Some(providers) = config.get_mut("provider").and_then(Value::as_object_mut) {
+            providers.remove(id);
         }
 
         write_config(&path, &config)
@@ -149,6 +176,79 @@ impl AgentPlugin for OpenCodePlugin {
 
     fn sessions(&self) -> Result<Vec<SessionMeta>, PluginError> {
         scan_sessions()
+    }
+
+    fn load_messages(&self, source: &str) -> Result<Vec<SessionMessage>, PluginError> {
+        if let Some((db_path, session_id)) = parse_sqlite_source(source) {
+            return load_messages_sqlite(&db_path, &session_id);
+        }
+        let path = Path::new(source);
+        if !path.is_dir() {
+            return Err(PluginError::Other(format!(
+                "消息目录不存在: {}",
+                path.display()
+            )));
+        }
+        load_messages_json(path)
+    }
+
+    fn delete_session(&self, session_id: &str, source: &str) -> Result<bool, PluginError> {
+        if let Some((db_path, ref_id)) = parse_sqlite_source(source) {
+            if ref_id != session_id {
+                return Err(PluginError::Other(format!(
+                    "会话 id 不匹配: 期望 {session_id}，实际 {ref_id}"
+                )));
+            }
+            return delete_session_sqlite(&db_path, session_id);
+        }
+        delete_session_json(source, session_id)
+    }
+
+    fn as_mcp(&self) -> Option<&dyn McpPlugin> {
+        Some(self)
+    }
+}
+
+impl McpPlugin for OpenCodePlugin {
+    fn get_mcp_servers(&self) -> Result<Vec<McpServerSpec>, PluginError> {
+        let config = read_config(&config_path())?;
+        let mut servers = Vec::new();
+        if let Some(map) = config.get("mcp").and_then(Value::as_object) {
+            for (id, value) in map {
+                let spec = mcp::convert_from_opencode_format(value)
+                    .map_err(|e| PluginError::Other(format!("解析 MCP 服务器 '{id}' 失败: {e}")))?;
+                servers.push(McpServerSpec {
+                    id: id.clone(),
+                    name: id.clone(),
+                    spec,
+                });
+            }
+        }
+        servers.sort_by(|a, b| a.id.cmp(&b.id));
+        Ok(servers)
+    }
+
+    fn set_mcp_server(&self, spec: &McpServerSpec) -> Result<(), PluginError> {
+        let path = config_path();
+        let mut config = read_config(&path)?;
+        let opencode_spec = mcp::convert_to_opencode_format(&spec.spec)?;
+
+        if !config.get("mcp").is_some_and(Value::is_object) {
+            config["mcp"] = json!({});
+        }
+        if let Some(map) = config.get_mut("mcp").and_then(Value::as_object_mut) {
+            map.insert(spec.id.clone(), opencode_spec);
+        }
+        write_config(&path, &config)
+    }
+
+    fn remove_mcp_server(&self, id: &str) -> Result<(), PluginError> {
+        let path = config_path();
+        let mut config = read_config(&path)?;
+        if let Some(map) = config.get_mut("mcp").and_then(Value::as_object_mut) {
+            map.remove(id);
+        }
+        write_config(&path, &config)
     }
 }
 
@@ -413,6 +513,305 @@ fn collect_json_files(root: &Path, files: &mut Vec<PathBuf>) {
     }
 }
 
+/// 解析 `sqlite:<db_path>:<session_id>` 来源引用。
+///
+/// 用 `rfind(":ses_")` 切分，因为 db 路径本身可能含冒号（如 Windows 盘符）。
+fn parse_sqlite_source(source: &str) -> Option<(PathBuf, String)> {
+    let rest = source.strip_prefix("sqlite:")?;
+    let sep = rest.rfind(":ses_")?;
+    let db_path = PathBuf::from(&rest[..sep]);
+    let session_id = rest[sep + 1..].to_string();
+    Some((db_path, session_id))
+}
+
+/// 从 JSON 会话目录加载消息（`storage/message/{sessionID}/`）。
+fn load_messages_json(path: &Path) -> Result<Vec<SessionMessage>, PluginError> {
+    let storage = path
+        .parent()
+        .and_then(|p| p.parent())
+        .ok_or_else(|| PluginError::Other("无法确定 storage 根目录".into()))?;
+
+    let mut msg_files = Vec::new();
+    collect_json_files(path, &mut msg_files);
+
+    let mut entries: Vec<(i64, String)> = Vec::new();
+    for msg_path in &msg_files {
+        let Ok(content) = std::fs::read_to_string(msg_path) else {
+            continue;
+        };
+        let Ok(value) = serde_json::from_str::<Value>(&content) else {
+            continue;
+        };
+        let msg_id = match value.get("id").and_then(Value::as_str) {
+            Some(id) => id.to_string(),
+            None => continue,
+        };
+        let role = value
+            .get("role")
+            .and_then(Value::as_str)
+            .unwrap_or("unknown")
+            .to_string();
+        let created_ts = value
+            .get("time")
+            .and_then(|t| t.get("created"))
+            .and_then(Value::as_i64)
+            .unwrap_or(0);
+
+        let part_dir = storage.join("part").join(&msg_id);
+        let text = collect_parts_text(&part_dir);
+        if text.trim().is_empty() {
+            continue;
+        }
+        entries.push((created_ts, format!("{role}\u{0001}{text}")));
+    }
+
+    entries.sort_by_key(|(ts, _)| *ts);
+    let messages = entries
+        .into_iter()
+        .map(|(ts, packed)| {
+            let (role, content) = packed.split_once('\u{0001}').unwrap_or(("unknown", ""));
+            SessionMessage {
+                role: role.to_string(),
+                content: content.to_string(),
+                ts: if ts > 0 { Some(ts) } else { None },
+            }
+        })
+        .collect();
+    Ok(messages)
+}
+
+/// 从 SQLite 数据库加载会话消息。
+fn load_messages_sqlite(
+    db_path: &Path,
+    session_id: &str,
+) -> Result<Vec<SessionMessage>, PluginError> {
+    let conn = match rusqlite::Connection::open_with_flags(
+        db_path,
+        rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY | rusqlite::OpenFlags::SQLITE_OPEN_NO_MUTEX,
+    ) {
+        Ok(c) => c,
+        Err(e) => return Err(PluginError::Other(format!("打开会话数据库失败: {e}"))),
+    };
+
+    let mut msg_stmt = match conn.prepare(
+        "SELECT id, time_created, data FROM message WHERE session_id = ?1 ORDER BY time_created ASC",
+    ) {
+        Ok(s) => s,
+        Err(_) => return Ok(Vec::new()),
+    };
+    let msg_rows = msg_stmt.query_map([session_id], |row| {
+        let id: String = row.get(0)?;
+        let ts: i64 = row.get(1)?;
+        let data: String = row.get(2)?;
+        Ok((id, ts, data))
+    });
+
+    let mut part_stmt = match conn.prepare(
+        "SELECT message_id, data FROM part WHERE session_id = ?1 ORDER BY time_created ASC",
+    ) {
+        Ok(s) => s,
+        Err(_) => return Ok(Vec::new()),
+    };
+    let part_rows = part_stmt.query_map([session_id], |row| {
+        let message_id: String = row.get(0)?;
+        let data: String = row.get(1)?;
+        Ok((message_id, data))
+    });
+
+    let mut parts_map: std::collections::HashMap<String, Vec<String>> =
+        std::collections::HashMap::new();
+    if let Ok(rows) = part_rows {
+        for part in rows.flatten() {
+            parts_map.entry(part.0).or_default().push(part.1);
+        }
+    }
+
+    let mut messages = Vec::new();
+    if let Ok(rows) = msg_rows {
+        for row in rows.flatten() {
+            let (msg_id, ts, data) = row;
+            let Ok(msg_value) = serde_json::from_str::<Value>(&data) else {
+                continue;
+            };
+            let role = msg_value
+                .get("role")
+                .and_then(Value::as_str)
+                .unwrap_or("unknown")
+                .to_string();
+
+            let mut texts = Vec::new();
+            if let Some(parts) = parts_map.get(&msg_id) {
+                for part_data in parts {
+                    let Ok(part_value) = serde_json::from_str::<Value>(part_data) else {
+                        continue;
+                    };
+                    if let Some(text) = extract_part_text(&part_value) {
+                        texts.push(text);
+                    }
+                }
+            }
+
+            let content = texts.join("\n");
+            if content.trim().is_empty() {
+                continue;
+            }
+            messages.push(SessionMessage {
+                role,
+                content,
+                ts: Some(ts),
+            });
+        }
+    }
+    Ok(messages)
+}
+
+/// 提取单个 part 的文本。
+fn extract_part_text(part_value: &Value) -> Option<String> {
+    match part_value.get("type").and_then(Value::as_str) {
+        Some("text") => part_value
+            .get("text")
+            .and_then(Value::as_str)
+            .filter(|t| !t.trim().is_empty())
+            .map(|t| t.to_string()),
+        Some("tool") => {
+            let tool = part_value
+                .get("tool")
+                .and_then(Value::as_str)
+                .unwrap_or("unknown");
+            Some(format!("[Tool: {tool}]"))
+        }
+        _ => None,
+    }
+}
+
+/// 收集 part 目录下全部文本。
+fn collect_parts_text(part_dir: &Path) -> String {
+    if !part_dir.is_dir() {
+        return String::new();
+    }
+    let mut parts = Vec::new();
+    collect_json_files(part_dir, &mut parts);
+
+    let mut texts = Vec::new();
+    for part_path in &parts {
+        let Ok(content) = std::fs::read_to_string(part_path) else {
+            continue;
+        };
+        let Ok(value) = serde_json::from_str::<Value>(&content) else {
+            continue;
+        };
+        if let Some(text) = extract_part_text(&value) {
+            texts.push(text);
+        }
+    }
+    texts.join("\n")
+}
+
+/// 删除 JSON 存储的会话（消息目录 + session_diff + session 文件）。
+fn delete_session_json(source: &str, session_id: &str) -> Result<bool, PluginError> {
+    let path = PathBuf::from(source);
+    let storage = match path.parent().and_then(|p| p.parent()) {
+        Some(s) => s.to_path_buf(),
+        None => return Err(PluginError::Other("无法确定 storage 根目录".into())),
+    };
+
+    let mut msg_files = Vec::new();
+    collect_json_files(&path, &mut msg_files);
+
+    let mut message_ids = Vec::new();
+    for message_path in &msg_files {
+        let Ok(content) = std::fs::read_to_string(message_path) else {
+            continue;
+        };
+        let Ok(value) = serde_json::from_str::<Value>(&content) else {
+            continue;
+        };
+        if let Some(message_id) = value.get("id").and_then(Value::as_str) {
+            message_ids.push(message_id.to_string());
+        }
+    }
+
+    for message_id in &message_ids {
+        let part_dir = storage.join("part").join(message_id);
+        remove_dir_all_if_exists(&part_dir).map_err(|e| PluginError::io(&part_dir, e))?;
+    }
+
+    let session_diff = storage.join("session_diff").join(format!("{session_id}.json"));
+    remove_file_if_exists(&session_diff).map_err(|e| PluginError::io(&session_diff, e))?;
+
+    remove_dir_all_if_exists(&path).map_err(|e| PluginError::io(&path, e))?;
+
+    if let Some(session_file) = find_session_file(&storage, session_id) {
+        remove_file_if_exists(&session_file).map_err(|e| PluginError::io(&session_file, e))?;
+    }
+
+    Ok(true)
+}
+
+/// 从 SQLite 数据库删除会话（含消息与 parts）。
+fn delete_session_sqlite(db_path: &Path, session_id: &str) -> Result<bool, PluginError> {
+    let expected_db = data_dir().join("opencode.db");
+    let canonical_db = db_path
+        .canonicalize()
+        .unwrap_or_else(|_| db_path.to_path_buf());
+    let canonical_expected = expected_db
+        .canonicalize()
+        .unwrap_or_else(|_| expected_db.clone());
+    if canonical_db != canonical_expected {
+        return Err(PluginError::Other(format!(
+            "数据库路径与预期不一致（拒绝操作）：{}",
+            db_path.display()
+        )));
+    }
+
+    let conn = match rusqlite::Connection::open(db_path) {
+        Ok(c) => c,
+        Err(e) => return Err(PluginError::Other(format!("打开会话数据库失败: {e}"))),
+    };
+    let tx = match conn.unchecked_transaction() {
+        Ok(t) => t,
+        Err(e) => return Err(PluginError::Other(format!("开启事务失败: {e}"))),
+    };
+
+    tx.execute("DELETE FROM part WHERE session_id = ?1", [session_id])
+        .map_err(|e| PluginError::Other(format!("删除会话 parts 失败: {e}")))?;
+    tx.execute("DELETE FROM message WHERE session_id = ?1", [session_id])
+        .map_err(|e| PluginError::Other(format!("删除会话消息失败: {e}")))?;
+    let deleted = tx
+        .execute("DELETE FROM session WHERE id = ?1", [session_id])
+        .map_err(|e| PluginError::Other(format!("删除会话失败: {e}")))?;
+    tx.commit()
+        .map_err(|e| PluginError::Other(format!("提交事务失败: {e}")))?;
+
+    Ok(deleted > 0)
+}
+
+fn find_session_file(storage: &Path, session_id: &str) -> Option<PathBuf> {
+    let session_root = storage.join("session");
+    let mut files = Vec::new();
+    collect_json_files(&session_root, &mut files);
+    let expected = format!("{session_id}.json");
+    files
+        .into_iter()
+        .find(|path| path.file_name().and_then(|n| n.to_str()) == Some(expected.as_str()))
+}
+
+fn remove_file_if_exists(path: &Path) -> std::io::Result<()> {
+    match std::fs::remove_file(path) {
+        Ok(()) => Ok(()),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(()),
+        Err(e) => Err(e),
+    }
+}
+
+fn remove_dir_all_if_exists(path: &Path) -> std::io::Result<()> {
+    match std::fs::remove_dir_all(path) {
+        Ok(()) => Ok(()),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(()),
+        Err(e) => Err(e),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -553,7 +952,7 @@ mod tests {
     }
 
     #[test]
-    fn apply_with_current_sets_top_level_selector() {
+    fn apply_current_is_additive_no_selector_overwrite() {
         let temp = tempfile::tempdir().unwrap();
         let _guard = HomeGuard::set(temp.path());
         let p = OpenCodePlugin::new();
@@ -566,8 +965,52 @@ mod tests {
         )
         .unwrap();
 
+        // additive 模式：current 仅表示写入，provider 段保持为对象。
         let config = read_config(&config_path()).unwrap();
-        assert_eq!(config["provider"], "my-prov");
+        assert!(config["provider"]["my-prov"]["npm"].is_string());
+    }
+
+    #[test]
+    fn remove_provider_deletes_from_live() {
+        let temp = tempfile::tempdir().unwrap();
+        let _guard = HomeGuard::set(temp.path());
+        write_config_file(
+            temp.path(),
+            r#"{"provider": {"a": {"npm": "x"}, "b": {"npm": "y"}}, "theme": "dark"}"#,
+        );
+        let p = OpenCodePlugin::new();
+        p.remove_provider("a").unwrap();
+        let config = read_config(&config_path()).unwrap();
+        assert!(config["provider"].get("a").is_none());
+        assert!(config["provider"]["b"]["npm"].is_string());
+        assert_eq!(config["theme"], "dark");
+    }
+
+    #[test]
+    fn mcp_servers_roundtrip_with_format_conversion() {
+        let temp = tempfile::tempdir().unwrap();
+        let _guard = HomeGuard::set(temp.path());
+        let p = OpenCodePlugin::new();
+
+        p.set_mcp_server(&McpServerSpec {
+            id: "filesystem".into(),
+            name: "Filesystem".into(),
+            spec: serde_json::json!({
+                "type": "stdio",
+                "command": "npx",
+                "args": ["-y", "@modelcontextprotocol/server-filesystem"]
+            }),
+        })
+        .unwrap();
+
+        let servers = p.get_mcp_servers().unwrap();
+        assert_eq!(servers.len(), 1);
+        assert_eq!(servers[0].id, "filesystem");
+        assert_eq!(servers[0].spec["command"], "npx");
+        assert_eq!(servers[0].spec["args"][1], "@modelcontextprotocol/server-filesystem");
+
+        p.remove_mcp_server("filesystem").unwrap();
+        assert!(p.get_mcp_servers().unwrap().is_empty());
     }
 
     #[test]
@@ -658,5 +1101,121 @@ mod tests {
         assert_eq!(sessions[0].session_id, "ses_1");
         assert_eq!(sessions[0].title.as_deref(), Some("a"));
         assert_eq!(sessions[1].session_id, "ses_legacy");
+    }
+
+    #[test]
+    fn load_messages_reads_json_storage() {
+        let temp = tempfile::tempdir().unwrap();
+        let storage = temp.path();
+        let session_id = "ses_test";
+        let msg_id = "msg_1";
+
+        let msg_dir = storage.join("message").join(session_id);
+        let part_dir = storage.join("part").join(msg_id);
+        std::fs::create_dir_all(&msg_dir).unwrap();
+        std::fs::create_dir_all(&part_dir).unwrap();
+
+        std::fs::write(
+            msg_dir.join(format!("{msg_id}.json")),
+            r#"{"id":"msg_1","role":"assistant","time":{"created":1000}}"#,
+        )
+        .unwrap();
+        std::fs::write(
+            part_dir.join("prt_1.json"),
+            r#"{"id":"prt_1","type":"tool","tool":"bash"}"#,
+        )
+        .unwrap();
+        std::fs::write(
+            part_dir.join("prt_2.json"),
+            r#"{"id":"prt_2","type":"text","text":"Done"}"#,
+        )
+        .unwrap();
+
+        let p = OpenCodePlugin::new();
+        let msgs = p
+            .load_messages(&msg_dir.display().to_string())
+            .unwrap();
+        assert_eq!(msgs.len(), 1);
+        assert_eq!(msgs[0].role, "assistant");
+        assert!(msgs[0].content.contains("[Tool: bash]"));
+        assert!(msgs[0].content.contains("Done"));
+        assert_eq!(msgs[0].ts, Some(1000));
+    }
+
+    #[test]
+    fn load_messages_sqlite_reads_messages_and_parts() {
+        let temp = tempfile::tempdir().unwrap();
+        let db_path = temp.path().join("opencode.db");
+        let conn = rusqlite::Connection::open(&db_path).unwrap();
+        conn.execute_batch(
+            "CREATE TABLE session (id TEXT PRIMARY KEY, title TEXT NOT NULL, directory TEXT NOT NULL, time_created INTEGER NOT NULL, time_updated INTEGER NOT NULL);
+             CREATE TABLE message (id TEXT PRIMARY KEY, session_id TEXT NOT NULL, time_created INTEGER NOT NULL, data TEXT NOT NULL);
+             CREATE TABLE part (id TEXT PRIMARY KEY, session_id TEXT NOT NULL, message_id TEXT NOT NULL, time_created INTEGER NOT NULL, data TEXT NOT NULL);",
+        )
+        .unwrap();
+        conn.execute(
+            "INSERT INTO session VALUES ('ses_1', 'T', '/p', 1000, 3000)",
+            [],
+        )
+        .unwrap();
+        conn.execute(
+            "INSERT INTO message VALUES ('msg_1', 'ses_1', 1000, '{\"role\":\"user\"}')",
+            [],
+        )
+        .unwrap();
+        conn.execute(
+            "INSERT INTO part VALUES ('prt_1', 'ses_1', 'msg_1', 1000, '{\"type\":\"text\",\"text\":\"Hello\"}')",
+            [],
+        )
+        .unwrap();
+        drop(conn);
+
+        let source = format!("sqlite:{}:ses_1", db_path.display());
+        let p = OpenCodePlugin::new();
+        let msgs = p.load_messages(&source).unwrap();
+        assert_eq!(msgs.len(), 1);
+        assert_eq!(msgs[0].role, "user");
+        assert_eq!(msgs[0].content, "Hello");
+    }
+
+    #[test]
+    fn delete_session_sqlite_removes_session_and_parts() {
+        let temp = tempfile::tempdir().unwrap();
+        let _home = HomeGuard::set(temp.path());
+        let original_xdg = std::env::var_os("XDG_DATA_HOME");
+        std::env::set_var("XDG_DATA_HOME", temp.path());
+
+        let base = temp.path().join("opencode");
+        std::fs::create_dir_all(&base).unwrap();
+        let db_path = base.join("opencode.db");
+        let conn = rusqlite::Connection::open(&db_path).unwrap();
+        conn.execute_batch(
+            "CREATE TABLE session (id TEXT PRIMARY KEY, title TEXT NOT NULL, directory TEXT NOT NULL, time_created INTEGER NOT NULL, time_updated INTEGER NOT NULL);
+             CREATE TABLE message (id TEXT PRIMARY KEY, session_id TEXT NOT NULL, time_created INTEGER NOT NULL, data TEXT NOT NULL);
+             CREATE TABLE part (id TEXT PRIMARY KEY, session_id TEXT NOT NULL, message_id TEXT NOT NULL, time_created INTEGER NOT NULL, data TEXT NOT NULL);",
+        )
+        .unwrap();
+        conn.execute("INSERT INTO session VALUES ('ses_1', 'T', '/p', 1000, 3000)", []).unwrap();
+        conn.execute("INSERT INTO message VALUES ('msg_1', 'ses_1', 1000, '{\"role\":\"user\"}')", []).unwrap();
+        conn.execute("INSERT INTO part VALUES ('prt_1', 'ses_1', 'msg_1', 1000, '{\"type\":\"text\",\"text\":\"Hi\"}')", []).unwrap();
+        drop(conn);
+
+        let source = format!("sqlite:{}:ses_1", db_path.display());
+        let p = OpenCodePlugin::new();
+        let deleted = p.delete_session("ses_1", &source).unwrap();
+        assert!(deleted);
+
+        let conn = rusqlite::Connection::open(&db_path).unwrap();
+        let remaining: i64 = conn
+            .query_row("SELECT COUNT(*) FROM session WHERE id = 'ses_1'", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(remaining, 0);
+        drop(conn);
+
+        if let Some(v) = original_xdg {
+            std::env::set_var("XDG_DATA_HOME", v);
+        } else {
+            std::env::remove_var("XDG_DATA_HOME");
+        }
     }
 }

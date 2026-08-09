@@ -5,6 +5,7 @@
 //!
 //! - `read_live`：读取该 Agent 当前生效的 live 配置
 //! - `apply`：把某个 provider 写入 live 配置（切换）
+//! - `remove_provider`：从 live 配置移除某个 provider
 //! - `import`：从 live 配置反向导入 provider 到数据库
 //! - `sessions`：列出该 Agent 的会话
 //!
@@ -14,6 +15,7 @@
 //!   由 [`super::registry`] 包装成进程插件调用。
 
 pub mod error;
+pub mod mcp;
 pub mod opencode;
 pub mod process;
 
@@ -25,6 +27,8 @@ use serde::{Deserialize, Serialize};
 
 use crate::types::Provider;
 
+pub use mcp::McpPlugin;
+
 /// 插件能力声明：manifest 中的 `capabilities` 字段。
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -35,12 +39,21 @@ pub struct PluginCapabilities {
     /// 支持把 provider 写入 live 配置（切换）。
     #[serde(default)]
     pub apply: bool,
+    /// 支持从 live 配置移除 provider。
+    #[serde(default)]
+    pub remove: bool,
     /// 支持从 live 配置导入 provider。
     #[serde(default)]
     pub import: bool,
     /// 支持列出会话。
     #[serde(default)]
     pub sessions: bool,
+    /// 支持 MCP 服务器管理。
+    #[serde(default)]
+    pub mcp: bool,
+    /// 支持插件管理（如 OMO 等 opencode 插件）。
+    #[serde(default)]
+    pub plugins: bool,
 }
 
 /// 从 live 配置中读到的单个 provider 视图。
@@ -86,6 +99,15 @@ pub struct SessionMeta {
     pub resume_command: Option<String>,
 }
 
+/// 会话消息（`load_messages` 返回值）。
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SessionMessage {
+    pub role: String,
+    pub content: String,
+    pub ts: Option<i64>,
+}
+
 /// Agent 插件协议。
 ///
 /// 实现方必须同时满足 `Send + Sync`，以便作为 Tauri 全局状态被并发访问。
@@ -105,9 +127,44 @@ pub trait AgentPlugin: Send + Sync {
     /// 是否同时把它标记为当前生效的 provider。
     fn apply(&self, provider: &Provider, current: bool) -> Result<(), PluginError>;
 
+    /// 从 live 配置移除某个 provider。
+    ///
+    /// 默认实现返回能力不支持错误；支持的插件覆盖此方法。
+    fn remove_provider(&self, _id: &str) -> Result<(), PluginError> {
+        Err(PluginError::Capability(format!(
+            "插件 '{}' 不支持移除 provider",
+            self.id()
+        )))
+    }
+
     /// 从 live 配置导入 provider 候选列表。
     fn import(&self) -> Result<Vec<ImportCandidate>, PluginError>;
 
     /// 列出该 Agent 的会话。
     fn sessions(&self) -> Result<Vec<SessionMeta>, PluginError>;
+
+    /// 加载某个会话的消息。
+    ///
+    /// `source` 是 [`SessionMeta::source_path`] 返回的来源引用。
+    fn load_messages(&self, _source: &str) -> Result<Vec<SessionMessage>, PluginError> {
+        Err(PluginError::Capability(format!(
+            "插件 '{}' 不支持加载会话消息",
+            self.id()
+        )))
+    }
+
+    /// 删除某个会话。
+    ///
+    /// `source` 是 [`SessionMeta::source_path`] 返回的来源引用。
+    fn delete_session(&self, _session_id: &str, _source: &str) -> Result<bool, PluginError> {
+        Err(PluginError::Capability(format!(
+            "插件 '{}' 不支持删除会话",
+            self.id()
+        )))
+    }
+
+    /// 若插件实现 MCP 管理，返回对应的 trait 对象引用。
+    fn as_mcp(&self) -> Option<&dyn McpPlugin> {
+        None
+    }
 }

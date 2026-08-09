@@ -9,8 +9,11 @@
   "capabilities": {
     "readLive": true,
     "apply": true,
+    "remove": true,
     "import": true,
-    "sessions": true
+    "sessions": true,
+    "mcp": true,
+    "plugins": true
   },
   "entry": {
     "type": "native",

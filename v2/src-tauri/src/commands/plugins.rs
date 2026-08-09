@@ -3,7 +3,10 @@ use std::path::Path;
 use tauri::State;
 
 use crate::db::Database;
-use crate::plugin::{AgentPlugin, ImportCandidate, LiveConfig, PluginError, SessionMeta};
+use crate::plugin::mcp::McpServerSpec;
+use crate::plugin::{
+    AgentPlugin, ImportCandidate, LiveConfig, PluginError, SessionMessage, SessionMeta,
+};
 use crate::registry::PluginRegistry;
 use crate::types::{InstalledPlugin, Provider};
 
@@ -78,6 +81,91 @@ pub fn plugin_sessions(
     let plugin = registry.resolve_plugin(&id).map_err(|e| e.to_string())?;
     require_capability(plugin.as_ref(), plugin.capabilities().sessions, "sessions")?;
     plugin.sessions().map_err(|e| e.to_string())
+}
+
+/// 从 live 配置移除某个 provider。
+#[tauri::command]
+pub fn plugin_remove_provider(
+    registry: State<'_, PluginRegistry>,
+    id: String,
+    provider_id: String,
+) -> Result<(), String> {
+    let plugin = registry.resolve_plugin(&id).map_err(|e| e.to_string())?;
+    require_capability(plugin.as_ref(), plugin.capabilities().remove, "remove_provider")?;
+    plugin.remove_provider(&provider_id).map_err(|e| e.to_string())
+}
+
+/// 加载某个会话的消息。
+#[tauri::command]
+pub fn plugin_load_messages(
+    registry: State<'_, PluginRegistry>,
+    id: String,
+    source: String,
+) -> Result<Vec<SessionMessage>, String> {
+    let plugin = registry.resolve_plugin(&id).map_err(|e| e.to_string())?;
+    require_capability(plugin.as_ref(), plugin.capabilities().sessions, "load_messages")?;
+    plugin.load_messages(&source).map_err(|e| e.to_string())
+}
+
+/// 删除某个会话。
+#[tauri::command]
+pub fn plugin_delete_session(
+    registry: State<'_, PluginRegistry>,
+    id: String,
+    session_id: String,
+    source: String,
+) -> Result<bool, String> {
+    let plugin = registry.resolve_plugin(&id).map_err(|e| e.to_string())?;
+    require_capability(plugin.as_ref(), plugin.capabilities().sessions, "delete_session")?;
+    plugin
+        .delete_session(&session_id, &source)
+        .map_err(|e| e.to_string())
+}
+
+/// 读取插件的 MCP 服务器列表。
+#[tauri::command]
+pub fn plugin_mcp_get(
+    registry: State<'_, PluginRegistry>,
+    id: String,
+) -> Result<Vec<McpServerSpec>, String> {
+    let plugin = registry.resolve_plugin(&id).map_err(|e| e.to_string())?;
+    require_capability(plugin.as_ref(), plugin.capabilities().mcp, "mcp")?;
+    let mcp_plugin = plugin
+        .as_mcp()
+        .ok_or_else(|| format!("插件 '{id}' 不支持 MCP 管理"))?;
+    mcp_plugin.get_mcp_servers().map_err(|e| e.to_string())
+}
+
+/// 写入/更新插件的某个 MCP 服务器。
+#[tauri::command]
+pub fn plugin_mcp_set(
+    registry: State<'_, PluginRegistry>,
+    id: String,
+    server: McpServerSpec,
+) -> Result<(), String> {
+    let plugin = registry.resolve_plugin(&id).map_err(|e| e.to_string())?;
+    require_capability(plugin.as_ref(), plugin.capabilities().mcp, "mcp")?;
+    let mcp_plugin = plugin
+        .as_mcp()
+        .ok_or_else(|| format!("插件 '{id}' 不支持 MCP 管理"))?;
+    mcp_plugin.set_mcp_server(&server).map_err(|e| e.to_string())
+}
+
+/// 移除插件的某个 MCP 服务器。
+#[tauri::command]
+pub fn plugin_mcp_remove(
+    registry: State<'_, PluginRegistry>,
+    id: String,
+    server_id: String,
+) -> Result<(), String> {
+    let plugin = registry.resolve_plugin(&id).map_err(|e| e.to_string())?;
+    require_capability(plugin.as_ref(), plugin.capabilities().mcp, "mcp")?;
+    let mcp_plugin = plugin
+        .as_mcp()
+        .ok_or_else(|| format!("插件 '{id}' 不支持 MCP 管理"))?;
+    mcp_plugin
+        .remove_mcp_server(&server_id)
+        .map_err(|e| e.to_string())
 }
 
 /// 把某个 provider 写入插件对应的 live 配置（切换）。
