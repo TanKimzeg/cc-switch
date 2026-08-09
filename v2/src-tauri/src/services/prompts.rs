@@ -41,7 +41,7 @@ impl Database {
     pub fn list_prompts(&self, plugin_id: Option<&str>) -> rusqlite::Result<Vec<PromptRecord>> {
         let conn = self.lock();
         let mut stmt = match plugin_id {
-            Some(pid) => conn.prepare(
+            Some(_) => conn.prepare(
                 "SELECT id, plugin_id, name, content, description, enabled, created_at, updated_at
                  FROM prompts WHERE plugin_id = ?1 ORDER BY name",
             )?,

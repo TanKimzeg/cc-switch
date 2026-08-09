@@ -109,10 +109,9 @@ impl Database {
                 params![id, name, description, id, source.display().to_string(), now],
             )
             .map_err(|e| e.to_string())?;
-        Ok(self
-            .get_skill(id)
+        self.get_skill(id)
             .map_err(|e| e.to_string())?
-            .ok_or_else(|| "技能写入失败".to_string())?)
+            .ok_or_else(|| "技能写入失败".to_string())
     }
 
     /// 删除技能：删除 SSOT 目录与记录。

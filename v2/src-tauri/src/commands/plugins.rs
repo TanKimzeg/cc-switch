@@ -4,7 +4,6 @@ use tauri::State;
 
 use crate::db::Database;
 use crate::plugin::mcp::McpServerSpec;
-use crate::plugin::ops::PluginManagerPlugin;
 use crate::plugin::{
     AgentPlugin, ImportCandidate, LiveConfig, PluginError, SessionMessage, SessionMeta,
 };

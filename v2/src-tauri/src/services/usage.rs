@@ -291,7 +291,7 @@ impl Database {
     pub fn list_request_logs(&self, plugin_id: Option<&str>, limit: usize) -> rusqlite::Result<Vec<RequestLogRow>> {
         let conn = self.lock();
         let mut stmt = match plugin_id {
-            Some(pid) => conn.prepare(
+            Some(_) => conn.prepare(
                 "SELECT request_id, plugin_id, model, input_tokens, output_tokens, cache_read_tokens,
                         cache_creation_tokens, total_cost_usd, session_id, created_at
                  FROM request_logs WHERE plugin_id = ?1 ORDER BY created_at DESC LIMIT ?2",
@@ -313,7 +313,7 @@ impl Database {
     pub fn usage_daily_summary(&self, plugin_id: Option<&str>) -> rusqlite::Result<Vec<DailyUsageRow>> {
         let conn = self.lock();
         let mut stmt = match plugin_id {
-            Some(pid) => conn.prepare(
+            Some(_) => conn.prepare(
                 "SELECT date(created_at, 'unixepoch') AS day, plugin_id, model,
                         COUNT(*) AS requests, SUM(input_tokens) AS input_tokens,
                         SUM(output_tokens) AS output_tokens,

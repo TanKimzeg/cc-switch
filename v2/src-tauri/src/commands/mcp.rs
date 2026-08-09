@@ -101,10 +101,13 @@ pub fn mcp_toggle_app(
     plugin_id: String,
     enabled: bool,
 ) -> Result<(), String> {
-    let server = db.get_mcp_server(&id).map_err(|e| e.to_string())?;
-    let Some(server) = server else {
+    let exists = db
+        .get_mcp_server(&id)
+        .map_err(|e| e.to_string())?
+        .is_some();
+    if !exists {
         return Err(format!("MCP 服务器不存在: {id}"));
-    };
+    }
     if enabled {
         db.set_mcp_server_app_enabled(&id, &plugin_id, true)
             .map_err(|e| e.to_string())?;
