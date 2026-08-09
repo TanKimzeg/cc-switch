@@ -140,3 +140,29 @@ it("applies a provider to the live config", async () => {
     expect(invoke).toHaveBeenCalledWith("plugin_apply", expect.anything());
   });
 });
+
+it("shows MCP servers when the plugin supports mcp", async () => {
+  vi.mocked(invoke).mockImplementation(async (cmd: string) => {
+    if (cmd === "get_plugins")
+      return [
+        {
+          id: "opencode",
+          name: "OpenCode",
+          version: "0.1.0",
+          apiVersion: "1",
+          source: "builtin",
+          installedAt: "2026-08-08",
+          capabilities: { mcp: true },
+        },
+      ];
+    if (cmd === "get_providers") return [];
+    if (cmd === "plugin_mcp_get")
+      return [
+        { id: "filesystem", name: "Filesystem", spec: { type: "stdio", command: "npx" } },
+      ];
+    return null;
+  });
+  renderApp();
+  fireEvent.click(await screen.findByText("OpenCode"));
+  expect(await screen.findByText("Filesystem")).toBeInTheDocument();
+});

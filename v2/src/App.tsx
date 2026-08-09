@@ -19,77 +19,13 @@ import {
   getProviders,
   importFromLive,
   installPlugin,
-  listSessions,
   readLiveConfig,
   uninstallPlugin,
 } from "@/lib/api";
-import type { InstalledPlugin, Provider, SessionMeta } from "@/types";
-
-function formatTime(ts?: number | null): string {
-  if (!ts) return "—";
-  const d = new Date(ts * 1000);
-  return d.toLocaleString();
-}
-
-function SessionList({ pluginId }: { pluginId: string }) {
-  const { t } = useTranslation();
-  const queryClient = useQueryClient();
-  const sessionsQuery = useQuery({
-    queryKey: ["sessions", pluginId],
-    queryFn: () => listSessions(pluginId),
-  });
-
-  const sessions = sessionsQuery.data ?? [];
-  return (
-    <section className="space-y-2">
-      <div className="flex items-center justify-between">
-        <h3 className="text-sm font-medium">{t("shell.sessions")}</h3>
-        <button
-          type="button"
-          onClick={() =>
-            queryClient.invalidateQueries({ queryKey: ["sessions", pluginId] })
-          }
-          className="rounded p-1 text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
-          title={t("common.refresh")}
-        >
-          <RefreshCw className="h-3.5 w-3.5" />
-        </button>
-      </div>
-      {sessionsQuery.isLoading ? (
-        <p className="text-xs text-muted-foreground">{t("common.loading")}</p>
-      ) : sessions.length === 0 ? (
-        <p className="text-xs text-muted-foreground">{t("shell.noSessions")}</p>
-      ) : (
-        <ul className="divide-y divide-border rounded-lg border border-border">
-          {sessions.map((s: SessionMeta) => (
-            <li key={s.sessionId} className="flex items-center gap-3 px-3 py-2">
-              <div className="min-w-0 flex-1">
-                <div className="truncate text-sm">
-                  {s.title || s.projectDir || s.sessionId}
-                </div>
-                <div className="mt-0.5 flex items-center gap-2 text-xs text-muted-foreground">
-                  <span className="truncate">{s.projectDir ?? "—"}</span>
-                  <span>{formatTime(s.lastActiveAt)}</span>
-                </div>
-              </div>
-              {s.resumeCommand && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    toast.info(s.resumeCommand);
-                  }}
-                  className="shrink-0 rounded-md border border-border px-2 py-1 text-xs transition-colors hover:bg-accent"
-                >
-                  {t("shell.resume")}
-                </button>
-              )}
-            </li>
-          ))}
-        </ul>
-      )}
-    </section>
-  );
-}
+import type { InstalledPlugin, Provider } from "@/types";
+import SessionList from "@/components/SessionList";
+import McpPanel from "@/components/McpPanel";
+import UsagePanel from "@/components/UsagePanel";
 
 export default function App() {
   const { t } = useTranslation();
@@ -439,6 +375,10 @@ function PluginDetail({
       )}
 
       {canSessions && <SessionList pluginId={plugin.id} />}
+
+      {canRead && <UsagePanel pluginId={plugin.id} />}
+
+      {caps.mcp && <McpPanel pluginId={plugin.id} />}
     </div>
   );
 }
