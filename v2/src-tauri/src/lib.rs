@@ -8,9 +8,16 @@ mod test_support;
 mod tray;
 mod types;
 
+use std::path::PathBuf;
+
 use db::Database;
 use registry::PluginRegistry;
 use tauri::{Manager, Wry};
+
+/// 全局状态：应用数据目录（skills 等落盘根目录）。
+pub struct AppPaths {
+    pub data_dir: PathBuf,
+}
 
 fn init_db(app: &tauri::App<Wry>) -> Result<(), Box<dyn std::error::Error>> {
     let dir = app.path().app_data_dir()?;
@@ -23,6 +30,7 @@ fn init_db(app: &tauri::App<Wry>) -> Result<(), Box<dyn std::error::Error>> {
     registry.sync_installs(&plugins)?;
     log::info!("discovered {} plugin(s)", plugins.len());
 
+    app.manage(AppPaths { data_dir: dir.clone() });
     app.manage(db);
     app.manage(registry);
     Ok(())
@@ -69,6 +77,10 @@ pub fn run() {
             commands::usage::sync_opencode_usage,
             commands::usage::usage_list_request_logs,
             commands::usage::usage_daily_summary,
+            commands::skills::skills_list,
+            commands::skills::skills_install,
+            commands::skills::skills_uninstall,
+            commands::skills::skills_toggle_plugin,
             commands::providers::get_providers,
             commands::providers::add_provider,
             commands::providers::update_provider,

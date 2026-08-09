@@ -78,6 +78,7 @@ CREATE TABLE IF NOT EXISTS skills (
   name           TEXT NOT NULL,
   description    TEXT,
   directory      TEXT NOT NULL,
+  source_path    TEXT,
   repo_owner     TEXT,
   repo_name      TEXT,
   repo_branch    TEXT DEFAULT 'main',
@@ -197,6 +198,11 @@ impl Database {
             .lock()
             .unwrap()
             .execute_batch(SCHEMA)?;
+        // 兼容旧库：skills 表若缺少 source_path 列则补充（已存在时忽略错误）。
+        let _ = db.conn.lock().unwrap().execute(
+            "ALTER TABLE skills ADD COLUMN source_path TEXT",
+            [],
+        );
         Ok(db)
     }
 
