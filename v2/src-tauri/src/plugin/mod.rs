@@ -17,10 +17,12 @@
 pub mod error;
 pub mod mcp;
 pub mod opencode;
+pub mod ops;
 pub mod process;
 
 pub use error::PluginError;
 pub use opencode::OpenCodePlugin;
+pub use ops::PluginManagerPlugin;
 pub use process::ProcessPlugin;
 
 use serde::{Deserialize, Serialize};
@@ -165,6 +167,11 @@ pub trait AgentPlugin: Send + Sync {
 
     /// 若插件实现 MCP 管理，返回对应的 trait 对象引用。
     fn as_mcp(&self) -> Option<&dyn McpPlugin> {
+        None
+    }
+
+    /// 若插件支持插件内插件管理（如 OMO），返回对应的 trait 对象引用。
+    fn as_plugin_manager(&self) -> Option<&dyn PluginManagerPlugin> {
         None
     }
 }
