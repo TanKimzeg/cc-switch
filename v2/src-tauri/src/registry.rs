@@ -192,15 +192,16 @@ impl PluginRegistry {
     }
 
     /// 首次运行：将内置插件写入插件目录。
+    ///
+    /// 内置插件由应用分发，其 manifest 必须始终与二进制内置版本一致，
+    /// 因此每次启动都覆盖写入（更新能力声明、版本等）。
     pub fn seed_builtin(&self) -> Result<(), ManifestError> {
         std::fs::create_dir_all(&self.dir).map_err(|e| ManifestError::io(&self.dir, e))?;
         for (id, manifest) in [("openclaw", OPENCLAW_MANIFEST), ("opencode", OPENCODE_MANIFEST)] {
             let plugin_dir = self.dir.join(id);
             std::fs::create_dir_all(&plugin_dir).map_err(|e| ManifestError::io(&plugin_dir, e))?;
             let target = plugin_dir.join("manifest.json");
-            if !target.exists() {
-                std::fs::write(&target, manifest).map_err(|e| ManifestError::io(&target, e))?;
-            }
+            std::fs::write(&target, manifest).map_err(|e| ManifestError::io(&target, e))?;
         }
         Ok(())
     }
@@ -445,17 +446,18 @@ mod tests {
     }
 
     #[test]
-    fn seed_does_not_overwrite_existing() {
+    fn seed_overwrites_builtin_manifest() {
         let dir = tempfile::tempdir().unwrap();
         let (registry, _db) = registry_in(dir.path());
-        let path = dir.path().join("plugins/openclaw/manifest.json");
+        let path = dir.path().join("plugins/opencode/manifest.json");
         std::fs::create_dir_all(path.parent().unwrap()).unwrap();
-        std::fs::write(&path, "{\"custom\": true}").unwrap();
+        std::fs::write(&path, "{\"stale\": true}").unwrap();
         registry.seed_builtin().unwrap();
-        assert_eq!(
-            std::fs::read_to_string(&path).unwrap(),
-            "{\"custom\": true}"
-        );
+        // 内置插件 manifest 由应用分发，启动时必须刷新为最新版本。
+        let refreshed: serde_json::Value =
+            serde_json::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
+        assert_eq!(refreshed["id"], "opencode");
+        assert!(refreshed["capabilities"]["mcp"].as_bool().unwrap_or(false));
     }
 
     #[test]
