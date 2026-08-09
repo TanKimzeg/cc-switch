@@ -3,6 +3,8 @@ mod db;
 mod plugin;
 mod registry;
 mod services;
+#[cfg(test)]
+mod test_support;
 mod tray;
 mod types;
 
@@ -64,6 +66,9 @@ pub fn run() {
             commands::mcp::mcp_toggle_app,
             commands::mcp::import_mcp_servers_from_plugin,
             commands::mcp::import_mcp_from_plugin,
+            commands::usage::sync_opencode_usage,
+            commands::usage::usage_list_request_logs,
+            commands::usage::usage_daily_summary,
             commands::providers::get_providers,
             commands::providers::add_provider,
             commands::providers::update_provider,
