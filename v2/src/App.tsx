@@ -26,11 +26,23 @@ import type { InstalledPlugin, Provider } from "@/types";
 import SessionList from "@/components/SessionList";
 import McpPanel from "@/components/McpPanel";
 import UsagePanel from "@/components/UsagePanel";
+import GlobalPanels, { globalPanelTabs } from "@/components/GlobalPanels";
 
 export default function App() {
   const { t } = useTranslation();
   const queryClient = useQueryClient();
   const [selectedPluginId, setSelectedPluginId] = useState<string | null>(null);
+  const [globalView, setGlobalView] = useState<string | null>(null);
+
+  const selectPlugin = (id: string | null) => {
+    setSelectedPluginId(id);
+    setGlobalView(null);
+  };
+
+  const selectGlobal = (view: string | null) => {
+    setSelectedPluginId(null);
+    setGlobalView(view);
+  };
 
   const pluginsQuery = useQuery({
     queryKey: ["plugins"],
@@ -106,8 +118,8 @@ export default function App() {
                 <button
                   type="button"
                   onClick={() =>
-                    setSelectedPluginId((current) =>
-                      current === plugin.id ? null : plugin.id,
+                    selectPlugin(
+                      selectedPluginId === plugin.id ? null : plugin.id,
                     )
                   }
                   className={`flex flex-1 items-center gap-2 rounded-md px-3 py-2 text-left text-sm transition-colors ${
@@ -137,10 +149,40 @@ export default function App() {
               </p>
             )}
           </nav>
+
+          <div className="mt-4 border-t border-border pt-2">
+            <span className="mb-2 block px-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+              {t("app.tagline")}
+            </span>
+            <nav className="space-y-1">
+              {globalPanelTabs().map((tab) => {
+                const Icon = tab.icon;
+                return (
+                  <button
+                    key={tab.id}
+                    type="button"
+                    onClick={() =>
+                      selectGlobal(globalView === tab.id ? null : tab.id)
+                    }
+                    className={`flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-sm transition-colors ${
+                      globalView === tab.id
+                        ? "bg-primary/10 text-primary"
+                        : "text-foreground hover:bg-muted"
+                    }`}
+                  >
+                    <Icon className="h-4 w-4 shrink-0" />
+                    <span className="truncate">{t(tab.label)}</span>
+                  </button>
+                );
+              })}
+            </nav>
+          </div>
         </aside>
 
         <main className="min-w-0 flex-1 overflow-auto p-6">
-          {selectedPlugin ? (
+          {globalView ? (
+            <GlobalPanels view={globalView} />
+          ) : selectedPlugin ? (
             <PluginDetail
               plugin={selectedPlugin}
               providers={providers}

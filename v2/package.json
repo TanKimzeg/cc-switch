@@ -34,9 +34,10 @@
     "vitest": "^2.0.5"
   },
   "dependencies": {
+    "@tanstack/react-query": "^5.90.3",
     "@tauri-apps/api": "^2.8.0",
     "@tauri-apps/plugin-dialog": "^2.4.0",
-    "@tanstack/react-query": "^5.90.3",
+    "@tauri-apps/plugin-fs": "^2.5.1",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "i18next": "^25.5.2",
