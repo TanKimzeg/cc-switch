@@ -3,6 +3,16 @@
     "name": "CC Switch v2",
     "tagline": "Plugin-based agent switcher"
   },
+  "nav": {
+    "providers": "Providers",
+    "sessions": "Sessions",
+    "mcp": "MCP",
+    "skills": "Skills",
+    "usage": "Usage",
+    "prompts": "Prompts",
+    "profiles": "Profiles",
+    "backup": "Backup & Export"
+  },
   "shell": {
     "agents": "Agents",
     "installed": "Installed",

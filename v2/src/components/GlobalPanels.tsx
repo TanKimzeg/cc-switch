@@ -1,15 +1,7 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import {
-  Archive,
-  Download,
-  Layers,
-  Plus,
-  ScrollText,
-  Sparkles,
-  Trash2,
-} from "lucide-react";
+import { Archive, Download, Plus, Trash2 } from "lucide-react";
 import { open, save } from "@tauri-apps/plugin-dialog";
 import { toast } from "sonner";
 import {
@@ -31,10 +23,26 @@ import {
   skillsList,
   skillsTogglePlugin,
   skillsUninstall,
+  applyProvider,
+  addProvider,
+  deleteProvider,
+  getProviders,
+  importFromLive,
+  removeProviderFromLive,
 } from "@/lib/api";
-import type { BackupRecord, Profile, PromptRecord, SkillRecord } from "@/types";
+import type {
+  BackupRecord,
+  Profile,
+  PromptRecord,
+  SkillRecord,
+  Provider,
+} from "@/types";
+import ProviderForm from "@/components/ProviderForm";
+import SessionList from "@/components/SessionList";
+import McpPanel from "@/components/McpPanel";
+import UsagePanel from "@/components/UsagePanel";
 
-function SkillsPanel() {
+function SkillsPanel({ pluginId }: { pluginId: string }) {
   const { t } = useTranslation();
   const queryClient = useQueryClient();
   const query = useQuery({ queryKey: ["skills"], queryFn: skillsList });
@@ -106,15 +114,15 @@ function SkillsPanel() {
                 )}
                 <button
                   type="button"
-                  onClick={() => handleToggle(s, "opencode")}
+                  onClick={() => handleToggle(s, pluginId)}
                   className={`mt-1 rounded-full px-2 py-0.5 text-xs ${
-                    s.enabledPlugins.includes("opencode")
+                    s.enabledPlugins.includes(pluginId)
                       ? "bg-primary/10 text-primary"
                       : "border border-border text-muted-foreground"
                   }`}
                 >
-                  opencode ·{" "}
-                  {s.enabledPlugins.includes("opencode")
+                  {pluginId} ·{" "}
+                  {s.enabledPlugins.includes(pluginId)
                     ? t("features.skillsEnable")
                     : t("features.skillsDisable")}
                 </button>
@@ -135,7 +143,7 @@ function SkillsPanel() {
   );
 }
 
-function PromptsPanel() {
+function PromptsPanel({ pluginId }: { pluginId: string }) {
   const { t } = useTranslation();
   const queryClient = useQueryClient();
   const [showForm, setShowForm] = useState(false);
@@ -154,13 +162,7 @@ function PromptsPanel() {
       return;
     }
     try {
-      await promptsUpsert(
-        id,
-        "opencode",
-        name.trim() || id,
-        content,
-        undefined,
-      );
+      await promptsUpsert(id, pluginId, name.trim() || id, content, undefined);
       await queryClient.invalidateQueries({ queryKey: ["prompts"] });
       setShowForm(false);
       setName("");
@@ -517,12 +519,210 @@ function BackupPanel() {
   );
 }
 
-export default function GlobalPanels({ view }: { view: string }) {
+function ProvidersPanel({ pluginId }: { pluginId: string }) {
+  const { t } = useTranslation();
+  const queryClient = useQueryClient();
+  const [formOpen, setFormOpen] = useState(false);
+  const [editing, setEditing] = useState<Provider | null>(null);
+
+  const query = useQuery({
+    queryKey: ["providers"],
+    queryFn: () => getProviders(),
+  });
+  const providers = (query.data ?? []).filter((p) => p.pluginId === pluginId);
+
+  const invalidate = () =>
+    queryClient.invalidateQueries({ queryKey: ["providers"] });
+
+  const handleApply = async (id: string) => {
+    try {
+      await applyProvider(pluginId, id, true);
+      toast.success(t("shell.applied"));
+    } catch (e) {
+      toast.error(String(e));
+    }
+  };
+
+  const handleDelete = async (p: Provider) => {
+    try {
+      await deleteProvider(p.id);
+      await removeProviderFromLive(pluginId, p.id);
+      await invalidate();
+      toast.success(t("shell.providerDeleted"));
+    } catch (e) {
+      toast.error(String(e));
+    }
+  };
+
+  const handleImport = async () => {
+    try {
+      const candidates = await importFromLive(pluginId);
+      for (const c of candidates) {
+        try {
+          await addProvider({
+            pluginId,
+            name: c.name,
+            category: "imported",
+            settingsConfig: JSON.stringify(c.settingsConfig),
+            meta: { liveId: c.id },
+          });
+        } catch {
+          // 跳过已存在条目
+        }
+      }
+      await invalidate();
+      toast.success(t("shell.importedCount", { count: candidates.length }));
+    } catch (e) {
+      toast.error(String(e));
+    }
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <h2 className="text-lg font-semibold">
+          {t("nav.providers")} · {pluginId}
+        </h2>
+        <div className="flex gap-1">
+          <button
+            type="button"
+            onClick={handleImport}
+            className="inline-flex items-center gap-1 rounded-md border border-border px-2 py-1 text-xs transition-colors hover:bg-accent"
+          >
+            <Download className="h-3.5 w-3.5" />
+            {t("shell.importLive")}
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setEditing(null);
+              setFormOpen(true);
+            }}
+            className="inline-flex items-center gap-1 rounded-md bg-primary px-2 py-1 text-xs text-primary-foreground transition-colors hover:bg-primary/90"
+          >
+            <Plus className="h-3.5 w-3.5" />
+            {t("shell.addProvider")}
+          </button>
+        </div>
+      </div>
+
+      {formOpen && (
+        <ProviderForm
+          pluginId={pluginId}
+          existing={editing}
+          onDone={() => {
+            setFormOpen(false);
+            setEditing(null);
+            invalidate();
+          }}
+        />
+      )}
+
+      {providers.length === 0 ? (
+        <p className="text-sm text-muted-foreground">
+          {t("shell.noProviders")}
+        </p>
+      ) : (
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          {providers.map((p) => (
+            <div
+              key={p.id}
+              className="flex flex-col gap-2 rounded-lg border border-border p-4"
+            >
+              <div className="truncate font-medium">{p.name}</div>
+              <div className="text-xs text-muted-foreground">{p.category}</div>
+              <div className="mt-auto flex gap-1">
+                <button
+                  type="button"
+                  onClick={() => handleApply(p.id)}
+                  className="flex-1 rounded-md bg-primary px-2 py-1.5 text-xs text-primary-foreground transition-colors hover:bg-primary/90"
+                >
+                  {t("shell.applyProvider")}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setEditing(p);
+                    setFormOpen(true);
+                  }}
+                  className="rounded-md border border-border px-2 py-1.5 text-xs transition-colors hover:bg-accent"
+                  title={t("shell.editProvider")}
+                >
+                  {t("shell.editProvider")}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleDelete(p)}
+                  className="rounded-md border border-border px-2 py-1.5 text-xs text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
+                  title={t("shell.deleteProvider")}
+                >
+                  {t("shell.deleteProvider")}
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function SessionsPanel({ pluginId }: { pluginId: string }) {
+  const { t } = useTranslation();
+  return (
+    <div className="space-y-4">
+      <h2 className="text-lg font-semibold">
+        {t("nav.sessions")} · {pluginId}
+      </h2>
+      <SessionList pluginId={pluginId} />
+    </div>
+  );
+}
+
+function McpGlobalPanel({ pluginId }: { pluginId: string }) {
+  const { t } = useTranslation();
+  return (
+    <div className="space-y-4">
+      <h2 className="text-lg font-semibold">
+        {t("nav.mcp")} · {pluginId}
+      </h2>
+      <McpPanel pluginId={pluginId} />
+    </div>
+  );
+}
+
+function UsageGlobalPanel({ pluginId }: { pluginId: string }) {
+  const { t } = useTranslation();
+  return (
+    <div className="space-y-4">
+      <h2 className="text-lg font-semibold">
+        {t("nav.usage")} · {pluginId}
+      </h2>
+      <UsagePanel pluginId={pluginId} />
+    </div>
+  );
+}
+
+export default function GlobalPanels({
+  view,
+  pluginId,
+}: {
+  view: string;
+  pluginId: string;
+}) {
   switch (view) {
+    case "providers":
+      return <ProvidersPanel pluginId={pluginId} />;
+    case "sessions":
+      return <SessionsPanel pluginId={pluginId} />;
+    case "mcp":
+      return <McpGlobalPanel pluginId={pluginId} />;
+    case "usage":
+      return <UsageGlobalPanel pluginId={pluginId} />;
     case "skills":
-      return <SkillsPanel />;
+      return <SkillsPanel pluginId={pluginId} />;
     case "prompts":
-      return <PromptsPanel />;
+      return <PromptsPanel pluginId={pluginId} />;
     case "profiles":
       return <ProfilesPanel />;
     case "backup":
@@ -530,13 +730,4 @@ export default function GlobalPanels({ view }: { view: string }) {
     default:
       return null;
   }
-}
-
-export function globalPanelTabs() {
-  return [
-    { id: "skills", label: "features.skillsTitle", icon: Sparkles },
-    { id: "prompts", label: "features.promptsTitle", icon: ScrollText },
-    { id: "profiles", label: "features.profilesTitle", icon: Layers },
-    { id: "backup", label: "features.backupTitle", icon: Archive },
-  ];
 }

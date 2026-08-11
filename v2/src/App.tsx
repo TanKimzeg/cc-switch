@@ -2,13 +2,18 @@ import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
+  Archive,
   Blocks,
   Download,
+  History,
+  Layers,
   Pencil,
   Puzzle,
   Plus,
   RefreshCw,
+  ScrollText,
   Send,
+  Sparkles,
   Trash2,
   X,
 } from "lucide-react";
@@ -30,31 +35,43 @@ import type { InstalledPlugin, Provider } from "@/types";
 import SessionList from "@/components/SessionList";
 import McpPanel from "@/components/McpPanel";
 import UsagePanel from "@/components/UsagePanel";
-import GlobalPanels, { globalPanelTabs } from "@/components/GlobalPanels";
+import GlobalPanels from "@/components/GlobalPanels";
 import ProviderForm from "@/components/ProviderForm";
+
+type View =
+  | "providers"
+  | "sessions"
+  | "mcp"
+  | "skills"
+  | "usage"
+  | "prompts"
+  | "profiles"
+  | "backup"
+  | "plugin-detail";
+
+const NAV_ITEMS: { id: View; label: string; icon: typeof Blocks }[] = [
+  { id: "providers", label: "nav.providers", icon: Blocks },
+  { id: "sessions", label: "nav.sessions", icon: History },
+  { id: "mcp", label: "nav.mcp", icon: Puzzle },
+  { id: "skills", label: "nav.skills", icon: Sparkles },
+  { id: "usage", label: "nav.usage", icon: RefreshCw },
+  { id: "prompts", label: "nav.prompts", icon: ScrollText },
+  { id: "profiles", label: "nav.profiles", icon: Layers },
+  { id: "backup", label: "nav.backup", icon: Archive },
+];
 
 export default function App() {
   const { t } = useTranslation();
   const queryClient = useQueryClient();
+  const [view, setView] = useState<View>("providers");
   const [selectedPluginId, setSelectedPluginId] = useState<string | null>(null);
-  const [globalView, setGlobalView] = useState<string | null>(null);
-
-  const selectPlugin = (id: string | null) => {
-    setSelectedPluginId(id);
-    setGlobalView(null);
-  };
-
-  const selectGlobal = (view: string | null) => {
-    setSelectedPluginId(null);
-    setGlobalView(view);
-  };
 
   const pluginsQuery = useQuery({
     queryKey: ["plugins"],
     queryFn: getPlugins,
   });
   const providersQuery = useQuery({
-    queryKey: ["providers", selectedPluginId],
+    queryKey: ["providers"],
     queryFn: () => getProviders(),
   });
 
@@ -92,18 +109,63 @@ export default function App() {
     }
   };
 
+  const renderContent = () => {
+    if (view === "plugin-detail" && selectedPlugin) {
+      return (
+        <PluginDetail
+          plugin={selectedPlugin}
+          providers={providers}
+          onProvidersChanged={() =>
+            queryClient.invalidateQueries({ queryKey: ["providers"] })
+          }
+        />
+      );
+    }
+    const activePluginId = selectedPluginId ?? plugins[0]?.id ?? "opencode";
+    return <GlobalPanels view={view} pluginId={activePluginId} />;
+  };
+
   return (
     <div className="flex h-screen w-screen flex-col overflow-hidden">
-      <header className="flex h-12 shrink-0 items-center gap-2 border-b border-border px-4">
+      <header className="flex h-12 shrink-0 items-center gap-3 border-b border-border px-4">
         <Puzzle className="h-5 w-5 text-blue-500" />
         <span className="font-semibold">{t("app.name")}</span>
         <span className="text-xs text-muted-foreground">
           {t("app.tagline")}
         </span>
+        <nav className="ml-4 flex items-center gap-1">
+          {NAV_ITEMS.map((item) => {
+            const Icon = item.icon;
+            const active =
+              view === item.id ||
+              (item.id === "providers" && view === "plugin-detail");
+            return (
+              <button
+                key={item.id}
+                type="button"
+                onClick={() => {
+                  if (item.id === "providers") {
+                    setView(selectedPlugin ? "plugin-detail" : "providers");
+                  } else {
+                    setView(item.id);
+                  }
+                }}
+                className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm transition-colors ${
+                  active
+                    ? "bg-primary/10 text-primary"
+                    : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                }`}
+              >
+                <Icon className="h-4 w-4 shrink-0" />
+                <span className="hidden lg:inline">{t(item.label)}</span>
+              </button>
+            );
+          })}
+        </nav>
       </header>
 
       <div className="flex min-h-0 flex-1">
-        <aside className="w-56 shrink-0 border-r border-border p-3">
+        <aside className="w-48 shrink-0 border-r border-border p-3">
           <div className="mb-2 flex items-center justify-between px-2">
             <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
               {t("shell.installed")}
@@ -122,13 +184,12 @@ export default function App() {
               <div key={plugin.id} className="group flex items-center gap-1">
                 <button
                   type="button"
-                  onClick={() =>
-                    selectPlugin(
-                      selectedPluginId === plugin.id ? null : plugin.id,
-                    )
-                  }
+                  onClick={() => {
+                    setSelectedPluginId(plugin.id);
+                    setView("plugin-detail");
+                  }}
                   className={`flex flex-1 items-center gap-2 rounded-md px-3 py-2 text-left text-sm transition-colors ${
-                    selectedPluginId === plugin.id
+                    view === "plugin-detail" && selectedPluginId === plugin.id
                       ? "bg-primary/10 text-primary"
                       : "text-foreground hover:bg-muted"
                   }`}
@@ -154,58 +215,10 @@ export default function App() {
               </p>
             )}
           </nav>
-
-          <div className="mt-4 border-t border-border pt-2">
-            <span className="mb-2 block px-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
-              {t("app.tagline")}
-            </span>
-            <nav className="space-y-1">
-              {globalPanelTabs().map((tab) => {
-                const Icon = tab.icon;
-                return (
-                  <button
-                    key={tab.id}
-                    type="button"
-                    onClick={() =>
-                      selectGlobal(globalView === tab.id ? null : tab.id)
-                    }
-                    className={`flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-sm transition-colors ${
-                      globalView === tab.id
-                        ? "bg-primary/10 text-primary"
-                        : "text-foreground hover:bg-muted"
-                    }`}
-                  >
-                    <Icon className="h-4 w-4 shrink-0" />
-                    <span className="truncate">{t(tab.label)}</span>
-                  </button>
-                );
-              })}
-            </nav>
-          </div>
         </aside>
 
         <main className="min-w-0 flex-1 overflow-auto p-6">
-          {globalView ? (
-            <GlobalPanels view={globalView} />
-          ) : selectedPlugin ? (
-            <PluginDetail
-              plugin={selectedPlugin}
-              providers={providers}
-              onProvidersChanged={() =>
-                queryClient.invalidateQueries({ queryKey: ["providers"] })
-              }
-            />
-          ) : (
-            <div className="flex h-full flex-col items-center justify-center gap-3 text-center">
-              <Puzzle className="h-10 w-10 text-muted-foreground" />
-              <h2 className="text-base font-medium">
-                {t("shell.noPluginsTitle")}
-              </h2>
-              <p className="max-w-xs text-sm text-muted-foreground">
-                {t("shell.noPluginsDesc")}
-              </p>
-            </div>
-          )}
+          {renderContent()}
         </main>
       </div>
     </div>

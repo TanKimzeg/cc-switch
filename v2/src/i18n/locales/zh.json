@@ -3,6 +3,16 @@
     "name": "CC Switch v2",
     "tagline": "基于插件的 Agent 切换器"
   },
+  "nav": {
+    "providers": "供应商",
+    "sessions": "会话",
+    "mcp": "MCP",
+    "skills": "技能",
+    "usage": "用量",
+    "prompts": "Prompt",
+    "profiles": "配置方案",
+    "backup": "备份与导出"
+  },
   "shell": {
     "agents": "Agent",
     "installed": "已安装",
