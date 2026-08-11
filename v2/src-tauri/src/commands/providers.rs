@@ -3,6 +3,7 @@ use tauri::State;
 use uuid::Uuid;
 
 use crate::db::Database;
+use crate::registry::PluginRegistry;
 use crate::types::{Provider, ProviderInput};
 
 const PROVIDER_COLUMNS: &str = "id, plugin_id, name, category, icon, website, api_key, settings_config, meta, sort_order, created_at, updated_at";
@@ -147,12 +148,15 @@ pub fn delete_provider(db: State<'_, Database>, id: String) -> Result<(), String
 }
 
 #[tauri::command]
-pub fn get_current_provider(db: State<'_, Database>) -> Result<Option<Provider>, String> {
+pub fn get_current_provider(
+    db: State<'_, Database>,
+    plugin_id: String,
+) -> Result<Option<Provider>, String> {
     let conn = db.lock();
     let pid: Option<String> = conn
         .query_row(
-            "SELECT current_provider_id FROM app_state WHERE plugin_id = 'default'",
-            [],
+            "SELECT current_provider_id FROM app_state WHERE plugin_id = ?1",
+            params![plugin_id],
             |row| row.get(0),
         )
         .optional()
@@ -163,18 +167,106 @@ pub fn get_current_provider(db: State<'_, Database>) -> Result<Option<Provider>,
     get_provider_by_id(&db, &pid).map(Some)
 }
 
+/// 记录某插件当前生效的 provider（不写 live，只更新 app_state）。
 #[tauri::command]
 pub fn set_current_provider(
     db: State<'_, Database>,
-    id: Option<String>,
+    plugin_id: String,
+    provider_id: Option<String>,
 ) -> Result<(), String> {
     db.lock()
         .execute(
-            "INSERT INTO app_state (plugin_id, current_provider_id) VALUES ('default', ?1)
+            "INSERT INTO app_state (plugin_id, current_provider_id) VALUES (?1, ?2)
              ON CONFLICT(plugin_id) DO UPDATE SET current_provider_id = excluded.current_provider_id",
-            params![id],
+            params![plugin_id, provider_id],
         )
         .map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+/// 读取单个 provider。
+#[tauri::command]
+pub fn get_provider(db: State<'_, Database>, id: String) -> Result<Option<Provider>, String> {
+    db.lock()
+        .query_row(
+            &format!("SELECT {PROVIDER_COLUMNS} FROM providers WHERE id = ?1"),
+            params![id],
+            row_to_provider,
+        )
+        .optional()
+        .map_err(|e| e.to_string())
+}
+
+/// 切换 provider：把 provider 写入插件 live 配置（current=true），并记录为当前。
+#[tauri::command]
+pub fn switch_provider(
+    registry: State<'_, PluginRegistry>,
+    db: State<'_, Database>,
+    provider_id: String,
+) -> Result<(), String> {
+    let provider = get_provider_by_id(&db, &provider_id)?;
+    let plugin = registry
+        .resolve_plugin(&provider.plugin_id)
+        .map_err(|e| e.to_string())?;
+    require_apply(plugin.as_ref())?;
+    plugin
+        .apply(&provider, true)
+        .map_err(|e| e.to_string())?;
+    db.lock()
+        .execute(
+            "INSERT INTO app_state (plugin_id, current_provider_id) VALUES (?1, ?2)
+             ON CONFLICT(plugin_id) DO UPDATE SET current_provider_id = excluded.current_provider_id",
+            params![provider.plugin_id, provider.id],
+        )
+        .map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+/// 从 live 配置移除某个 provider（不删除数据库记录）。
+#[tauri::command]
+pub fn remove_provider_from_live_config(
+    registry: State<'_, PluginRegistry>,
+    db: State<'_, Database>,
+    provider_id: String,
+) -> Result<(), String> {
+    let provider = get_provider_by_id(&db, &provider_id)?;
+    let plugin = registry
+        .resolve_plugin(&provider.plugin_id)
+        .map_err(|e| e.to_string())?;
+    require_remove(plugin.as_ref())?;
+    plugin.remove_provider(&provider.id).map_err(|e| e.to_string())
+}
+
+/// 更新某插件下 provider 的排序。
+#[tauri::command]
+pub fn update_providers_sort_order(
+    db: State<'_, Database>,
+    plugin_id: String,
+    ids: Vec<String>,
+) -> Result<(), String> {
+    let conn = db.lock();
+    for (i, id) in ids.iter().enumerate() {
+        conn.execute(
+            "UPDATE providers SET sort_order = ?1, updated_at = datetime('now')
+             WHERE id = ?2 AND plugin_id = ?3",
+            params![i as i64, id, plugin_id],
+        )
+        .map_err(|e| e.to_string())?;
+    }
+    Ok(())
+}
+
+fn require_apply(plugin: &dyn crate::plugin::AgentPlugin) -> Result<(), String> {
+    if !plugin.capabilities().apply {
+        return Err(format!("插件 '{}' 不支持切换", plugin.id()));
+    }
+    Ok(())
+}
+
+fn require_remove(plugin: &dyn crate::plugin::AgentPlugin) -> Result<(), String> {
+    if !plugin.capabilities().remove {
+        return Err(format!("插件 '{}' 不支持移除 provider", plugin.id()));
+    }
     Ok(())
 }
 

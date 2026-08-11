@@ -16,7 +16,7 @@ import {
   backupCreate,
   backupDelete,
   backupList,
-  exportConfigJson,
+  exportConfigToFile,
   profilesApply,
   profilesClearCurrent,
   profilesCurrent,
@@ -438,13 +438,11 @@ function BackupPanel() {
 
   const handleExport = async () => {
     try {
-      const payload = await exportConfigJson();
       const filePath = await save({
         defaultPath: "cc-switch-export.json",
       });
       if (typeof filePath !== "string") return;
-      const fs = await import("@tauri-apps/plugin-fs");
-      await fs.writeTextFile(filePath, JSON.stringify(payload, null, 2));
+      await exportConfigToFile(filePath);
       toast.success(t("common.save"));
     } catch (e) {
       toast.error(String(e));

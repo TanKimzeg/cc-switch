@@ -45,15 +45,32 @@ export function deleteProvider(id: string): Promise<void> {
   return invoke<void>("delete_provider", { id });
 }
 
-export function getCurrentProvider(pluginId: string): Promise<string | null> {
-  return invoke<string | null>("get_current_provider", { pluginId });
+export function getCurrentProvider(
+  pluginId: string,
+): Promise<Provider | null> {
+  return invoke<Provider | null>("get_current_provider", { pluginId });
 }
 
 export function setCurrentProvider(
   pluginId: string,
-  providerId: string,
+  providerId: string | null,
 ): Promise<void> {
   return invoke<void>("set_current_provider", { pluginId, providerId });
+}
+
+export function switchProvider(providerId: string): Promise<void> {
+  return invoke<void>("switch_provider", { providerId });
+}
+
+export function removeProviderFromLiveConfig(providerId: string): Promise<void> {
+  return invoke<void>("remove_provider_from_live_config", { providerId });
+}
+
+export function updateProvidersSortOrder(
+  pluginId: string,
+  ids: string[],
+): Promise<void> {
+  return invoke<void>("update_providers_sort_order", { pluginId, ids });
 }
 
 export function getPlugins(): Promise<InstalledPlugin[]> {
@@ -299,4 +316,8 @@ export function backupDelete(id: string): Promise<void> {
 
 export function exportConfigJson(): Promise<ExportPayload> {
   return invoke<ExportPayload>("export_config_json");
+}
+
+export function exportConfigToFile(path: string): Promise<void> {
+  return invoke<void>("export_config_to_file", { path });
 }

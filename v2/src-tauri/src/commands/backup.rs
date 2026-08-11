@@ -42,6 +42,18 @@ pub fn export_config_json(db: State<'_, Database>) -> Result<ExportPayload, Stri
     db.export_config()
 }
 
+/// 把导出的配置 JSON 写入指定路径。
+#[tauri::command]
+pub fn export_config_to_file(
+    db: State<'_, Database>,
+    path: String,
+) -> Result<(), String> {
+    let payload = db.export_config()?;
+    let json = serde_json::to_string_pretty(&payload)
+        .map_err(|e| format!("序列化导出失败: {e}"))?;
+    std::fs::write(&path, json).map_err(|e| format!("写入文件失败: {e}"))
+}
+
 /// 把 JSON 文本解析为导出负载（供前端下载保存）。
 #[tauri::command]
 pub fn parse_export_json(content: String) -> Result<ExportPayload, String> {
