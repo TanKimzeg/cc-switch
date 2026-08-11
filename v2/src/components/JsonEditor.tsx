@@ -10,6 +10,7 @@ import { useTranslation } from "react-i18next";
 import { Wand2 } from "lucide-react";
 import { toast } from "sonner";
 import { formatJSON } from "@/lib/formatters";
+import { useTheme } from "@/components/theme-provider";
 
 interface JsonEditorProps {
   id?: string;
@@ -28,15 +29,24 @@ const JsonEditor: React.FC<JsonEditorProps> = ({
   value,
   onChange,
   placeholder: placeholderText = "",
-  darkMode = false,
+  darkMode,
   rows = 12,
   showValidation = true,
   language = "json",
   height,
 }) => {
   const { t } = useTranslation();
+  const { theme } = useTheme();
   const editorRef = useRef<HTMLDivElement>(null);
   const viewRef = useRef<EditorView | null>(null);
+
+  const isDarkMode =
+    theme === "dark" ||
+    (theme === "system" &&
+      typeof window !== "undefined" &&
+      window.matchMedia("(prefers-color-scheme: dark)").matches);
+
+  const resolvedDarkMode = darkMode ?? isDarkMode;
 
   // JSON linter 函数
   const jsonLinter = useMemo(
@@ -151,7 +161,7 @@ const JsonEditor: React.FC<JsonEditorProps> = ({
     ];
 
     // 如果启用深色模式，添加深色主题
-    if (darkMode) {
+    if (resolvedDarkMode) {
       extensions.push(oneDark);
       // 在 oneDark 之后强制覆盖边框样式
       extensions.push(
@@ -208,7 +218,7 @@ const JsonEditor: React.FC<JsonEditorProps> = ({
       view.destroy();
       viewRef.current = null;
     };
-  }, [darkMode, rows, height, language, jsonLinter]); // 依赖项中不包含 onChange 和 placeholder，避免不必要的重建
+  }, [resolvedDarkMode, rows, height, language, jsonLinter]); // 依赖项中不包含 onChange 和 placeholder，避免不必要的重建
 
   // 当 value 从外部改变时更新编辑器内容
   useEffect(() => {
