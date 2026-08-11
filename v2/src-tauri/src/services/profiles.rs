@@ -95,7 +95,10 @@ impl Database {
                 )
                 .optional()?;
             if current.as_deref() == Some(id) {
-                conn.execute("DELETE FROM settings WHERE key = ?1", params![CURRENT_PROFILE_KEY])?;
+                conn.execute(
+                    "DELETE FROM settings WHERE key = ?1",
+                    params![CURRENT_PROFILE_KEY],
+                )?;
             }
         }
         Ok(changed > 0)
@@ -115,7 +118,10 @@ impl Database {
                  ON CONFLICT(key) DO UPDATE SET value = excluded.value",
                 params![CURRENT_PROFILE_KEY, id],
             )?,
-            None => conn.execute("DELETE FROM settings WHERE key = ?1", params![CURRENT_PROFILE_KEY])?,
+            None => conn.execute(
+                "DELETE FROM settings WHERE key = ?1",
+                params![CURRENT_PROFILE_KEY],
+            )?,
         };
         Ok(())
     }

@@ -10,8 +10,7 @@ const PROVIDER_COLUMNS: &str = "id, plugin_id, name, category, icon, website, ap
 
 fn row_to_provider(row: &Row<'_>) -> rusqlite::Result<Provider> {
     let meta: Option<String> = row.get("meta")?;
-    let meta = meta
-        .map(|s| serde_json::from_str(&s).unwrap_or(serde_json::Value::Null));
+    let meta = meta.map(|s| serde_json::from_str(&s).unwrap_or(serde_json::Value::Null));
     Ok(Provider {
         id: row.get("id")?,
         plugin_id: row.get("plugin_id")?,
@@ -53,13 +52,15 @@ pub fn get_providers(
             let iter = stmt
                 .query_map(params![pid], row_to_provider)
                 .map_err(|e| e.to_string())?;
-            iter.collect::<Result<Vec<_>, _>>().map_err(|e| e.to_string())?
+            iter.collect::<Result<Vec<_>, _>>()
+                .map_err(|e| e.to_string())?
         }
         None => {
             let iter = stmt
                 .query_map([], row_to_provider)
                 .map_err(|e| e.to_string())?;
-            iter.collect::<Result<Vec<_>, _>>().map_err(|e| e.to_string())?
+            iter.collect::<Result<Vec<_>, _>>()
+                .map_err(|e| e.to_string())?
         }
     };
     Ok(rows)
@@ -112,9 +113,7 @@ pub fn add_provider(
             .resolve_plugin(&provider.plugin_id)
             .map_err(|e| e.to_string())?;
         if plugin.capabilities().apply {
-            plugin
-                .apply(&provider, false)
-                .map_err(|e| e.to_string())?;
+            plugin.apply(&provider, false).map_err(|e| e.to_string())?;
         }
     }
     Ok(provider)
@@ -163,9 +162,7 @@ pub fn update_provider(
     if live_managed {
         if let Ok(plugin) = registry.resolve_plugin(&provider.plugin_id) {
             if plugin.capabilities().apply {
-                plugin
-                    .apply(&provider, false)
-                    .map_err(|e| e.to_string())?;
+                plugin.apply(&provider, false).map_err(|e| e.to_string())?;
             }
         }
     }
@@ -247,9 +244,7 @@ pub fn switch_provider(
         .resolve_plugin(&provider.plugin_id)
         .map_err(|e| e.to_string())?;
     require_apply(plugin.as_ref())?;
-    plugin
-        .apply(&provider, true)
-        .map_err(|e| e.to_string())?;
+    plugin.apply(&provider, true).map_err(|e| e.to_string())?;
     db.lock()
         .execute(
             "INSERT INTO app_state (plugin_id, current_provider_id) VALUES (?1, ?2)
@@ -272,7 +267,9 @@ pub fn remove_provider_from_live_config(
         .resolve_plugin(&provider.plugin_id)
         .map_err(|e| e.to_string())?;
     require_remove(plugin.as_ref())?;
-    plugin.remove_provider(&provider.id).map_err(|e| e.to_string())
+    plugin
+        .remove_provider(&provider.id)
+        .map_err(|e| e.to_string())
 }
 
 /// 更新某插件下 provider 的排序。
@@ -305,7 +302,8 @@ fn list_managed_providers(db: &Database, plugin_id: &str) -> Result<Vec<Provider
     let rows = stmt
         .query_map(params![plugin_id], row_to_provider)
         .map_err(|e| e.to_string())?;
-    rows.collect::<Result<Vec<_>, _>>().map_err(|e| e.to_string())
+    rows.collect::<Result<Vec<_>, _>>()
+        .map_err(|e| e.to_string())
 }
 
 /// 把某插件（或全部插件）DB 中 `live_config_managed = 1` 的 provider 全量投影到 live。
@@ -325,7 +323,8 @@ pub fn sync_all_providers_to_live(
             let rows = stmt
                 .query_map([], |r| r.get::<_, String>(0))
                 .map_err(|e| e.to_string())?;
-            rows.collect::<Result<Vec<_>, _>>().map_err(|e| e.to_string())?
+            rows.collect::<Result<Vec<_>, _>>()
+                .map_err(|e| e.to_string())?
         }
     };
 
@@ -337,9 +336,7 @@ pub fn sync_all_providers_to_live(
             continue;
         }
         for provider in providers {
-            plugin
-                .apply(&provider, false)
-                .map_err(|e| e.to_string())?;
+            plugin.apply(&provider, false).map_err(|e| e.to_string())?;
             written += 1;
         }
     }
@@ -374,8 +371,8 @@ pub fn import_providers_from_live(
                 |r| r.get::<_, i64>(0),
             )
             .map_err(|e| e.to_string())?;
-        let settings = serde_json::to_string(&candidate.settings_config)
-            .map_err(|e| e.to_string())?;
+        let settings =
+            serde_json::to_string(&candidate.settings_config).map_err(|e| e.to_string())?;
         if exists > 0 {
             db.lock()
                 .execute(

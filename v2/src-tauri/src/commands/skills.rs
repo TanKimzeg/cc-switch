@@ -5,7 +5,7 @@ use std::path::Path;
 use tauri::State;
 
 use crate::db::Database;
-use crate::services::skills::{SkillRecord, plugin_skills_dir};
+use crate::services::skills::{plugin_skills_dir, SkillRecord};
 use crate::AppPaths;
 
 fn skills_root(paths: &AppPaths) -> std::path::PathBuf {

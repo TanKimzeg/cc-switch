@@ -14,7 +14,11 @@ pub fn import_mcp_from_plugin(
 ) -> Result<Vec<crate::plugin::mcp::McpServerSpec>, String> {
     let plugin = registry.resolve_plugin(&id).map_err(|e| e.to_string())?;
     require_mcp(plugin.as_ref(), &id)?;
-    plugin.as_mcp().unwrap().get_mcp_servers().map_err(|e| e.to_string())
+    plugin
+        .as_mcp()
+        .unwrap()
+        .get_mcp_servers()
+        .map_err(|e| e.to_string())
 }
 
 /// 从插件 live 配置导入 MCP 服务器到统一表。
@@ -101,10 +105,7 @@ pub fn mcp_toggle_app(
     plugin_id: String,
     enabled: bool,
 ) -> Result<(), String> {
-    let exists = db
-        .get_mcp_server(&id)
-        .map_err(|e| e.to_string())?
-        .is_some();
+    let exists = db.get_mcp_server(&id).map_err(|e| e.to_string())?.is_some();
     if !exists {
         return Err(format!("MCP 服务器不存在: {id}"));
     }

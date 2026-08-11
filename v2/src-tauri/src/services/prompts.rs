@@ -70,7 +70,14 @@ impl Database {
     }
 
     /// 新增/更新 prompt。
-    pub fn upsert_prompt(&self, id: &str, plugin_id: &str, name: &str, content: &str, description: Option<&str>) -> rusqlite::Result<()> {
+    pub fn upsert_prompt(
+        &self,
+        id: &str,
+        plugin_id: &str,
+        name: &str,
+        content: &str,
+        description: Option<&str>,
+    ) -> rusqlite::Result<()> {
         self.lock().execute(
             "INSERT INTO prompts (id, plugin_id, name, content, description, updated_at)
              VALUES (?1, ?2, ?3, ?4, ?5, datetime('now'))
@@ -144,8 +151,10 @@ mod tests {
     fn prompt_upsert_updates_in_place() {
         let dir = tempfile::tempdir().unwrap();
         let db = Database::new(&dir.path().join("cc.db")).unwrap();
-        db.upsert_prompt("p1", "opencode", "A", "old", None).unwrap();
-        db.upsert_prompt("p1", "opencode", "A", "new", None).unwrap();
+        db.upsert_prompt("p1", "opencode", "A", "old", None)
+            .unwrap();
+        db.upsert_prompt("p1", "opencode", "A", "new", None)
+            .unwrap();
         let prompt = db.get_prompt("p1").unwrap().unwrap();
         assert_eq!(prompt.content, "new");
     }

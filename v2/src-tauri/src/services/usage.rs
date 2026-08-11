@@ -37,7 +37,10 @@ pub fn parse_opencode_message(value: &serde_json::Value) -> Option<OpenCodeUsage
     let tokens = value.get("tokens")?;
     let input_tokens = tokens.get("input").and_then(|v| v.as_u64()).unwrap_or(0);
     let output_tokens = tokens.get("output").and_then(|v| v.as_u64()).unwrap_or(0);
-    let reasoning_tokens = tokens.get("reasoning").and_then(|v| v.as_u64()).unwrap_or(0);
+    let reasoning_tokens = tokens
+        .get("reasoning")
+        .and_then(|v| v.as_u64())
+        .unwrap_or(0);
     let cache_obj = tokens.get("cache");
     let cache_read_tokens = cache_obj
         .and_then(|c| c.get("read"))
@@ -288,7 +291,11 @@ pub struct RequestLogRow {
 
 impl Database {
     /// 查询请求日志（按时间倒序，可限制条数）。
-    pub fn list_request_logs(&self, plugin_id: Option<&str>, limit: usize) -> rusqlite::Result<Vec<RequestLogRow>> {
+    pub fn list_request_logs(
+        &self,
+        plugin_id: Option<&str>,
+        limit: usize,
+    ) -> rusqlite::Result<Vec<RequestLogRow>> {
         let conn = self.lock();
         let mut stmt = match plugin_id {
             Some(_) => conn.prepare(
@@ -310,7 +317,10 @@ impl Database {
     }
 
     /// 按日汇总用量。
-    pub fn usage_daily_summary(&self, plugin_id: Option<&str>) -> rusqlite::Result<Vec<DailyUsageRow>> {
+    pub fn usage_daily_summary(
+        &self,
+        plugin_id: Option<&str>,
+    ) -> rusqlite::Result<Vec<DailyUsageRow>> {
         let conn = self.lock();
         let mut stmt = match plugin_id {
             Some(_) => conn.prepare(

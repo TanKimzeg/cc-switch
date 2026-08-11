@@ -44,7 +44,9 @@ impl Database {
         );
         let dest = backups_dir.join(format!("{id}.db"));
         std::fs::copy(&db_path, &dest).map_err(|e| e.to_string())?;
-        let size = std::fs::metadata(&dest).map(|m| m.len() as i64).unwrap_or(0);
+        let size = std::fs::metadata(&dest)
+            .map(|m| m.len() as i64)
+            .unwrap_or(0);
         let now = now_secs();
 
         self.lock()
@@ -149,7 +151,9 @@ impl Database {
         let conn = self.lock();
         let mut count = 0;
         for row in &payload.providers {
-            let cols = row.as_object().ok_or_else(|| "providers 行不是对象".to_string())?;
+            let cols = row
+                .as_object()
+                .ok_or_else(|| "providers 行不是对象".to_string())?;
             conn.execute(
                 "INSERT OR REPLACE INTO providers
                  (id, plugin_id, name, category, icon, website, api_key, settings_config, meta, sort_order, live_config_managed, created_at, updated_at)
@@ -174,7 +178,9 @@ impl Database {
             count += 1;
         }
         for row in &payload.mcp_servers {
-            let cols = row.as_object().ok_or_else(|| "mcp_servers 行不是对象".to_string())?;
+            let cols = row
+                .as_object()
+                .ok_or_else(|| "mcp_servers 行不是对象".to_string())?;
             conn.execute(
                 "INSERT OR REPLACE INTO mcp_servers (id, name, server_config, description, homepage, docs, tags, created_at, updated_at)
                  VALUES (?1,?2,?3,?4,?5,?6,?7,COALESCE(?8, datetime('now')),COALESCE(?9, datetime('now')))",
@@ -194,7 +200,9 @@ impl Database {
             count += 1;
         }
         for row in &payload.skills {
-            let cols = row.as_object().ok_or_else(|| "skills 行不是对象".to_string())?;
+            let cols = row
+                .as_object()
+                .ok_or_else(|| "skills 行不是对象".to_string())?;
             conn.execute(
                 "INSERT OR REPLACE INTO skills (id, name, description, directory, source_path, repo_owner, repo_name, repo_branch, readme_url, installed_at, content_hash, updated_at)
                  VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,COALESCE(?10,0),?11,COALESCE(?12,0))",
@@ -217,7 +225,9 @@ impl Database {
             count += 1;
         }
         for row in &payload.prompts {
-            let cols = row.as_object().ok_or_else(|| "prompts 行不是对象".to_string())?;
+            let cols = row
+                .as_object()
+                .ok_or_else(|| "prompts 行不是对象".to_string())?;
             conn.execute(
                 "INSERT OR REPLACE INTO prompts (id, plugin_id, name, content, description, enabled, created_at, updated_at)
                  VALUES (?1,?2,?3,?4,?5,COALESCE(?6,1),COALESCE(?7, datetime('now')),COALESCE(?8, datetime('now')))",
@@ -236,7 +246,9 @@ impl Database {
             count += 1;
         }
         for row in &payload.profiles {
-            let cols = row.as_object().ok_or_else(|| "profiles 行不是对象".to_string())?;
+            let cols = row
+                .as_object()
+                .ok_or_else(|| "profiles 行不是对象".to_string())?;
             conn.execute(
                 "INSERT OR REPLACE INTO profiles (id, name, payload, sort_order, created_at, updated_at)
                  VALUES (?1,?2,?3,?4,COALESCE(?5,0),COALESCE(?6,0))",
@@ -268,9 +280,7 @@ fn opt_str(map: &serde_json::Map<String, serde_json::Value>, key: &str) -> Optio
 }
 
 fn int_of(map: &serde_json::Map<String, serde_json::Value>, key: &str) -> i64 {
-    map.get(key)
-        .and_then(|v| v.as_i64())
-        .unwrap_or(0)
+    map.get(key).and_then(|v| v.as_i64()).unwrap_or(0)
 }
 
 fn query_all(conn: &rusqlite::Connection, sql: &str) -> Vec<serde_json::Value> {
@@ -281,7 +291,11 @@ fn query_all(conn: &rusqlite::Connection, sql: &str) -> Vec<serde_json::Value> {
     let column_count = stmt.column_count();
     let mut column_names = Vec::with_capacity(column_count);
     for i in 0..column_count {
-        column_names.push(stmt.column_name(i).map(|n| n.to_string()).unwrap_or_default());
+        column_names.push(
+            stmt.column_name(i)
+                .map(|n| n.to_string())
+                .unwrap_or_default(),
+        );
     }
     let mut rows = Vec::new();
     let mut query = match stmt.query([]) {
@@ -388,17 +402,25 @@ mod tests {
 
         let p: String = db
             .lock()
-            .query_row("SELECT name FROM providers WHERE id='deepseek'", [], |r| r.get(0))
+            .query_row("SELECT name FROM providers WHERE id='deepseek'", [], |r| {
+                r.get(0)
+            })
             .unwrap();
         assert_eq!(p, "DeepSeek");
         let mcp: String = db
             .lock()
-            .query_row("SELECT name FROM mcp_servers WHERE id='filesystem'", [], |r| r.get(0))
+            .query_row(
+                "SELECT name FROM mcp_servers WHERE id='filesystem'",
+                [],
+                |r| r.get(0),
+            )
             .unwrap();
         assert_eq!(mcp, "FS");
         let prompt: String = db
             .lock()
-            .query_row("SELECT content FROM prompts WHERE id='rules'", [], |r| r.get(0))
+            .query_row("SELECT content FROM prompts WHERE id='rules'", [], |r| {
+                r.get(0)
+            })
             .unwrap();
         assert_eq!(prompt, "be concise");
     }

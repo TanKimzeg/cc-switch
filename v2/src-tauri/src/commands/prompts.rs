@@ -3,7 +3,7 @@
 use tauri::State;
 
 use crate::db::Database;
-use crate::services::prompts::{PromptRecord, plugin_prompt_file};
+use crate::services::prompts::{plugin_prompt_file, PromptRecord};
 
 /// 列出 prompts（可按插件过滤）。
 #[tauri::command]
@@ -11,7 +11,8 @@ pub fn prompts_list(
     db: State<'_, Database>,
     plugin_id: Option<String>,
 ) -> Result<Vec<PromptRecord>, String> {
-    db.list_prompts(plugin_id.as_deref()).map_err(|e| e.to_string())
+    db.list_prompts(plugin_id.as_deref())
+        .map_err(|e| e.to_string())
 }
 
 /// 新增或更新 prompt。
@@ -37,11 +38,7 @@ pub fn prompts_delete(db: State<'_, Database>, id: String) -> Result<(), String>
 
 /// 启用/停用 prompt，并写入（或移除）插件的 prompt 文件。
 #[tauri::command]
-pub fn prompts_toggle(
-    db: State<'_, Database>,
-    id: String,
-    enabled: bool,
-) -> Result<(), String> {
+pub fn prompts_toggle(db: State<'_, Database>, id: String, enabled: bool) -> Result<(), String> {
     let prompt = db
         .get_prompt(&id)
         .map_err(|e| e.to_string())?
@@ -58,5 +55,6 @@ pub fn prompts_toggle(
     } else if file.exists() {
         std::fs::remove_file(&file).map_err(|e| e.to_string())?;
     }
-    db.set_prompt_enabled(&id, enabled).map_err(|e| e.to_string())
+    db.set_prompt_enabled(&id, enabled)
+        .map_err(|e| e.to_string())
 }

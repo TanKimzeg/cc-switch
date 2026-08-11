@@ -19,11 +19,10 @@ fn require_capability(
     if supported {
         Ok(())
     } else {
-        Err(PluginError::Capability(format!(
-            "plugin '{}' 不支持 {action}",
-            plugin.id()
-        ))
-        .to_string())
+        Err(
+            PluginError::Capability(format!("plugin '{}' 不支持 {action}", plugin.id()))
+                .to_string(),
+        )
     }
 }
 
@@ -57,7 +56,11 @@ pub fn plugin_read_live(
     id: String,
 ) -> Result<LiveConfig, String> {
     let plugin = registry.resolve_plugin(&id).map_err(|e| e.to_string())?;
-    require_capability(plugin.as_ref(), plugin.capabilities().read_live, "read_live")?;
+    require_capability(
+        plugin.as_ref(),
+        plugin.capabilities().read_live,
+        "read_live",
+    )?;
     plugin.read_live().map_err(|e| e.to_string())
 }
 
@@ -91,8 +94,14 @@ pub fn plugin_remove_provider(
     provider_id: String,
 ) -> Result<(), String> {
     let plugin = registry.resolve_plugin(&id).map_err(|e| e.to_string())?;
-    require_capability(plugin.as_ref(), plugin.capabilities().remove, "remove_provider")?;
-    plugin.remove_provider(&provider_id).map_err(|e| e.to_string())
+    require_capability(
+        plugin.as_ref(),
+        plugin.capabilities().remove,
+        "remove_provider",
+    )?;
+    plugin
+        .remove_provider(&provider_id)
+        .map_err(|e| e.to_string())
 }
 
 /// 加载某个会话的消息。
@@ -103,7 +112,11 @@ pub fn plugin_load_messages(
     source: String,
 ) -> Result<Vec<SessionMessage>, String> {
     let plugin = registry.resolve_plugin(&id).map_err(|e| e.to_string())?;
-    require_capability(plugin.as_ref(), plugin.capabilities().sessions, "load_messages")?;
+    require_capability(
+        plugin.as_ref(),
+        plugin.capabilities().sessions,
+        "load_messages",
+    )?;
     plugin.load_messages(&source).map_err(|e| e.to_string())
 }
 
@@ -116,7 +129,11 @@ pub fn plugin_delete_session(
     source: String,
 ) -> Result<bool, String> {
     let plugin = registry.resolve_plugin(&id).map_err(|e| e.to_string())?;
-    require_capability(plugin.as_ref(), plugin.capabilities().sessions, "delete_session")?;
+    require_capability(
+        plugin.as_ref(),
+        plugin.capabilities().sessions,
+        "delete_session",
+    )?;
     plugin
         .delete_session(&session_id, &source)
         .map_err(|e| e.to_string())
@@ -148,7 +165,9 @@ pub fn plugin_mcp_set(
     let mcp_plugin = plugin
         .as_mcp()
         .ok_or_else(|| format!("插件 '{id}' 不支持 MCP 管理"))?;
-    mcp_plugin.set_mcp_server(&server).map_err(|e| e.to_string())
+    mcp_plugin
+        .set_mcp_server(&server)
+        .map_err(|e| e.to_string())
 }
 
 /// 移除插件的某个 MCP 服务器。
@@ -219,7 +238,11 @@ pub fn plugin_read_raw_config(
     id: String,
 ) -> Result<String, String> {
     let plugin = registry.resolve_plugin(&id).map_err(|e| e.to_string())?;
-    require_capability(plugin.as_ref(), plugin.capabilities().read_live, "read_raw_config")?;
+    require_capability(
+        plugin.as_ref(),
+        plugin.capabilities().read_live,
+        "read_raw_config",
+    )?;
     plugin.read_raw_config().map_err(|e| e.to_string())
 }
 
@@ -231,7 +254,11 @@ pub fn plugin_write_raw_config(
     content: String,
 ) -> Result<(), String> {
     let plugin = registry.resolve_plugin(&id).map_err(|e| e.to_string())?;
-    require_capability(plugin.as_ref(), plugin.capabilities().apply, "write_raw_config")?;
+    require_capability(
+        plugin.as_ref(),
+        plugin.capabilities().apply,
+        "write_raw_config",
+    )?;
     plugin.write_raw_config(&content).map_err(|e| e.to_string())
 }
 
@@ -259,8 +286,7 @@ fn get_provider_by_id(db: &Database, id: &str) -> Result<Provider, String> {
 
     fn row_to_provider(row: &Row<'_>) -> rusqlite::Result<Provider> {
         let meta: Option<String> = row.get("meta")?;
-        let meta = meta
-            .map(|s| serde_json::from_str(&s).unwrap_or(serde_json::Value::Null));
+        let meta = meta.map(|s| serde_json::from_str(&s).unwrap_or(serde_json::Value::Null));
         Ok(Provider {
             id: row.get("id")?,
             plugin_id: row.get("plugin_id")?,
@@ -313,8 +339,8 @@ mod tests {
     #[test]
     fn require_capability_rejects_missing() {
         let plugin = plugin_with(PluginCapabilities::default());
-        let err = require_capability(&plugin, plugin.capabilities().sessions, "sessions")
-            .unwrap_err();
+        let err =
+            require_capability(&plugin, plugin.capabilities().sessions, "sessions").unwrap_err();
         assert!(err.contains("不支持"));
         assert!(err.contains("demo"));
     }

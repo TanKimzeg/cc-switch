@@ -183,7 +183,10 @@ pub struct PluginRegistry {
 
 impl PluginRegistry {
     pub fn new(dir: impl Into<PathBuf>, db: Database) -> Self {
-        Self { dir: dir.into(), db }
+        Self {
+            dir: dir.into(),
+            db,
+        }
     }
 
     /// 插件目录绝对路径。
@@ -220,7 +223,9 @@ impl PluginRegistry {
                 args.clone(),
                 capabilities,
             ))),
-            ManifestEntry::Ts { .. } => Ok(Box::new(TsPluginStub::new(mf.id.clone(), capabilities))),
+            ManifestEntry::Ts { .. } => {
+                Ok(Box::new(TsPluginStub::new(mf.id.clone(), capabilities)))
+            }
         }
     }
 
@@ -230,7 +235,10 @@ impl PluginRegistry {
     /// 因此每次启动都覆盖写入（更新能力声明、版本等）。
     pub fn seed_builtin(&self) -> Result<(), ManifestError> {
         std::fs::create_dir_all(&self.dir).map_err(|e| ManifestError::io(&self.dir, e))?;
-        for (id, manifest) in [("openclaw", OPENCLAW_MANIFEST), ("opencode", OPENCODE_MANIFEST)] {
+        for (id, manifest) in [
+            ("openclaw", OPENCLAW_MANIFEST),
+            ("opencode", OPENCODE_MANIFEST),
+        ] {
             let plugin_dir = self.dir.join(id);
             std::fs::create_dir_all(&plugin_dir).map_err(|e| ManifestError::io(&plugin_dir, e))?;
             let target = plugin_dir.join("manifest.json");
@@ -272,7 +280,8 @@ impl PluginRegistry {
     /// 将发现的插件同步到 `plugin_installs` 表（内置插件标记为 builtin）。
     pub fn sync_installs(&self, manifests: &[PluginManifest]) -> rusqlite::Result<()> {
         for m in manifests {
-            self.db.upsert_plugin_install(&m.id, &m.version, "builtin", None)?;
+            self.db
+                .upsert_plugin_install(&m.id, &m.version, "builtin", None)?;
         }
         Ok(())
     }
@@ -290,9 +299,7 @@ impl PluginRegistry {
                     source: inst
                         .map(|i| i.source.clone())
                         .unwrap_or_else(|| "unknown".to_string()),
-                    installed_at: inst
-                        .map(|i| i.installed_at.clone())
-                        .unwrap_or_default(),
+                    installed_at: inst.map(|i| i.installed_at.clone()).unwrap_or_default(),
                 }
             })
             .collect())
@@ -315,8 +322,8 @@ impl PluginRegistry {
         copy_dir_recursive(src, &target).map_err(|e| ManifestError::io(&target, e))?;
 
         let target_manifest = target.join("manifest.json");
-        let sha = sha256_file(&target_manifest)
-            .map_err(|e| ManifestError::io(&target_manifest, e))?;
+        let sha =
+            sha256_file(&target_manifest).map_err(|e| ManifestError::io(&target_manifest, e))?;
         self.db
             .upsert_plugin_install(&mf.id, &mf.version, "local", Some(&sha))?;
 
@@ -428,10 +435,7 @@ mod tests {
     fn rejects_unsupported_api_version() {
         let bad = SAMPLE.replace("\"apiVersion\": \"1\"", "\"apiVersion\": \"2\"");
         let mf: ManifestFile = serde_json::from_str(&bad).unwrap();
-        assert!(matches!(
-            mf.validate(),
-            Err(ManifestError::Invalid { .. })
-        ));
+        assert!(matches!(mf.validate(), Err(ManifestError::Invalid { .. })));
     }
 
     #[test]
@@ -544,7 +548,10 @@ mod tests {
         let target = dir.path().join("plugins/opencode");
         assert!(target.join("manifest.json").exists());
         assert!(target.join("extra.txt").exists());
-        assert_eq!(std::fs::read_to_string(target.join("extra.txt")).unwrap(), "hello");
+        assert_eq!(
+            std::fs::read_to_string(target.join("extra.txt")).unwrap(),
+            "hello"
+        );
 
         let inst = db.get_plugin_install("opencode").unwrap().unwrap();
         assert_eq!(inst.source, "local");
@@ -587,10 +594,7 @@ mod tests {
 
     #[test]
     fn install_from_real_example() {
-        let example = concat!(
-            env!("CARGO_MANIFEST_DIR"),
-            "/../examples/plugins/opencode"
-        );
+        let example = concat!(env!("CARGO_MANIFEST_DIR"), "/../examples/plugins/opencode");
         assert!(Path::new(example).join("manifest.json").exists());
         let dir = tempfile::tempdir().unwrap();
         let (registry, _db) = registry_in(dir.path());
@@ -629,7 +633,9 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let (registry, db) = registry_in(dir.path());
         registry.seed_builtin().unwrap();
-        registry.sync_installs(&registry.discover().unwrap()).unwrap();
+        registry
+            .sync_installs(&registry.discover().unwrap())
+            .unwrap();
         let is_builtin: String = db
             .lock()
             .query_row(
@@ -660,7 +666,9 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let (registry, _db) = registry_in(dir.path());
         registry.seed_builtin().unwrap();
-        registry.sync_installs(&registry.discover().unwrap()).unwrap();
+        registry
+            .sync_installs(&registry.discover().unwrap())
+            .unwrap();
         let source = dir.path().join("demo-src");
         write_plugin(&source, "demo");
         registry.install_from_dir(&source).unwrap();

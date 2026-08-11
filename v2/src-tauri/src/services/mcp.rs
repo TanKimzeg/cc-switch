@@ -58,7 +58,11 @@ impl Database {
         )?;
         let rows = app_stmt
             .query_map([], |row| {
-                Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?, row.get::<_, i64>(2)?))
+                Ok((
+                    row.get::<_, String>(0)?,
+                    row.get::<_, String>(1)?,
+                    row.get::<_, i64>(2)?,
+                ))
             })?
             .collect::<rusqlite::Result<Vec<_>>>()?;
         for server in &mut servers {
@@ -118,7 +122,10 @@ impl Database {
                 serde_json::to_string(&server.tags).unwrap_or_else(|_| "[]".into()),
             ],
         )?;
-        conn.execute("DELETE FROM mcp_server_apps WHERE mcp_server_id = ?1", params![server.id])?;
+        conn.execute(
+            "DELETE FROM mcp_server_apps WHERE mcp_server_id = ?1",
+            params![server.id],
+        )?;
         for (plugin_id, enabled) in &server.apps {
             conn.execute(
                 "INSERT INTO mcp_server_apps (mcp_server_id, plugin_id, enabled) VALUES (?1, ?2, ?3)",
@@ -131,7 +138,10 @@ impl Database {
     /// 删除 MCP 服务器。
     pub fn delete_mcp_server(&self, id: &str) -> rusqlite::Result<bool> {
         let conn = self.lock();
-        conn.execute("DELETE FROM mcp_server_apps WHERE mcp_server_id = ?1", params![id])?;
+        conn.execute(
+            "DELETE FROM mcp_server_apps WHERE mcp_server_id = ?1",
+            params![id],
+        )?;
         let changed = conn.execute("DELETE FROM mcp_servers WHERE id = ?1", params![id])?;
         Ok(changed > 0)
     }
@@ -179,7 +189,9 @@ impl McpService {
         server: &McpServer,
         plugin_id: &str,
     ) -> Result<(), String> {
-        let plugin = registry.resolve_plugin(plugin_id).map_err(|e| e.to_string())?;
+        let plugin = registry
+            .resolve_plugin(plugin_id)
+            .map_err(|e| e.to_string())?;
         let mcp_plugin = plugin
             .as_mcp()
             .ok_or_else(|| format!("插件 '{plugin_id}' 不支持 MCP"))?;
@@ -198,11 +210,15 @@ impl McpService {
         server_id: &str,
         plugin_id: &str,
     ) -> Result<(), String> {
-        let plugin = registry.resolve_plugin(plugin_id).map_err(|e| e.to_string())?;
+        let plugin = registry
+            .resolve_plugin(plugin_id)
+            .map_err(|e| e.to_string())?;
         let mcp_plugin = plugin
             .as_mcp()
             .ok_or_else(|| format!("插件 '{plugin_id}' 不支持 MCP"))?;
-        mcp_plugin.remove_mcp_server(server_id).map_err(|e| e.to_string())
+        mcp_plugin
+            .remove_mcp_server(server_id)
+            .map_err(|e| e.to_string())
     }
 
     /// 从所有（此前）启用的插件移除服务器。

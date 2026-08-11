@@ -50,7 +50,9 @@ impl Database {
             "SELECT skill_id, plugin_id FROM skill_apps WHERE enabled = 1 ORDER BY plugin_id",
         )?;
         let rows = app_stmt
-            .query_map([], |row| Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?)))?
+            .query_map([], |row| {
+                Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
+            })?
             .collect::<rusqlite::Result<Vec<_>>>()?;
         for skill in &mut skills {
             skill.enabled_plugins = rows
@@ -85,7 +87,12 @@ impl Database {
     }
 
     /// 安装技能：复制目录到 SSOT，写入清单。
-    pub fn install_skill(&self, skills_root: &Path, source: &Path, id: &str) -> Result<SkillRecord, String> {
+    pub fn install_skill(
+        &self,
+        skills_root: &Path,
+        source: &Path,
+        id: &str,
+    ) -> Result<SkillRecord, String> {
         if !source.is_dir() {
             return Err(format!("技能源目录不存在: {}", source.display()));
         }
@@ -236,9 +243,7 @@ mod tests {
         std::fs::create_dir_all(&src).unwrap();
         std::fs::write(src.join("SKILL.md"), "---\nname: Test Skill\n---\nbody").unwrap();
 
-        let skill = db
-            .install_skill(&skills_root, &src, "test-skill")
-            .unwrap();
+        let skill = db.install_skill(&skills_root, &src, "test-skill").unwrap();
         assert_eq!(skill.name, "Test Skill");
         assert!(skills_root.join("test-skill").exists());
 

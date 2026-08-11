@@ -13,9 +13,7 @@ use std::process::{Command, Stdio};
 use serde_json::Value;
 
 use crate::plugin::error::PluginError;
-use crate::plugin::{
-    AgentPlugin, ImportCandidate, LiveConfig, PluginCapabilities, SessionMeta,
-};
+use crate::plugin::{AgentPlugin, ImportCandidate, LiveConfig, PluginCapabilities, SessionMeta};
 use crate::types::Provider;
 
 /// 进程插件：包装 manifest 的 shell entry。
@@ -71,7 +69,10 @@ impl ProcessPlugin {
             let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
             return Err(PluginError::Process {
                 command: self.command.clone(),
-                message: format!("子命令 {subcommand} 退出码 {:?}: {stderr}", output.status.code()),
+                message: format!(
+                    "子命令 {subcommand} 退出码 {:?}: {stderr}",
+                    output.status.code()
+                ),
             });
         }
 
@@ -129,10 +130,7 @@ impl AgentPlugin for ProcessPlugin {
             let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
             return Err(PluginError::Process {
                 command: self.command.clone(),
-                message: format!(
-                    "apply 退出码 {:?}: {stderr}",
-                    output.status.code()
-                ),
+                message: format!("apply 退出码 {:?}: {stderr}", output.status.code()),
             });
         }
         Ok(())
@@ -152,9 +150,7 @@ impl AgentPlugin for ProcessPlugin {
 /// 解析 `read-live` 子命令的输出为 [`LiveConfig`]。
 fn parse_live_config(plugin_id: &str, value: Value) -> Result<LiveConfig, PluginError> {
     serde_json::from_value(value).map_err(|e| {
-        PluginError::Other(format!(
-            "插件 '{plugin_id}' 的 read-live 输出结构不符: {e}"
-        ))
+        PluginError::Other(format!("插件 '{plugin_id}' 的 read-live 输出结构不符: {e}"))
     })
 }
 
@@ -176,9 +172,7 @@ fn parse_import(plugin_id: &str, value: Value) -> Result<Vec<ImportCandidate>, P
         .into_iter()
         .map(|item| {
             serde_json::from_value(item).map_err(|e| {
-                PluginError::Other(format!(
-                    "插件 '{plugin_id}' 的 import 条目结构不符: {e}"
-                ))
+                PluginError::Other(format!("插件 '{plugin_id}' 的 import 条目结构不符: {e}"))
             })
         })
         .collect()
@@ -191,9 +185,7 @@ fn parse_sessions(plugin_id: &str, value: Value) -> Result<Vec<SessionMeta>, Plu
         .into_iter()
         .map(|item| {
             serde_json::from_value(item).map_err(|e| {
-                PluginError::Other(format!(
-                    "插件 '{plugin_id}' 的 sessions 条目结构不符: {e}"
-                ))
+                PluginError::Other(format!("插件 '{plugin_id}' 的 sessions 条目结构不符: {e}"))
             })
         })
         .collect()
@@ -275,7 +267,10 @@ mod tests {
         let sessions = parse_sessions("demo", value).unwrap();
         assert_eq!(sessions.len(), 1);
         assert_eq!(sessions[0].session_id, "s1");
-        assert_eq!(sessions[0].resume_command.as_deref(), Some("opencode -s s1"));
+        assert_eq!(
+            sessions[0].resume_command.as_deref(),
+            Some("opencode -s s1")
+        );
     }
 
     #[test]
@@ -286,12 +281,7 @@ mod tests {
 
     #[test]
     fn command_failure_reports_process_error() {
-        let p = ProcessPlugin::new(
-            "demo",
-            "definitely-not-a-real-command-xyz",
-            vec![],
-            caps(),
-        );
+        let p = ProcessPlugin::new("demo", "definitely-not-a-real-command-xyz", vec![], caps());
         assert!(matches!(
             p.run("read-live", None),
             Err(PluginError::Process { .. })

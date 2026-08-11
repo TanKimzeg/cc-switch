@@ -2,9 +2,9 @@
 
 use tauri::State;
 
-use crate::AppPaths;
 use crate::db::Database;
 use crate::services::backup::{BackupRecord, ExportPayload};
+use crate::AppPaths;
 
 fn backups_dir(paths: &AppPaths) -> std::path::PathBuf {
     paths.data_dir.join("backups")
@@ -44,13 +44,10 @@ pub fn export_config_json(db: State<'_, Database>) -> Result<ExportPayload, Stri
 
 /// 把导出的配置 JSON 写入指定路径。
 #[tauri::command]
-pub fn export_config_to_file(
-    db: State<'_, Database>,
-    path: String,
-) -> Result<(), String> {
+pub fn export_config_to_file(db: State<'_, Database>, path: String) -> Result<(), String> {
     let payload = db.export_config()?;
-    let json = serde_json::to_string_pretty(&payload)
-        .map_err(|e| format!("序列化导出失败: {e}"))?;
+    let json =
+        serde_json::to_string_pretty(&payload).map_err(|e| format!("序列化导出失败: {e}"))?;
     std::fs::write(&path, json).map_err(|e| format!("写入文件失败: {e}"))
 }
 
@@ -68,10 +65,7 @@ pub fn import_config(db: State<'_, Database>, payload: ExportPayload) -> Result<
 
 /// 从 JSON 文件导入配置（读取文件 → 解析 → 落库）。
 #[tauri::command]
-pub fn import_config_from_file(
-    db: State<'_, Database>,
-    path: String,
-) -> Result<usize, String> {
+pub fn import_config_from_file(db: State<'_, Database>, path: String) -> Result<usize, String> {
     let content = std::fs::read_to_string(&path).map_err(|e| format!("读取文件失败: {e}"))?;
     let payload: ExportPayload =
         serde_json::from_str(&content).map_err(|e| format!("解析配置 JSON 失败: {e}"))?;

@@ -195,15 +195,13 @@ impl Database {
         let db = Self {
             conn: Arc::new(Mutex::new(conn)),
         };
-        db.conn
+        db.conn.lock().unwrap().execute_batch(SCHEMA)?;
+        // 兼容旧库：skills 表若缺少 source_path 列则补充（已存在时忽略错误）。
+        let _ = db
+            .conn
             .lock()
             .unwrap()
-            .execute_batch(SCHEMA)?;
-        // 兼容旧库：skills 表若缺少 source_path 列则补充（已存在时忽略错误）。
-        let _ = db.conn.lock().unwrap().execute(
-            "ALTER TABLE skills ADD COLUMN source_path TEXT",
-            [],
-        );
+            .execute("ALTER TABLE skills ADD COLUMN source_path TEXT", []);
         // 兼容旧库：providers 表若缺少 live_config_managed 列则补充。
         let _ = db.conn.lock().unwrap().execute(
             "ALTER TABLE providers ADD COLUMN live_config_managed INTEGER NOT NULL DEFAULT 1",
@@ -280,15 +278,19 @@ impl Database {
 
     /// 删除插件安装记录。
     pub fn delete_plugin_install(&self, plugin_id: &str) -> rusqlite::Result<()> {
-        self.lock()
-            .execute("DELETE FROM plugin_installs WHERE plugin_id = ?1", params![plugin_id])?;
+        self.lock().execute(
+            "DELETE FROM plugin_installs WHERE plugin_id = ?1",
+            params![plugin_id],
+        )?;
         Ok(())
     }
 
     /// 删除某插件名下的全部供应商（卸载插件时清理数据）。
     pub fn delete_providers_by_plugin(&self, plugin_id: &str) -> rusqlite::Result<()> {
-        self.lock()
-            .execute("DELETE FROM providers WHERE plugin_id = ?1", params![plugin_id])?;
+        self.lock().execute(
+            "DELETE FROM providers WHERE plugin_id = ?1",
+            params![plugin_id],
+        )?;
         Ok(())
     }
 }

@@ -30,7 +30,9 @@ fn init_db(app: &tauri::App<Wry>) -> Result<(), Box<dyn std::error::Error>> {
     registry.sync_installs(&plugins)?;
     log::info!("discovered {} plugin(s)", plugins.len());
 
-    app.manage(AppPaths { data_dir: dir.clone() });
+    app.manage(AppPaths {
+        data_dir: dir.clone(),
+    });
     app.manage(db);
     app.manage(registry);
     Ok(())

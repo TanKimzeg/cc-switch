@@ -76,8 +76,7 @@ pub fn convert_to_opencode_format(spec: &Value) -> Result<Value, PluginError> {
                 result.insert("url".into(), url.clone());
             }
             if let Some(headers) = obj.get("headers") {
-                if headers.is_object()
-                    && !headers.as_object().map(|o| o.is_empty()).unwrap_or(true)
+                if headers.is_object() && !headers.as_object().map(|o| o.is_empty()).unwrap_or(true)
                 {
                     result.insert("headers".into(), headers.clone());
                 }
@@ -112,10 +111,7 @@ pub fn convert_from_opencode_format(spec: &Value) -> Result<Value, PluginError> 
                     result.insert("command".into(), Value::String(cmd.into()));
                 }
                 if cmd_arr.len() > 1 {
-                    result.insert(
-                        "args".into(),
-                        Value::Array(cmd_arr[1..].to_vec()),
-                    );
+                    result.insert("args".into(), Value::Array(cmd_arr[1..].to_vec()));
                 }
             }
             if let Some(env) = obj.get("environment") {
@@ -130,8 +126,7 @@ pub fn convert_from_opencode_format(spec: &Value) -> Result<Value, PluginError> 
                 result.insert("url".into(), url.clone());
             }
             if let Some(headers) = obj.get("headers") {
-                if headers.is_object()
-                    && !headers.as_object().map(|o| o.is_empty()).unwrap_or(true)
+                if headers.is_object() && !headers.as_object().map(|o| o.is_empty()).unwrap_or(true)
                 {
                     result.insert("headers".into(), headers.clone());
                 }
@@ -163,7 +158,10 @@ mod tests {
         let result = convert_to_opencode_format(&spec).unwrap();
         assert_eq!(result["type"], "local");
         assert_eq!(result["command"][0], "npx");
-        assert_eq!(result["command"][2], "@modelcontextprotocol/server-filesystem");
+        assert_eq!(
+            result["command"][2],
+            "@modelcontextprotocol/server-filesystem"
+        );
         assert_eq!(result["environment"]["HOME"], "/Users/test");
         assert_eq!(result["enabled"], true);
     }

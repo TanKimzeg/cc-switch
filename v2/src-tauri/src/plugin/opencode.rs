@@ -40,9 +40,8 @@ fn override_dir(name: &str) -> Option<PathBuf> {
 
 /// OpenCode 配置目录（`~/.config/opencode`）。
 fn config_dir() -> PathBuf {
-    override_dir("CC_SWITCH_OPENCODE_CONFIG_DIR").unwrap_or_else(|| {
-        home_dir().join(".config").join("opencode")
-    })
+    override_dir("CC_SWITCH_OPENCODE_CONFIG_DIR")
+        .unwrap_or_else(|| home_dir().join(".config").join("opencode"))
 }
 
 /// OpenCode 数据目录（会话等；遵循 XDG_DATA_HOME，兜底 `~/.local/share/opencode`）。
@@ -90,29 +89,29 @@ impl AgentPlugin for OpenCodePlugin {
     }
 
     fn read_live(&self) -> Result<LiveConfig, PluginError> {
-    let config = read_config(&config_path())?;
-    let mut providers = Vec::new();
+        let config = read_config(&config_path())?;
+        let mut providers = Vec::new();
 
-    if let Some(provider_map) = config.get("provider").and_then(Value::as_object) {
-        for (id, value) in provider_map {
-            let name = value
-                .get("name")
-                .and_then(Value::as_str)
-                .map(str::to_string)
-                .unwrap_or_else(|| id.clone());
-            providers.push(LiveProvider {
-                id: id.clone(),
-                name,
-                settings_config: value.clone(),
-            });
+        if let Some(provider_map) = config.get("provider").and_then(Value::as_object) {
+            for (id, value) in provider_map {
+                let name = value
+                    .get("name")
+                    .and_then(Value::as_str)
+                    .map(str::to_string)
+                    .unwrap_or_else(|| id.clone());
+                providers.push(LiveProvider {
+                    id: id.clone(),
+                    name,
+                    settings_config: value.clone(),
+                });
+            }
         }
-    }
-    providers.sort_by(|a, b| a.id.cmp(&b.id));
+        providers.sort_by(|a, b| a.id.cmp(&b.id));
 
-    Ok(LiveConfig {
-        providers,
-        current: None,
-    })
+        Ok(LiveConfig {
+            providers,
+            current: None,
+        })
     }
 
     fn apply(&self, provider: &Provider, current: bool) -> Result<(), PluginError> {
@@ -122,9 +121,7 @@ impl AgentPlugin for OpenCodePlugin {
         let settings = parse_provider_settings(provider)?;
 
         // provider 段必须是对象；非对象则重置（并记录告警）。
-        let provider_section = config
-            .get_mut("provider")
-            .and_then(Value::as_object_mut);
+        let provider_section = config.get_mut("provider").and_then(Value::as_object_mut);
         match provider_section {
             Some(map) => {
                 map.insert(provider.id.clone(), settings);
@@ -227,9 +224,8 @@ impl AgentPlugin for OpenCodePlugin {
     fn write_raw_config(&self, content: &str) -> Result<(), PluginError> {
         let path = config_path();
         // JSON5 语法校验：非法内容拒绝写入，防止破坏 live 配置。
-        let value: Value = json5::from_str(content).map_err(|e| {
-            PluginError::Config(format!("JSON5 解析失败，拒绝写入: {e}"))
-        })?;
+        let value: Value = json5::from_str(content)
+            .map_err(|e| PluginError::Config(format!("JSON5 解析失败，拒绝写入: {e}")))?;
         if !value.is_object() {
             return Err(PluginError::Config(
                 "live 配置根节点必须是 JSON 对象".into(),
@@ -442,9 +438,8 @@ fn read_config(path: &Path) -> Result<Value, PluginError> {
         Err(e) => return Err(PluginError::io(path, e)),
     };
 
-    let value: Value = json5::from_str(&content).map_err(|e| {
-        PluginError::Config(format!("解析 {} 失败: {e}", path.display()))
-    })?;
+    let value: Value = json5::from_str(&content)
+        .map_err(|e| PluginError::Config(format!("解析 {} 失败: {e}", path.display())))?;
     if !value.is_object() {
         return Err(PluginError::Config(format!(
             "根节点必须是 JSON 对象: {}",
@@ -544,9 +539,7 @@ fn scan_sessions_sqlite() -> Result<Vec<SessionMeta>, PluginError> {
             let updated: i64 = row.get(4)?;
             Ok((id, title, directory, created, updated))
         })
-        .map_err(|e| {
-            PluginError::Other(format!("查询 OpenCode session 表失败: {e}"))
-        })?;
+        .map_err(|e| PluginError::Other(format!("查询 OpenCode session 表失败: {e}")))?;
 
     let db_display = db_path.display().to_string();
     let mut sessions = Vec::new();
@@ -604,7 +597,10 @@ fn scan_sessions_json() -> Result<Vec<SessionMeta>, PluginError> {
         let Some(session_id) = value.get("id").and_then(Value::as_str) else {
             continue;
         };
-        let title = value.get("title").and_then(Value::as_str).map(str::to_string);
+        let title = value
+            .get("title")
+            .and_then(Value::as_str)
+            .map(str::to_string);
         let directory = value
             .get("directory")
             .and_then(Value::as_str)
@@ -618,14 +614,12 @@ fn scan_sessions_json() -> Result<Vec<SessionMeta>, PluginError> {
             .and_then(|t| t.get("updated"))
             .and_then(Value::as_i64);
 
-        let display_title = title
-            .filter(|t| !t.is_empty())
-            .or_else(|| {
-                directory
-                    .as_deref()
-                    .and_then(|d| d.rsplit('/').next())
-                    .map(|s| s.to_string())
-            });
+        let display_title = title.filter(|t| !t.is_empty()).or_else(|| {
+            directory
+                .as_deref()
+                .and_then(|d| d.rsplit('/').next())
+                .map(|s| s.to_string())
+        });
 
         sessions.push(SessionMeta {
             session_id: session_id.to_string(),
@@ -877,7 +871,9 @@ fn delete_session_json(source: &str, session_id: &str) -> Result<bool, PluginErr
         remove_dir_all_if_exists(&part_dir).map_err(|e| PluginError::io(&part_dir, e))?;
     }
 
-    let session_diff = storage.join("session_diff").join(format!("{session_id}.json"));
+    let session_diff = storage
+        .join("session_diff")
+        .join(format!("{session_id}.json"));
     remove_file_if_exists(&session_diff).map_err(|e| PluginError::io(&session_diff, e))?;
 
     remove_dir_all_if_exists(&path).map_err(|e| PluginError::io(&path, e))?;
@@ -1047,11 +1043,7 @@ mod tests {
         let p = OpenCodePlugin::new();
         let live = p.read_live().unwrap();
         assert_eq!(live.providers.len(), 2);
-        let openai = live
-            .providers
-            .iter()
-            .find(|x| x.id == "openai")
-            .unwrap();
+        let openai = live.providers.iter().find(|x| x.id == "openai").unwrap();
         assert_eq!(openai.name, "OpenAI");
         assert_eq!(openai.settings_config["options"]["apiKey"], "sk-1");
         assert!(live.current.is_none());
@@ -1098,10 +1090,7 @@ mod tests {
         let _guard = HomeGuard::set(temp.path());
         let p = OpenCodePlugin::new();
         p.apply(
-            &provider(
-                "my-prov",
-                r#"{"npm":"@ai-sdk/openai-compatible"}"#,
-            ),
+            &provider("my-prov", r#"{"npm":"@ai-sdk/openai-compatible"}"#),
             true,
         )
         .unwrap();
@@ -1148,7 +1137,10 @@ mod tests {
         assert_eq!(servers.len(), 1);
         assert_eq!(servers[0].id, "filesystem");
         assert_eq!(servers[0].spec["command"], "npx");
-        assert_eq!(servers[0].spec["args"][1], "@modelcontextprotocol/server-filesystem");
+        assert_eq!(
+            servers[0].spec["args"][1],
+            "@modelcontextprotocol/server-filesystem"
+        );
 
         p.remove_mcp_server("filesystem").unwrap();
         assert!(p.get_mcp_servers().unwrap().is_empty());
@@ -1273,9 +1265,7 @@ mod tests {
         .unwrap();
 
         let p = OpenCodePlugin::new();
-        let msgs = p
-            .load_messages(&msg_dir.display().to_string())
-            .unwrap();
+        let msgs = p.load_messages(&msg_dir.display().to_string()).unwrap();
         assert_eq!(msgs.len(), 1);
         assert_eq!(msgs[0].role, "assistant");
         assert!(msgs[0].content.contains("[Tool: bash]"));
@@ -1336,8 +1326,16 @@ mod tests {
              CREATE TABLE part (id TEXT PRIMARY KEY, session_id TEXT NOT NULL, message_id TEXT NOT NULL, time_created INTEGER NOT NULL, data TEXT NOT NULL);",
         )
         .unwrap();
-        conn.execute("INSERT INTO session VALUES ('ses_1', 'T', '/p', 1000, 3000)", []).unwrap();
-        conn.execute("INSERT INTO message VALUES ('msg_1', 'ses_1', 1000, '{\"role\":\"user\"}')", []).unwrap();
+        conn.execute(
+            "INSERT INTO session VALUES ('ses_1', 'T', '/p', 1000, 3000)",
+            [],
+        )
+        .unwrap();
+        conn.execute(
+            "INSERT INTO message VALUES ('msg_1', 'ses_1', 1000, '{\"role\":\"user\"}')",
+            [],
+        )
+        .unwrap();
         conn.execute("INSERT INTO part VALUES ('prt_1', 'ses_1', 'msg_1', 1000, '{\"type\":\"text\",\"text\":\"Hi\"}')", []).unwrap();
         drop(conn);
 
@@ -1348,7 +1346,9 @@ mod tests {
 
         let conn = rusqlite::Connection::open(&db_path).unwrap();
         let remaining: i64 = conn
-            .query_row("SELECT COUNT(*) FROM session WHERE id = 'ses_1'", [], |r| r.get(0))
+            .query_row("SELECT COUNT(*) FROM session WHERE id = 'ses_1'", [], |r| {
+                r.get(0)
+            })
             .unwrap();
         assert_eq!(remaining, 0);
         drop(conn);
@@ -1385,7 +1385,9 @@ mod tests {
         p.add_plugin("oh-my-opencode-slim@latest").unwrap();
         let plugins = p.get_plugins().unwrap();
         assert!(!plugins.iter().any(|s| s.starts_with("oh-my-opencode@")));
-        assert!(plugins.iter().any(|s| s.starts_with("oh-my-opencode-slim@")));
+        assert!(plugins
+            .iter()
+            .any(|s| s.starts_with("oh-my-opencode-slim@")));
         assert!(plugins.contains(&"unrelated".to_string()));
     }
 
@@ -1404,7 +1406,10 @@ mod tests {
 
     #[test]
     fn canonicalize_omo_names() {
-        assert_eq!(canonicalize_plugin_name("oh-my-opencode"), "oh-my-openagent");
+        assert_eq!(
+            canonicalize_plugin_name("oh-my-opencode"),
+            "oh-my-openagent"
+        );
         assert_eq!(
             canonicalize_plugin_name("oh-my-opencode@latest"),
             "oh-my-openagent@latest"
