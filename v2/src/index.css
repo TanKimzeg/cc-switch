@@ -99,3 +99,124 @@ html.dark {
 [data-tauri-drag-region] .no-drag {
   -webkit-app-region: no-drag;
 }
+
+.glass {
+  background: rgba(255, 255, 255, 0.7);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border: 1px solid rgba(0, 0, 0, 0.1);
+}
+
+.dark .glass {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.glass-card {
+  background: rgba(255, 255, 255, 0.8);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(0, 0, 0, 0.1);
+}
+
+.dark .glass-card {
+  background: linear-gradient(
+    145deg,
+    rgba(255, 255, 255, 0.05) 0%,
+    rgba(255, 255, 255, 0.01) 100%
+  );
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+}
+
+.glass-card-active {
+  background: rgba(59, 130, 246, 0.08);
+  border: 1px solid rgba(59, 130, 246, 0.4);
+}
+
+.dark .glass-card-active {
+  background: rgba(59, 130, 246, 0.12);
+  border: 1px solid rgba(59, 130, 246, 0.3);
+}
+
+.glass-header {
+  background: hsl(var(--background));
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  border: none;
+  border-top: 2px solid hsl(var(--border));
+}
+
+.dark .glass-header {
+  background: hsl(var(--background));
+  border: none;
+  border-top: 2px solid hsl(var(--border));
+}
+
+.status-heartbeat {
+  opacity: 1;
+  transition-property: color, opacity;
+  transition-duration: 150ms, 300ms;
+  transition-timing-function: ease, ease-out;
+}
+
+html[data-window-active="true"][data-status-heartbeat="true"]
+  .status-heartbeat {
+  opacity: 0.5;
+}
+
+html[data-window-active="false"] .status-heartbeat {
+  opacity: 1;
+  transition-duration: 0s;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .status-heartbeat {
+    opacity: 1;
+    transition-property: color;
+  }
+
+  html[data-window-active="true"][data-status-heartbeat="true"]
+    .status-heartbeat {
+    opacity: 1;
+  }
+}
+
+@layer utilities {
+  .scroll-overlay {
+    scrollbar-gutter: stable both-edges;
+    padding-right: 0.5rem;
+    margin-right: -0.5rem;
+    overflow-x: hidden;
+  }
+
+  .border-default {
+    border-width: 1px;
+    border-color: hsl(var(--border));
+  }
+
+  .border-active {
+    border-width: 2px;
+  }
+
+  .border-border-default {
+    border-color: hsl(var(--border));
+  }
+
+  .border-border-active {
+    border-color: hsl(var(--primary));
+  }
+
+  .border-border-hover {
+    border-color: hsl(var(--primary) / 0.4);
+  }
+
+  .border-border-dragging {
+    border-color: hsl(var(--primary) / 0.6);
+  }
+}
+
+input[type="password"]::-ms-reveal,
+input[type="password"]::-ms-clear {
+  display: none;
+}

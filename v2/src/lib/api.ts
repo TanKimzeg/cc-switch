@@ -45,9 +45,7 @@ export function deleteProvider(id: string): Promise<void> {
   return invoke<void>("delete_provider", { id });
 }
 
-export function getCurrentProvider(
-  pluginId: string,
-): Promise<Provider | null> {
+export function getCurrentProvider(pluginId: string): Promise<Provider | null> {
   return invoke<Provider | null>("get_current_provider", { pluginId });
 }
 
@@ -62,7 +60,9 @@ export function switchProvider(providerId: string): Promise<void> {
   return invoke<void>("switch_provider", { providerId });
 }
 
-export function removeProviderFromLiveConfig(providerId: string): Promise<void> {
+export function removeProviderFromLiveConfig(
+  providerId: string,
+): Promise<void> {
   return invoke<void>("remove_provider_from_live_config", { providerId });
 }
 
