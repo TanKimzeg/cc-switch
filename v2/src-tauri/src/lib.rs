@@ -68,6 +68,8 @@ pub fn run() {
             commands::plugins::plugin_get_plugins,
             commands::plugins::plugin_add_plugin,
             commands::plugins::plugin_remove_plugin,
+            commands::plugins::plugin_read_raw_config,
+            commands::plugins::plugin_write_raw_config,
             commands::mcp::mcp_list,
             commands::mcp::mcp_upsert,
             commands::mcp::mcp_delete,

@@ -212,6 +212,29 @@ pub fn plugin_remove_plugin(
     ops.remove_plugin(&name).map_err(|e| e.to_string())
 }
 
+/// 读取插件的 live 配置原始文本（供用户手动编辑）。
+#[tauri::command]
+pub fn plugin_read_raw_config(
+    registry: State<'_, PluginRegistry>,
+    id: String,
+) -> Result<String, String> {
+    let plugin = registry.resolve_plugin(&id).map_err(|e| e.to_string())?;
+    require_capability(plugin.as_ref(), plugin.capabilities().read_live, "read_raw_config")?;
+    plugin.read_raw_config().map_err(|e| e.to_string())
+}
+
+/// 写入插件的 live 配置原始文本（后端做格式校验）。
+#[tauri::command]
+pub fn plugin_write_raw_config(
+    registry: State<'_, PluginRegistry>,
+    id: String,
+    content: String,
+) -> Result<(), String> {
+    let plugin = registry.resolve_plugin(&id).map_err(|e| e.to_string())?;
+    require_capability(plugin.as_ref(), plugin.capabilities().apply, "write_raw_config")?;
+    plugin.write_raw_config(&content).map_err(|e| e.to_string())
+}
+
 /// 把某个 provider 写入插件对应的 live 配置（切换）。
 ///
 /// `current` 为 true 时同时标记为当前生效的 provider。

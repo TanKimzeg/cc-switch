@@ -195,6 +195,17 @@ export function removePluginSubPlugin(
   return invoke<void>("plugin_remove_plugin", { id: pluginId, name });
 }
 
+export function readRawConfig(pluginId: string): Promise<string> {
+  return invoke<string>("plugin_read_raw_config", { id: pluginId });
+}
+
+export function writeRawConfig(
+  pluginId: string,
+  content: string,
+): Promise<void> {
+  return invoke<void>("plugin_write_raw_config", { id: pluginId, content });
+}
+
 export function mcpList(): Promise<McpServer[]> {
   return invoke<McpServer[]>("mcp_list");
 }

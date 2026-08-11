@@ -176,4 +176,20 @@ pub trait AgentPlugin: Send + Sync {
     fn as_plugin_manager(&self) -> Option<&dyn PluginManagerPlugin> {
         None
     }
+
+    /// 读取 live 配置的原始文本（JSON5 等），供用户手动编辑。
+    fn read_raw_config(&self) -> Result<String, PluginError> {
+        Err(PluginError::Capability(format!(
+            "插件 '{}' 不支持原始配置读取",
+            self.id()
+        )))
+    }
+
+    /// 写入 live 配置的原始文本（须为合法配置格式）。
+    fn write_raw_config(&self, _content: &str) -> Result<(), PluginError> {
+        Err(PluginError::Capability(format!(
+            "插件 '{}' 不支持原始配置写入",
+            self.id()
+        )))
+    }
 }

@@ -69,7 +69,14 @@
     "delete": "Delete",
     "close": "Close",
     "save": "Save",
-    "cancel": "Cancel"
+    "cancel": "Cancel",
+    "format": "Format",
+    "formatSuccess": "Formatted",
+    "formatError": "Format failed: {{error}}"
+  },
+  "jsonEditor": {
+    "mustBeObject": "Config must be a JSON object, not an array or other type",
+    "invalidJson": "Invalid JSON"
   },
   "features": {
     "mcpTitle": "MCP Servers",

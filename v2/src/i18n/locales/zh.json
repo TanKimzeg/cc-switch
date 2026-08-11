@@ -69,7 +69,14 @@
     "delete": "删除",
     "close": "关闭",
     "save": "保存",
-    "cancel": "取消"
+    "cancel": "取消",
+    "format": "格式化",
+    "formatSuccess": "格式化成功",
+    "formatError": "格式化失败：{{error}}"
+  },
+  "jsonEditor": {
+    "mustBeObject": "配置必须是 JSON 对象，不能是数组或其他类型",
+    "invalidJson": "JSON 格式错误"
   },
   "features": {
     "mcpTitle": "MCP 服务器",

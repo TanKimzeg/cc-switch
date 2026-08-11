@@ -212,6 +212,31 @@ impl AgentPlugin for OpenCodePlugin {
     fn as_plugin_manager(&self) -> Option<&dyn PluginManagerPlugin> {
         Some(self)
     }
+
+    fn read_raw_config(&self) -> Result<String, PluginError> {
+        let path = config_path();
+        match std::fs::read_to_string(&path) {
+            Ok(c) => Ok(c),
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+                Ok(format!("{{\n  \"$schema\": \"{SCHEMA_URL}\"\n}}\n"))
+            }
+            Err(e) => Err(PluginError::io(&path, e)),
+        }
+    }
+
+    fn write_raw_config(&self, content: &str) -> Result<(), PluginError> {
+        let path = config_path();
+        // JSON5 语法校验：非法内容拒绝写入，防止破坏 live 配置。
+        let value: Value = json5::from_str(content).map_err(|e| {
+            PluginError::Config(format!("JSON5 解析失败，拒绝写入: {e}"))
+        })?;
+        if !value.is_object() {
+            return Err(PluginError::Config(
+                "live 配置根节点必须是 JSON 对象".into(),
+            ));
+        }
+        atomic_write(&path, content.as_bytes())
+    }
 }
 
 impl McpPlugin for OpenCodePlugin {
@@ -1389,5 +1414,32 @@ mod tests {
             "oh-my-opencode-slim"
         );
         assert_eq!(canonicalize_plugin_name("other"), "other");
+    }
+
+    #[test]
+    fn read_raw_config_returns_missing_default() {
+        let temp = tempfile::tempdir().unwrap();
+        let _guard = HomeGuard::set(temp.path());
+        let p = OpenCodePlugin::new();
+        let raw = p.read_raw_config().unwrap();
+        assert!(raw.contains("$schema"));
+    }
+
+    #[test]
+    fn write_raw_config_roundtrips_and_validates() {
+        let temp = tempfile::tempdir().unwrap();
+        let _guard = HomeGuard::set(temp.path());
+        let p = OpenCodePlugin::new();
+
+        // 合法 JSON5（含注释）可写入
+        p.write_raw_config("// comment\n{ provider: { a: { npm: 'x' } }, theme: 'dark' }")
+            .unwrap();
+        let raw = p.read_raw_config().unwrap();
+        assert!(raw.contains("dark"));
+
+        // 非法 JSON 拒绝写入，且不破坏原文件
+        assert!(p.write_raw_config("not-json{{{").is_err());
+        let raw = p.read_raw_config().unwrap();
+        assert!(raw.contains("dark"));
     }
 }
