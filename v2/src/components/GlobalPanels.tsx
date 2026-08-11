@@ -32,12 +32,18 @@ import {
   skillsList,
   skillsTogglePlugin,
   skillsUninstall,
+  getPlugins,
   applyProvider,
   addProvider,
   deleteProvider,
   getProviders,
   importFromLive,
+  importMcpServersFromPlugin,
   importProvidersFromLive,
+  mcpDelete,
+  mcpList,
+  mcpToggleApp,
+  mcpUpsert,
   readRawConfig,
   removeProviderFromLive,
   syncAllProvidersToLive,
@@ -49,13 +55,14 @@ import type {
   PromptRecord,
   SkillRecord,
   Provider,
+  McpServer,
 } from "@/types";
 import ProviderForm from "@/components/ProviderForm";
 import SessionList from "@/components/SessionList";
-import McpPanel from "@/components/McpPanel";
 import UsagePanel from "@/components/UsagePanel";
 import JsonEditor from "@/components/JsonEditor";
 import MarkdownEditor from "@/components/MarkdownEditor";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Dialog,
   DialogContent,
@@ -839,14 +846,185 @@ function SessionsPanel({ pluginId }: { pluginId: string }) {
   );
 }
 
-function McpGlobalPanel({ pluginId }: { pluginId: string }) {
+function McpGlobalPanel() {
   const { t } = useTranslation();
+  const queryClient = useQueryClient();
+  const [showForm, setShowForm] = useState(false);
+  const [newId, setNewId] = useState("");
+  const [newName, setNewName] = useState("");
+  const [newSpec, setNewSpec] = useState("{}");
+
+  const query = useQuery({ queryKey: ["mcp-all"], queryFn: mcpList });
+  const pluginsQuery = useQuery({ queryKey: ["plugins"], queryFn: getPlugins });
+  const servers = query.data ?? [];
+  const plugins = pluginsQuery.data ?? [];
+
+  const invalidate = () =>
+    queryClient.invalidateQueries({ queryKey: ["mcp-all"] });
+
+  const handleUpsert = async () => {
+    if (!newId.trim()) {
+      toast.error(t("common.error"));
+      return;
+    }
+    let spec: Record<string, unknown>;
+    try {
+      spec = JSON.parse(newSpec || "{}");
+    } catch {
+      toast.error(t("jsonEditor.invalidJson"));
+      return;
+    }
+    try {
+      await mcpUpsert({
+        id: newId.trim(),
+        name: newName.trim() || newId.trim(),
+        spec,
+        apps: [],
+      });
+      await invalidate();
+      setShowForm(false);
+      setNewId("");
+      setNewName("");
+      setNewSpec("{}");
+      toast.success(t("common.save"));
+    } catch (e) {
+      toast.error(String(e));
+    }
+  };
+
+  const handleDelete = async (id: string) => {
+    try {
+      await mcpDelete(id);
+      await invalidate();
+    } catch (e) {
+      toast.error(String(e));
+    }
+  };
+
+  const handleToggleApp = async (
+    id: string,
+    pluginId: string,
+    enabled: boolean,
+  ) => {
+    try {
+      await mcpToggleApp(id, pluginId, enabled);
+      await invalidate();
+    } catch (e) {
+      toast.error(String(e));
+    }
+  };
+
+  const handleImport = async () => {
+    try {
+      const n = await importMcpServersFromPlugin("opencode");
+      await invalidate();
+      toast.success(t("features.mcpImported", { count: n }));
+    } catch (e) {
+      toast.error(String(e));
+    }
+  };
+
   return (
     <div className="space-y-4">
-      <h2 className="text-lg font-semibold">
-        {t("nav.mcp")} · {pluginId}
-      </h2>
-      <McpPanel pluginId={pluginId} />
+      <div className="flex items-center justify-between">
+        <h2 className="text-lg font-semibold">{t("nav.mcp")}</h2>
+        <div className="flex gap-1">
+          <button
+            type="button"
+            onClick={handleImport}
+            className="inline-flex items-center gap-1 rounded-md border border-border px-2 py-1 text-xs transition-colors hover:bg-accent"
+          >
+            <Download className="h-3.5 w-3.5" />
+            {t("features.mcpImport")}
+          </button>
+          <button
+            type="button"
+            onClick={() => setShowForm((v) => !v)}
+            className="inline-flex items-center gap-1 rounded-md bg-primary px-2 py-1 text-xs text-primary-foreground transition-colors hover:bg-primary/90"
+          >
+            <Plus className="h-3.5 w-3.5" />
+            {t("features.mcpAdd")}
+          </button>
+        </div>
+      </div>
+
+      {showForm && (
+        <div className="space-y-2 rounded-lg border border-border p-3">
+          <div className="flex gap-2">
+            <input
+              value={newId}
+              onChange={(e) => setNewId(e.target.value)}
+              placeholder="server-id"
+              className="flex-1 rounded-md border border-border bg-background px-2 py-1 text-xs"
+            />
+            <input
+              value={newName}
+              onChange={(e) => setNewName(e.target.value)}
+              placeholder={t("features.mcpName")}
+              className="flex-1 rounded-md border border-border bg-background px-2 py-1 text-xs"
+            />
+          </div>
+          <JsonEditor value={newSpec} onChange={setNewSpec} rows={8} />
+          <button
+            type="button"
+            onClick={handleUpsert}
+            className="w-full rounded-md bg-primary px-2 py-1.5 text-xs text-primary-foreground transition-colors hover:bg-primary/90"
+          >
+            {t("common.save")}
+          </button>
+        </div>
+      )}
+
+      {query.isLoading ? (
+        <p className="text-xs text-muted-foreground">{t("common.loading")}</p>
+      ) : servers.length === 0 ? (
+        <p className="text-xs text-muted-foreground">
+          {t("features.mcpEmpty")}
+        </p>
+      ) : (
+        <ul className="divide-y divide-border rounded-lg border border-border">
+          {servers.map((s: McpServer) => (
+            <li key={s.id} className="px-3 py-2">
+              <div className="flex items-center justify-between gap-2">
+                <div className="min-w-0 flex-1">
+                  <div className="truncate text-sm">{s.name}</div>
+                  <div className="truncate text-xs text-muted-foreground">
+                    {s.id}
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => handleDelete(s.id)}
+                  className="shrink-0 rounded p-1 text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
+                  title={t("common.delete")}
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                </button>
+              </div>
+              <div className="mt-2 flex flex-wrap gap-3">
+                {plugins.map((p) => {
+                  const enabled =
+                    s.apps.find(([pid]) => pid === p.id)?.[1] ?? false;
+                  return (
+                    <label
+                      key={p.id}
+                      className="flex items-center gap-1.5 text-xs text-muted-foreground"
+                    >
+                      <Checkbox
+                        checked={enabled}
+                        onCheckedChange={(v) =>
+                          handleToggleApp(s.id, p.id, v === true)
+                        }
+                      />
+                      {p.name}
+                    </label>
+                  );
+                })}
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
     </div>
   );
 }
@@ -876,7 +1054,7 @@ export default function GlobalPanels({
     case "sessions":
       return <SessionsPanel pluginId={pluginId} />;
     case "mcp":
-      return <McpGlobalPanel pluginId={pluginId} />;
+      return <McpGlobalPanel />;
     case "usage":
       return <UsageGlobalPanel pluginId={pluginId} />;
     case "skills":

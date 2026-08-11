@@ -156,9 +156,9 @@ it("shows MCP servers when the plugin supports mcp", async () => {
         },
       ];
     if (cmd === "get_providers") return [];
-    if (cmd === "plugin_mcp_get")
+    if (cmd === "mcp_list")
       return [
-        { id: "filesystem", name: "Filesystem", spec: { type: "stdio", command: "npx" } },
+        { id: "filesystem", name: "Filesystem", spec: { type: "stdio", command: "npx" }, apps: [] },
       ];
     return null;
   });
