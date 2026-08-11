@@ -37,6 +37,7 @@ import McpPanel from "@/components/McpPanel";
 import UsagePanel from "@/components/UsagePanel";
 import GlobalPanels from "@/components/GlobalPanels";
 import ProviderForm from "@/components/ProviderForm";
+import TsPluginView from "@/components/TsPluginView";
 
 type View =
   | "providers"
@@ -111,6 +112,9 @@ export default function App() {
 
   const renderContent = () => {
     if (view === "plugin-detail" && selectedPlugin) {
+      if (selectedPlugin.entryType === "ts") {
+        return <TsPluginView plugin={selectedPlugin} />;
+      }
       return (
         <PluginDetail
           plugin={selectedPlugin}

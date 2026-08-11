@@ -114,6 +114,7 @@
     "backupCreate": "Create backup",
     "backupEmpty": "No backups",
     "backupExport": "Export config",
-    "backupDelete": "Delete backup"
+    "backupDelete": "Delete backup",
+    "tsPluginHint": "This plugin is written in TypeScript and loaded via the frontend host. Capability panels are under development; showing the exported capabilities for now."
   }
 }

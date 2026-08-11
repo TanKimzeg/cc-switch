@@ -19,11 +19,13 @@ pub mod mcp;
 pub mod opencode;
 pub mod ops;
 pub mod process;
+pub mod ts;
 
 pub use error::PluginError;
 pub use opencode::OpenCodePlugin;
 pub use ops::PluginManagerPlugin;
 pub use process::ProcessPlugin;
+pub use ts::TsPluginStub;
 
 use serde::{Deserialize, Serialize};
 

@@ -8,7 +8,7 @@ use std::path::{Path, PathBuf};
 use serde::{Deserialize, Serialize};
 
 use crate::db::Database;
-use crate::plugin::{AgentPlugin, OpenCodePlugin, PluginCapabilities, ProcessPlugin};
+use crate::plugin::{AgentPlugin, OpenCodePlugin, PluginCapabilities, ProcessPlugin, TsPluginStub};
 use crate::types::{InstalledPlugin, PluginManifest};
 
 /// 当前支持的 manifest 协议版本。
@@ -54,6 +54,30 @@ pub enum ManifestEntry {
     },
     /// 调用命令行程序，后续用于「切换」动作（如 `openclaw config ...`）。
     Shell { command: String, args: Vec<String> },
+    /// TypeScript 插件：由前端（WebView）动态加载执行，通过宿主命令读写配置。
+    Ts {
+        /// 插件主脚本（相对插件目录，如 `main.ts`）。
+        main: String,
+    },
+}
+
+impl ManifestEntry {
+    /// 入口类型字符串（供前端判断渲染路径）。
+    pub fn type_str(&self) -> &'static str {
+        match self {
+            ManifestEntry::Native { .. } => "native",
+            ManifestEntry::Shell { .. } => "shell",
+            ManifestEntry::Ts { .. } => "ts",
+        }
+    }
+
+    /// TS 插件主脚本路径（相对插件目录）；非 TS 返回 None。
+    pub fn ts_main(&self) -> Option<&str> {
+        match self {
+            ManifestEntry::Ts { main } => Some(main),
+            _ => None,
+        }
+    }
 }
 
 impl ManifestFile {
@@ -101,6 +125,8 @@ impl ManifestFile {
             icon: self.icon.clone(),
             capabilities: Some(self.capabilities.clone()),
             settings_schema: self.settings_schema.clone(),
+            entry_type: self.entry.type_str().to_string(),
+            main: self.entry.ts_main().map(|s| s.to_string()),
         }
     }
 }
@@ -160,10 +186,16 @@ impl PluginRegistry {
         Self { dir: dir.into(), db }
     }
 
+    /// 插件目录绝对路径。
+    pub fn plugins_dir(&self) -> &Path {
+        &self.dir
+    }
+
     /// 解析已安装插件为可执行的 [`AgentPlugin`] 实例。
     ///
     /// - manifest `entry.type = native`：返回二进制内注册的原生插件；
-    /// - manifest `entry.type = shell`：包装为进程插件调用外部命令。
+    /// - manifest `entry.type = shell`：包装为进程插件调用外部命令；
+    /// - manifest `entry.type = ts`：返回占位实现（实际由前端宿主加载脚本执行）。
     pub fn resolve_plugin(&self, id: &str) -> Result<Box<dyn AgentPlugin>, ManifestError> {
         let manifest_path = self.dir.join(id).join("manifest.json");
         if !manifest_path.exists() {
@@ -188,6 +220,7 @@ impl PluginRegistry {
                 args.clone(),
                 capabilities,
             ))),
+            ManifestEntry::Ts { .. } => Ok(Box::new(TsPluginStub::new(mf.id.clone(), capabilities))),
         }
     }
 
@@ -387,6 +420,7 @@ mod tests {
                 assert!(args.is_empty());
             }
             ManifestEntry::Native { .. } => unreachable!("sample manifest is shell entry"),
+            ManifestEntry::Ts { .. } => unreachable!("sample manifest is shell entry"),
         }
     }
 
@@ -688,6 +722,39 @@ mod tests {
         assert_eq!(plugin.id(), "demo");
         // 未声明的能力默认全部为 false
         assert!(!plugin.capabilities().read_live);
+    }
+
+    #[test]
+    fn resolve_plugin_ts_returns_stub() {
+        let dir = tempfile::tempdir().unwrap();
+        let (registry, _db) = registry_in(dir.path());
+        let plugin_dir = dir.path().join("plugins/my-ts");
+        std::fs::create_dir_all(&plugin_dir).unwrap();
+        std::fs::write(
+            plugin_dir.join("manifest.json"),
+            r#"{
+                "id": "my-ts",
+                "name": "My TS",
+                "version": "0.1.0",
+                "apiVersion": "1",
+                "capabilities": { "readLive": true },
+                "entry": { "type": "ts", "main": "main.ts" }
+            }"#,
+        )
+        .unwrap();
+        std::fs::write(plugin_dir.join("main.ts"), "export const plugin = {};").unwrap();
+
+        let plugin = registry.resolve_plugin("my-ts").unwrap();
+        assert_eq!(plugin.id(), "my-ts");
+        assert!(plugin.capabilities().read_live);
+        // TS 插件占位：read_live 返回"请前端宿主执行"
+        assert!(plugin.read_live().is_err());
+
+        // to_manifest 暴露 entry_type 与 main
+        let mf = registry.discover().unwrap();
+        let my = mf.iter().find(|m| m.id == "my-ts").unwrap();
+        assert_eq!(my.entry_type, "ts");
+        assert_eq!(my.main.as_deref(), Some("main.ts"));
     }
 
     #[test]

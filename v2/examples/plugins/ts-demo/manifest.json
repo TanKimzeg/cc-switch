@@ -1,0 +1,17 @@
+{
+  "id": "ts-demo",
+  "name": "TS Demo",
+  "version": "0.1.0",
+  "apiVersion": "1",
+  "author": "cc-switch",
+  "description": "TypeScript 插件示例：演示前端宿主加载与宿主命令读写。",
+  "capabilities": {
+    "readLive": true,
+    "apply": true,
+    "sessions": true
+  },
+  "entry": {
+    "type": "ts",
+    "main": "main.ts"
+  }
+}

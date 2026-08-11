@@ -1,4 +1,5 @@
 pub mod backup;
+pub mod host;
 pub mod mcp;
 pub mod plugins;
 pub mod profiles;

@@ -38,6 +38,10 @@ export interface PluginManifest {
   icon?: string;
   capabilities?: PluginCapabilities;
   settingsSchema?: Record<string, unknown>;
+  /** 入口类型：native | shell | ts */
+  entryType?: string;
+  /** TS 插件主脚本（相对插件目录） */
+  main?: string | null;
 }
 
 /** 插件能力声明。 */

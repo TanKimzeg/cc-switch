@@ -57,6 +57,12 @@ pub struct PluginManifest {
     pub capabilities: Option<crate::plugin::PluginCapabilities>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub settings_schema: Option<serde_json::Value>,
+    /// 入口类型：native | shell | ts。
+    #[serde(default)]
+    pub entry_type: String,
+    /// TS 插件主脚本（相对插件目录）；非 TS 插件为 None。
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub main: Option<String>,
 }
 
 /// 插件安装记录（对应 plugin_installs 表）。
