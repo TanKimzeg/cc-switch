@@ -13,6 +13,8 @@ pub struct Provider {
     pub settings_config: Option<String>,
     pub meta: Option<serde_json::Value>,
     pub sort_order: i64,
+    #[serde(default)]
+    pub live_config_managed: bool,
     pub created_at: String,
     pub updated_at: String,
 }
@@ -32,6 +34,9 @@ pub struct ProviderInput {
     pub settings_config: Option<String>,
     pub meta: Option<serde_json::Value>,
     pub sort_order: Option<i64>,
+    /// 是否投影到 live 配置（默认 true）。
+    #[serde(default)]
+    pub live_config_managed: Option<bool>,
 }
 
 impl ProviderInput {

@@ -111,6 +111,8 @@ pub fn run() {
             commands::providers::switch_provider,
             commands::providers::remove_provider_from_live_config,
             commands::providers::update_providers_sort_order,
+            commands::providers::sync_all_providers_to_live,
+            commands::providers::import_providers_from_live,
             commands::settings::get_setting,
             commands::settings::set_setting,
         ])

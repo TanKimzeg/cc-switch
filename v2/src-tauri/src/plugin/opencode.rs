@@ -979,6 +979,7 @@ mod tests {
             settings_config: Some(settings.to_string()),
             meta: None,
             sort_order: 0,
+            live_config_managed: true,
             created_at: String::new(),
             updated_at: String::new(),
         }

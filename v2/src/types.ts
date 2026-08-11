@@ -10,6 +10,8 @@ export interface Provider {
   settingsConfig?: string;
   meta?: Record<string, unknown>;
   sortOrder: number;
+  /** 是否投影到 live 配置（SSOT 标记） */
+  liveConfigManaged?: boolean;
   createdAt: string;
   updatedAt: string;
 }
@@ -27,6 +29,8 @@ export interface ProviderInput {
   settingsConfig?: string;
   meta?: Record<string, unknown>;
   sortOrder?: number;
+  /** 是否投影到 live 配置（默认 true） */
+  liveConfigManaged?: boolean;
 }
 
 /** 插件清单信息（manifest 的镜像）。 */

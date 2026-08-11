@@ -249,13 +249,14 @@ fn get_provider_by_id(db: &Database, id: &str) -> Result<Provider, String> {
             settings_config: row.get("settings_config")?,
             meta,
             sort_order: row.get("sort_order")?,
+            live_config_managed: row.get::<_, i64>("live_config_managed")? != 0,
             created_at: row.get("created_at")?,
             updated_at: row.get("updated_at")?,
         })
     }
 
     const COLUMNS: &str =
-        "id, plugin_id, name, category, icon, website, api_key, settings_config, meta, sort_order, created_at, updated_at";
+        "id, plugin_id, name, category, icon, website, api_key, settings_config, meta, sort_order, live_config_managed, created_at, updated_at";
 
     db.lock()
         .query_row(

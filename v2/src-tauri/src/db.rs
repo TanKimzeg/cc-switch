@@ -18,6 +18,7 @@ CREATE TABLE IF NOT EXISTS providers (
   settings_config TEXT,
   meta           TEXT,
   sort_order     INTEGER NOT NULL DEFAULT 0,
+  live_config_managed INTEGER NOT NULL DEFAULT 1,
   created_at     TEXT NOT NULL DEFAULT (datetime('now')),
   updated_at     TEXT NOT NULL DEFAULT (datetime('now'))
 );
@@ -201,6 +202,11 @@ impl Database {
         // 兼容旧库：skills 表若缺少 source_path 列则补充（已存在时忽略错误）。
         let _ = db.conn.lock().unwrap().execute(
             "ALTER TABLE skills ADD COLUMN source_path TEXT",
+            [],
+        );
+        // 兼容旧库：providers 表若缺少 live_config_managed 列则补充。
+        let _ = db.conn.lock().unwrap().execute(
+            "ALTER TABLE providers ADD COLUMN live_config_managed INTEGER NOT NULL DEFAULT 1",
             [],
         );
         Ok(db)
