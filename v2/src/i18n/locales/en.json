@@ -67,7 +67,9 @@
     "syncAllHint": "Project all database providers to the live config",
     "editLive": "Edit live config",
     "editLiveHint": "Edit the plugin's live config file directly (JSON5)",
-    "syncedCount": "Synced {count} providers to live"
+    "syncedCount": "Synced {count} providers to live",
+    "duplicateProvider": "Duplicate",
+    "providerDuplicated": "Provider duplicated"
   },
   "common": {
     "loading": "Loading…",

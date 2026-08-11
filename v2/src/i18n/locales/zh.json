@@ -67,7 +67,9 @@
     "syncAllHint": "把数据库全部供应商投影到 live 配置",
     "editLive": "编辑 live 配置",
     "editLiveHint": "直接编辑插件的 live 配置文件（JSON5）",
-    "syncedCount": "已同步 {count} 个供应商到 live"
+    "syncedCount": "已同步 {count} 个供应商到 live",
+    "duplicateProvider": "复制",
+    "providerDuplicated": "已复制供应商"
   },
   "common": {
     "loading": "加载中…",

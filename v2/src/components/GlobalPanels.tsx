@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Archive,
+  Copy,
   Download,
   FileJson,
   Plus,
@@ -659,6 +660,36 @@ function ProvidersPanel({ pluginId }: { pluginId: string }) {
     }
   };
 
+  const handleDuplicate = async (p: Provider) => {
+    // 生成唯一 id：`{id}-copy-{n}`（仿 v1 generateUniqueProviderCopyKey）。
+    const base = p.id.includes("-copy") ? p.id.split("-copy")[0] : p.id;
+    let n = 1;
+    let newId = `${base}-copy-${n}`;
+    const existingIds = new Set(providers.map((x) => x.id));
+    while (existingIds.has(newId)) {
+      n += 1;
+      newId = `${base}-copy-${n}`;
+    }
+    try {
+      // addToLive=false：仅复制到 DB，不立即投影（仿 v1）。
+      await addProvider(
+        {
+          id: newId,
+          pluginId,
+          name: `${p.name} (copy)`,
+          category: p.category,
+          settingsConfig: p.settingsConfig,
+          meta: p.meta,
+        },
+        false,
+      );
+      await invalidate();
+      toast.success(t("shell.providerDuplicated"));
+    } catch (e) {
+      toast.error(String(e));
+    }
+  };
+
   const handleImport = async () => {
     try {
       const candidates = await importFromLive(pluginId);
@@ -784,6 +815,14 @@ function ProvidersPanel({ pluginId }: { pluginId: string }) {
                   title={t("shell.editProvider")}
                 >
                   {t("shell.editProvider")}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleDuplicate(p)}
+                  className="rounded-md border border-border px-2 py-1.5 text-xs transition-colors hover:bg-accent"
+                  title={t("shell.duplicateProvider")}
+                >
+                  <Copy className="h-3.5 w-3.5" />
                 </button>
                 <button
                   type="button"
