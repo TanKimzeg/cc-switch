@@ -58,7 +58,9 @@
     "deleteProvider": "Delete",
     "providerDeleted": "Provider deleted",
     "providerRemovedFromLive": "Removed from live config",
-    "addProvider": "Add provider"
+    "addProvider": "Add provider",
+    "providerIdRequired": "Please enter a provider ID (used as the live config key)",
+    "providerIdInvalid": "Provider ID may only contain lowercase letters, digits and hyphens (e.g. deepseek-r1)"
   },
   "common": {
     "loading": "Loading…",

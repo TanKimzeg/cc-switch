@@ -32,9 +32,6 @@ import {
   uninstallPlugin,
 } from "@/lib/api";
 import type { InstalledPlugin, Provider } from "@/types";
-import SessionList from "@/components/SessionList";
-import McpPanel from "@/components/McpPanel";
-import UsagePanel from "@/components/UsagePanel";
 import GlobalPanels from "@/components/GlobalPanels";
 import ProviderForm from "@/components/ProviderForm";
 import TsPluginView from "@/components/TsPluginView";
@@ -309,6 +306,8 @@ function PluginDetail({
       for (const c of candidates) {
         try {
           await addProvider({
+            // 保留 live 配置中的 provider id（additive 键一致）。
+            id: c.id,
             pluginId: plugin.id,
             name: c.name,
             category: "imported",
@@ -504,12 +503,6 @@ function PluginDetail({
           )}
         </section>
       )}
-
-      {canSessions && <SessionList pluginId={plugin.id} />}
-
-      {canRead && <UsagePanel pluginId={plugin.id} />}
-
-      {caps.mcp && <McpPanel pluginId={plugin.id} />}
     </div>
   );
 }

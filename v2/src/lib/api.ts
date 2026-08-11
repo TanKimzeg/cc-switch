@@ -30,8 +30,11 @@ export function getProvider(id: string): Promise<Provider | null> {
   return invoke<Provider | null>("get_provider", { id });
 }
 
-export function addProvider(input: ProviderInput): Promise<Provider> {
-  return invoke<Provider>("add_provider", { input });
+export function addProvider(
+  input: ProviderInput,
+  addToLive?: boolean,
+): Promise<Provider> {
+  return invoke<Provider>("add_provider", { input, addToLive });
 }
 
 export function updateProvider(

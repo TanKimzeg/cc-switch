@@ -58,7 +58,9 @@
     "deleteProvider": "删除",
     "providerDeleted": "供应商已删除",
     "providerRemovedFromLive": "已从 live 配置移除",
-    "addProvider": "添加供应商"
+    "addProvider": "添加供应商",
+    "providerIdRequired": "请填写供应商 ID（用于 live 配置）",
+    "providerIdInvalid": "供应商 ID 仅支持小写字母、数字与连字符（如 deepseek-r1）"
   },
   "common": {
     "loading": "加载中…",

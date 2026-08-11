@@ -16,6 +16,8 @@ export interface Provider {
 
 /** 新增/编辑供应商的入参。 */
 export interface ProviderInput {
+  /** additive 插件（如 opencode）的用户自定义 provider id（live 键） */
+  id?: string;
   pluginId: string;
   name: string;
   category?: string;

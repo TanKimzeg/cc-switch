@@ -20,6 +20,9 @@ pub struct Provider {
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ProviderInput {
+    /// 可选：additive 插件（如 opencode）的用户自定义 provider id
+    /// （作为 live 配置 `provider.<id>` 的键）。未提供时由后端生成 uuid。
+    pub id: Option<String>,
     pub plugin_id: String,
     pub name: String,
     pub category: Option<String>,

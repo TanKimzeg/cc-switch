@@ -67,10 +67,17 @@ pub fn get_providers(
 #[tauri::command]
 pub fn add_provider(
     db: State<'_, Database>,
+    registry: State<'_, PluginRegistry>,
     input: ProviderInput,
+    add_to_live: Option<bool>,
 ) -> Result<Provider, String> {
     let input = input.normalize();
-    let id = Uuid::new_v4().to_string();
+    // additive 插件（如 opencode）的 id 由用户提供，作为 live 配置键；
+    // 未提供时生成 uuid。
+    let id = input
+        .id
+        .filter(|s| !s.trim().is_empty())
+        .unwrap_or_else(|| Uuid::new_v4().to_string());
     let meta = input
         .meta
         .map(|m| serde_json::to_string(&m))
@@ -94,12 +101,26 @@ pub fn add_provider(
             ],
         )
         .map_err(|e| e.to_string())?;
-    get_provider_by_id(&db, &id)
+    let provider = get_provider_by_id(&db, &id)?;
+
+    // 仿 v1：默认 addToLive=true —— 添加后同步写 live 配置（additive 共存）。
+    if add_to_live.unwrap_or(true) {
+        let plugin = registry
+            .resolve_plugin(&provider.plugin_id)
+            .map_err(|e| e.to_string())?;
+        if plugin.capabilities().apply {
+            plugin
+                .apply(&provider, false)
+                .map_err(|e| e.to_string())?;
+        }
+    }
+    Ok(provider)
 }
 
 #[tauri::command]
 pub fn update_provider(
     db: State<'_, Database>,
+    registry: State<'_, PluginRegistry>,
     id: String,
     input: ProviderInput,
 ) -> Result<Provider, String> {
@@ -131,7 +152,15 @@ pub fn update_provider(
     if changed == 0 {
         return Err(format!("provider not found: {id}"));
     }
-    get_provider_by_id(&db, &id)
+    let provider = get_provider_by_id(&db, &id)?;
+
+    // additive 模式：更新后同步写 live（幂等 upsert）。
+    if let Ok(plugin) = registry.resolve_plugin(&provider.plugin_id) {
+        if plugin.capabilities().apply {
+            plugin.apply(&provider, false).map_err(|e| e.to_string())?;
+        }
+    }
+    Ok(provider)
 }
 
 #[tauri::command]

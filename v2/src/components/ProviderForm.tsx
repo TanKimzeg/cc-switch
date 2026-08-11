@@ -77,6 +77,15 @@ export default function ProviderForm({
     }
     return out;
   });
+  const [idError, setIdError] = useState<string | null>(null);
+
+  // additive 模式 provider id 正则（与 v1 一致）。
+  const ID_REGEX = /^[a-z0-9]+(-[a-z0-9]+)*$/;
+  const validateId = (value: string): string | null => {
+    if (!value.trim()) return "providerIdRequired";
+    if (!ID_REGEX.test(value.trim())) return "providerIdInvalid";
+    return null;
+  };
 
   const updateModel = (mid: string, patch: Partial<ModelEntry>) => {
     setModels((prev) => ({ ...prev, [mid]: { ...prev[mid], ...patch } }));
@@ -103,10 +112,26 @@ export default function ProviderForm({
       toast.error(t("common.error"));
       return;
     }
+    // 新建 additive provider 必须提供合法的 provider id（作为 live 键）。
+    if (!isEdit) {
+      const err = validateId(id);
+      if (err) {
+        setIdError(err);
+        toast.error(t(`shell.${err}`));
+        return;
+      }
+    }
+    const providerId = id.trim();
     const options: Record<string, unknown> = {};
-    if (baseUrl.trim()) options.baseURL = baseUrl.trim();
+    if (baseUrl.trim()) {
+      options.baseURL = baseUrl.trim().replace(/\/+$/, "");
+    }
     if (apiKey.trim()) options.apiKey = apiKey.trim();
     if (Object.keys(headers).length > 0) options.headers = headers;
+    // v1 默认值：opencode 表单默认带 setCacheKey。
+    if (options.baseURL === undefined && options.apiKey === undefined) {
+      options.setCacheKey = true;
+    }
 
     const settingsConfig: Record<string, unknown> = { npm };
     settingsConfig.options = options;
@@ -123,6 +148,7 @@ export default function ProviderForm({
     if (Object.keys(modelsOut).length > 0) settingsConfig.models = modelsOut;
 
     const input = {
+      id: providerId,
       pluginId,
       name: name.trim(),
       category: "custom",
@@ -134,7 +160,8 @@ export default function ProviderForm({
       if (isEdit && existing) {
         await updateProvider(existing.id, input);
       } else {
-        await addProvider(input);
+        // 默认 addToLive=true：添加后同步写 live 配置。
+        await addProvider(input, true);
       }
       toast.success(t("common.save"));
       onDone();
@@ -163,10 +190,20 @@ export default function ProviderForm({
           <label className="mb-1 block text-xs text-muted-foreground">ID</label>
           <input
             value={id}
-            onChange={(e) => setId(e.target.value)}
-            placeholder="provider-id"
-            className="w-full rounded-md border border-border bg-background px-2 py-1 text-sm"
+            onChange={(e) => {
+              setId(e.target.value);
+              if (idError) setIdError(null);
+            }}
+            placeholder="provider-id (如 deepseek)"
+            className={`w-full rounded-md border bg-background px-2 py-1 text-sm ${
+              idError ? "border-destructive" : "border-border"
+            }`}
           />
+          {idError && (
+            <p className="mt-1 text-xs text-destructive">
+              {t(`shell.${idError}`)}
+            </p>
+          )}
         </div>
       )}
 

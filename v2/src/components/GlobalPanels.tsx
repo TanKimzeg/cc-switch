@@ -560,6 +560,8 @@ function ProvidersPanel({ pluginId }: { pluginId: string }) {
       for (const c of candidates) {
         try {
           await addProvider({
+            // 保留 live 配置中的 provider id 作为 DB id（additive 键一致）。
+            id: c.id,
             pluginId,
             name: c.name,
             category: "imported",
