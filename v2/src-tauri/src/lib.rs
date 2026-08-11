@@ -99,6 +99,8 @@ pub fn run() {
             commands::backup::export_config_json,
             commands::backup::export_config_to_file,
             commands::backup::parse_export_json,
+            commands::backup::import_config,
+            commands::backup::import_config_from_file,
             commands::host::plugin_get_script,
             commands::host::host_read_file,
             commands::host::host_write_file,

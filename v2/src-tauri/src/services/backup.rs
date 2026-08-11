@@ -143,6 +143,134 @@ impl Database {
             profiles,
         })
     }
+
+    /// 导入配置负载：逐表 upsert（INSERT OR REPLACE）。
+    pub fn import_config(&self, payload: &ExportPayload) -> Result<usize, String> {
+        let conn = self.lock();
+        let mut count = 0;
+        for row in &payload.providers {
+            let cols = row.as_object().ok_or_else(|| "providers 行不是对象".to_string())?;
+            conn.execute(
+                "INSERT OR REPLACE INTO providers
+                 (id, plugin_id, name, category, icon, website, api_key, settings_config, meta, sort_order, live_config_managed, created_at, updated_at)
+                 VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,COALESCE(?12, datetime('now')),COALESCE(?13, datetime('now')))",
+                rusqlite::params![
+                    str_of(cols, "id"),
+                    str_of(cols, "plugin_id"),
+                    str_of(cols, "name"),
+                    opt_str(cols, "category"),
+                    opt_str(cols, "icon"),
+                    opt_str(cols, "website"),
+                    opt_str(cols, "api_key"),
+                    opt_str(cols, "settings_config"),
+                    opt_str(cols, "meta"),
+                    int_of(cols, "sort_order"),
+                    int_of(cols, "live_config_managed"),
+                    opt_str(cols, "created_at"),
+                    opt_str(cols, "updated_at"),
+                ],
+            )
+            .map_err(|e| format!("导入 providers 失败: {e}"))?;
+            count += 1;
+        }
+        for row in &payload.mcp_servers {
+            let cols = row.as_object().ok_or_else(|| "mcp_servers 行不是对象".to_string())?;
+            conn.execute(
+                "INSERT OR REPLACE INTO mcp_servers (id, name, server_config, description, homepage, docs, tags, created_at, updated_at)
+                 VALUES (?1,?2,?3,?4,?5,?6,?7,COALESCE(?8, datetime('now')),COALESCE(?9, datetime('now')))",
+                rusqlite::params![
+                    str_of(cols, "id"),
+                    str_of(cols, "name"),
+                    str_of(cols, "server_config"),
+                    opt_str(cols, "description"),
+                    opt_str(cols, "homepage"),
+                    opt_str(cols, "docs"),
+                    str_of(cols, "tags"),
+                    opt_str(cols, "created_at"),
+                    opt_str(cols, "updated_at"),
+                ],
+            )
+            .map_err(|e| format!("导入 mcp_servers 失败: {e}"))?;
+            count += 1;
+        }
+        for row in &payload.skills {
+            let cols = row.as_object().ok_or_else(|| "skills 行不是对象".to_string())?;
+            conn.execute(
+                "INSERT OR REPLACE INTO skills (id, name, description, directory, source_path, repo_owner, repo_name, repo_branch, readme_url, installed_at, content_hash, updated_at)
+                 VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,COALESCE(?10,0),?11,COALESCE(?12,0))",
+                rusqlite::params![
+                    str_of(cols, "id"),
+                    str_of(cols, "name"),
+                    opt_str(cols, "description"),
+                    str_of(cols, "directory"),
+                    opt_str(cols, "source_path"),
+                    opt_str(cols, "repo_owner"),
+                    opt_str(cols, "repo_name"),
+                    opt_str(cols, "repo_branch"),
+                    opt_str(cols, "readme_url"),
+                    int_of(cols, "installed_at"),
+                    opt_str(cols, "content_hash"),
+                    int_of(cols, "updated_at"),
+                ],
+            )
+            .map_err(|e| format!("导入 skills 失败: {e}"))?;
+            count += 1;
+        }
+        for row in &payload.prompts {
+            let cols = row.as_object().ok_or_else(|| "prompts 行不是对象".to_string())?;
+            conn.execute(
+                "INSERT OR REPLACE INTO prompts (id, plugin_id, name, content, description, enabled, created_at, updated_at)
+                 VALUES (?1,?2,?3,?4,?5,COALESCE(?6,1),COALESCE(?7, datetime('now')),COALESCE(?8, datetime('now')))",
+                rusqlite::params![
+                    str_of(cols, "id"),
+                    str_of(cols, "plugin_id"),
+                    str_of(cols, "name"),
+                    str_of(cols, "content"),
+                    opt_str(cols, "description"),
+                    int_of(cols, "enabled"),
+                    opt_str(cols, "created_at"),
+                    opt_str(cols, "updated_at"),
+                ],
+            )
+            .map_err(|e| format!("导入 prompts 失败: {e}"))?;
+            count += 1;
+        }
+        for row in &payload.profiles {
+            let cols = row.as_object().ok_or_else(|| "profiles 行不是对象".to_string())?;
+            conn.execute(
+                "INSERT OR REPLACE INTO profiles (id, name, payload, sort_order, created_at, updated_at)
+                 VALUES (?1,?2,?3,?4,COALESCE(?5,0),COALESCE(?6,0))",
+                rusqlite::params![
+                    str_of(cols, "id"),
+                    str_of(cols, "name"),
+                    str_of(cols, "payload"),
+                    int_of(cols, "sort_order"),
+                    int_of(cols, "created_at"),
+                    int_of(cols, "updated_at"),
+                ],
+            )
+            .map_err(|e| format!("导入 profiles 失败: {e}"))?;
+            count += 1;
+        }
+        Ok(count)
+    }
+}
+
+fn str_of(map: &serde_json::Map<String, serde_json::Value>, key: &str) -> String {
+    map.get(key)
+        .and_then(|v| v.as_str())
+        .unwrap_or_default()
+        .to_string()
+}
+
+fn opt_str(map: &serde_json::Map<String, serde_json::Value>, key: &str) -> Option<String> {
+    map.get(key).and_then(|v| v.as_str()).map(|s| s.to_string())
+}
+
+fn int_of(map: &serde_json::Map<String, serde_json::Value>, key: &str) -> i64 {
+    map.get(key)
+        .and_then(|v| v.as_i64())
+        .unwrap_or(0)
 }
 
 fn query_all(conn: &rusqlite::Connection, sql: &str) -> Vec<serde_json::Value> {
@@ -231,5 +359,47 @@ mod tests {
         assert_eq!(payload.providers[0]["id"], "p1");
         assert_eq!(payload.mcp_servers.len(), 1);
         assert_eq!(payload.version, 1);
+    }
+
+    #[test]
+    fn import_config_roundtrips_tables() {
+        let dir = tempfile::tempdir().unwrap();
+        let db = Database::new(&dir.path().join("cc.db")).unwrap();
+
+        let payload = ExportPayload {
+            version: 1,
+            providers: vec![serde_json::json!({
+                "id": "deepseek", "plugin_id": "opencode", "name": "DeepSeek",
+                "category": "custom", "settings_config": "{\"npm\":\"@ai-sdk/openai-compatible\"}",
+                "live_config_managed": 1, "sort_order": 0
+            })],
+            mcp_servers: vec![serde_json::json!({
+                "id": "filesystem", "name": "FS", "server_config": "{}", "tags": "[]"
+            })],
+            skills: vec![],
+            prompts: vec![serde_json::json!({
+                "id": "rules", "plugin_id": "opencode", "name": "Rules", "content": "be concise", "enabled": 1
+            })],
+            profiles: vec![],
+        };
+
+        let n = db.import_config(&payload).unwrap();
+        assert_eq!(n, 3); // providers + mcp_servers + prompts
+
+        let p: String = db
+            .lock()
+            .query_row("SELECT name FROM providers WHERE id='deepseek'", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(p, "DeepSeek");
+        let mcp: String = db
+            .lock()
+            .query_row("SELECT name FROM mcp_servers WHERE id='filesystem'", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(mcp, "FS");
+        let prompt: String = db
+            .lock()
+            .query_row("SELECT content FROM prompts WHERE id='rules'", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(prompt, "be concise");
     }
 }

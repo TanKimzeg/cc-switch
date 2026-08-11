@@ -59,3 +59,21 @@ pub fn export_config_to_file(
 pub fn parse_export_json(content: String) -> Result<ExportPayload, String> {
     serde_json::from_str(&content).map_err(|e| format!("导出 JSON 解析失败: {e}"))
 }
+
+/// 导入配置负载到数据库（逐表 upsert）。
+#[tauri::command]
+pub fn import_config(db: State<'_, Database>, payload: ExportPayload) -> Result<usize, String> {
+    db.import_config(&payload)
+}
+
+/// 从 JSON 文件导入配置（读取文件 → 解析 → 落库）。
+#[tauri::command]
+pub fn import_config_from_file(
+    db: State<'_, Database>,
+    path: String,
+) -> Result<usize, String> {
+    let content = std::fs::read_to_string(&path).map_err(|e| format!("读取文件失败: {e}"))?;
+    let payload: ExportPayload =
+        serde_json::from_str(&content).map_err(|e| format!("解析配置 JSON 失败: {e}"))?;
+    db.import_config(&payload)
+}

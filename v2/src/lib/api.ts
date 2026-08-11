@@ -343,3 +343,11 @@ export function exportConfigJson(): Promise<ExportPayload> {
 export function exportConfigToFile(path: string): Promise<void> {
   return invoke<void>("export_config_to_file", { path });
 }
+
+export function importConfig(payload: ExportPayload): Promise<number> {
+  return invoke<number>("import_config", { payload });
+}
+
+export function importConfigFromFile(path: string): Promise<number> {
+  return invoke<number>("import_config_from_file", { path });
+}

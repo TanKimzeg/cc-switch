@@ -8,6 +8,7 @@ import {
   Plus,
   RefreshCw,
   Trash2,
+  Upload,
 } from "lucide-react";
 import { open, save } from "@tauri-apps/plugin-dialog";
 import { toast } from "sonner";
@@ -16,6 +17,7 @@ import {
   backupDelete,
   backupList,
   exportConfigToFile,
+  importConfigFromFile,
   profilesApply,
   profilesClearCurrent,
   profilesCurrent,
@@ -478,6 +480,22 @@ function BackupPanel() {
     }
   };
 
+  const handleImport = async () => {
+    const filePath = await open({
+      multiple: false,
+      title: t("features.backupImportHint"),
+      filters: [{ name: "JSON", extensions: ["json"] }],
+    });
+    if (typeof filePath !== "string") return;
+    try {
+      const n = await importConfigFromFile(filePath);
+      await queryClient.invalidateQueries({ queryKey: ["providers"] });
+      toast.success(t("features.backupImported", { count: n }));
+    } catch (e) {
+      toast.error(String(e));
+    }
+  };
+
   const handleDelete = async (b: BackupRecord) => {
     try {
       await backupDelete(b.id);
@@ -507,6 +525,14 @@ function BackupPanel() {
           >
             <Download className="h-3 w-3" />
             {t("features.backupExport")}
+          </button>
+          <button
+            type="button"
+            onClick={handleImport}
+            className="inline-flex items-center gap-1 rounded-md border border-border px-2 py-1 text-xs transition-colors hover:bg-accent"
+          >
+            <Upload className="h-3 w-3" />
+            {t("features.backupImport")}
           </button>
         </div>
       </div>
