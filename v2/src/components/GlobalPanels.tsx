@@ -1,7 +1,14 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Archive, Download, Plus, Trash2 } from "lucide-react";
+import {
+  Archive,
+  Download,
+  FileJson,
+  Plus,
+  RefreshCw,
+  Trash2,
+} from "lucide-react";
 import { open, save } from "@tauri-apps/plugin-dialog";
 import { toast } from "sonner";
 import {
@@ -28,7 +35,11 @@ import {
   deleteProvider,
   getProviders,
   importFromLive,
+  importProvidersFromLive,
+  readRawConfig,
   removeProviderFromLive,
+  syncAllProvidersToLive,
+  writeRawConfig,
 } from "@/lib/api";
 import type {
   BackupRecord,
@@ -41,6 +52,14 @@ import ProviderForm from "@/components/ProviderForm";
 import SessionList from "@/components/SessionList";
 import McpPanel from "@/components/McpPanel";
 import UsagePanel from "@/components/UsagePanel";
+import JsonEditor from "@/components/JsonEditor";
+import MarkdownEditor from "@/components/MarkdownEditor";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 
 function SkillsPanel({ pluginId }: { pluginId: string }) {
   const { t } = useTranslation();
@@ -212,12 +231,11 @@ function PromptsPanel({ pluginId }: { pluginId: string }) {
             placeholder={t("features.promptsTitle")}
             className="w-full rounded-md border border-border bg-background px-2 py-1 text-xs"
           />
-          <textarea
+          <MarkdownEditor
             value={content}
-            onChange={(e) => setContent(e.target.value)}
+            onChange={setContent}
             placeholder="Content…"
-            rows={4}
-            className="w-full rounded-md border border-border bg-background px-2 py-1 text-xs"
+            minHeight="120px"
           />
           <button
             type="button"
@@ -290,6 +308,7 @@ function ProfilesPanel() {
   });
   const [showForm, setShowForm] = useState(false);
   const [name, setName] = useState("");
+  const [payloadJson, setPayloadJson] = useState("{}");
   const profiles = query.data ?? [];
 
   const handleAdd = async () => {
@@ -297,11 +316,18 @@ function ProfilesPanel() {
       toast.error(t("common.error"));
       return;
     }
+    let payload: Record<string, unknown>;
+    try {
+      payload = JSON.parse(payloadJson || "{}");
+    } catch {
+      toast.error(t("jsonEditor.invalidJson"));
+      return;
+    }
     try {
       await profilesUpsert({
         id: `profile_${Date.now()}`,
         name: name.trim(),
-        payload: {},
+        payload,
       });
       await queryClient.invalidateQueries({ queryKey: ["profiles"] });
       setShowForm(false);
@@ -367,13 +393,14 @@ function ProfilesPanel() {
         </div>
       )}
       {showForm && (
-        <div className="flex gap-2">
+        <div className="space-y-2">
           <input
             value={name}
             onChange={(e) => setName(e.target.value)}
             placeholder={t("features.profilesTitle")}
             className="flex-1 rounded-md border border-border bg-background px-2 py-1 text-xs"
           />
+          <JsonEditor value={payloadJson} onChange={setPayloadJson} rows={8} />
           <button
             type="button"
             onClick={handleAdd}
@@ -524,6 +551,9 @@ function ProvidersPanel({ pluginId }: { pluginId: string }) {
   const queryClient = useQueryClient();
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState<Provider | null>(null);
+  const [liveEditOpen, setLiveEditOpen] = useState(false);
+  const [liveRaw, setLiveRaw] = useState("");
+  const [liveLoading, setLiveLoading] = useState(false);
 
   const query = useQuery({
     queryKey: ["providers"],
@@ -533,6 +563,48 @@ function ProvidersPanel({ pluginId }: { pluginId: string }) {
 
   const invalidate = () =>
     queryClient.invalidateQueries({ queryKey: ["providers"] });
+
+  const openLiveEdit = async () => {
+    setLiveLoading(true);
+    try {
+      const raw = await readRawConfig(pluginId);
+      setLiveRaw(raw);
+      setLiveEditOpen(true);
+    } catch (e) {
+      toast.error(String(e));
+    } finally {
+      setLiveLoading(false);
+    }
+  };
+
+  const handleSaveLive = async () => {
+    try {
+      await writeRawConfig(pluginId, liveRaw);
+      setLiveEditOpen(false);
+      toast.success(t("common.save"));
+    } catch (e) {
+      toast.error(String(e));
+    }
+  };
+
+  const handleSyncAll = async () => {
+    try {
+      const n = await syncAllProvidersToLive(pluginId);
+      toast.success(t("shell.syncedCount", { count: n }));
+    } catch (e) {
+      toast.error(String(e));
+    }
+  };
+
+  const handleBackfill = async () => {
+    try {
+      const n = await importProvidersFromLive(pluginId);
+      await invalidate();
+      toast.success(t("shell.importedCount", { count: n }));
+    } catch (e) {
+      toast.error(String(e));
+    }
+  };
 
   const handleApply = async (id: string) => {
     try {
@@ -586,6 +658,34 @@ function ProvidersPanel({ pluginId }: { pluginId: string }) {
           {t("nav.providers")} · {pluginId}
         </h2>
         <div className="flex gap-1">
+          <button
+            type="button"
+            onClick={handleBackfill}
+            className="inline-flex items-center gap-1 rounded-md border border-border px-2 py-1 text-xs transition-colors hover:bg-accent"
+            title={t("shell.backfillHint")}
+          >
+            <RefreshCw className="h-3.5 w-3.5" />
+            {t("shell.backfill")}
+          </button>
+          <button
+            type="button"
+            onClick={handleSyncAll}
+            className="inline-flex items-center gap-1 rounded-md border border-border px-2 py-1 text-xs transition-colors hover:bg-accent"
+            title={t("shell.syncAllHint")}
+          >
+            <RefreshCw className="h-3.5 w-3.5" />
+            {t("shell.syncAll")}
+          </button>
+          <button
+            type="button"
+            onClick={openLiveEdit}
+            disabled={liveLoading}
+            className="inline-flex items-center gap-1 rounded-md border border-border px-2 py-1 text-xs transition-colors hover:bg-accent"
+            title={t("shell.editLiveHint")}
+          >
+            <FileJson className="h-3.5 w-3.5" />
+            {t("shell.editLive")}
+          </button>
           <button
             type="button"
             onClick={handleImport}
@@ -665,6 +765,38 @@ function ProvidersPanel({ pluginId }: { pluginId: string }) {
           ))}
         </div>
       )}
+
+      <Dialog
+        open={liveEditOpen}
+        onOpenChange={(o) => {
+          if (!o) setLiveEditOpen(false);
+        }}
+      >
+        <DialogContent className="max-w-3xl">
+          <DialogHeader>
+            <DialogTitle>
+              {t("shell.editLive")} · {pluginId}
+            </DialogTitle>
+          </DialogHeader>
+          <JsonEditor value={liveRaw} onChange={setLiveRaw} height={360} />
+          <div className="flex justify-end gap-2">
+            <button
+              type="button"
+              onClick={() => setLiveEditOpen(false)}
+              className="rounded-md border border-border px-3 py-1.5 text-xs transition-colors hover:bg-accent"
+            >
+              {t("common.cancel")}
+            </button>
+            <button
+              type="button"
+              onClick={handleSaveLive}
+              className="rounded-md bg-primary px-3 py-1.5 text-xs text-primary-foreground transition-colors hover:bg-primary/90"
+            >
+              {t("common.save")}
+            </button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

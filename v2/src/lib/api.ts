@@ -76,9 +76,7 @@ export function updateProvidersSortOrder(
   return invoke<void>("update_providers_sort_order", { pluginId, ids });
 }
 
-export function syncAllProvidersToLive(
-  pluginId?: string,
-): Promise<number> {
+export function syncAllProvidersToLive(pluginId?: string): Promise<number> {
   return invoke<number>("sync_all_providers_to_live", { pluginId });
 }
 

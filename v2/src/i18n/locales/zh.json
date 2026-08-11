@@ -60,7 +60,14 @@
     "providerRemovedFromLive": "已从 live 配置移除",
     "addProvider": "添加供应商",
     "providerIdRequired": "请填写供应商 ID（用于 live 配置）",
-    "providerIdInvalid": "供应商 ID 仅支持小写字母、数字与连字符（如 deepseek-r1）"
+    "providerIdInvalid": "供应商 ID 仅支持小写字母、数字与连字符（如 deepseek-r1）",
+    "backfill": "读回",
+    "backfillHint": "从 live 配置读回覆盖数据库",
+    "syncAll": "同步全部",
+    "syncAllHint": "把数据库全部供应商投影到 live 配置",
+    "editLive": "编辑 live 配置",
+    "editLiveHint": "直接编辑插件的 live 配置文件（JSON5）",
+    "syncedCount": "已同步 {count} 个供应商到 live"
   },
   "common": {
     "loading": "加载中…",
@@ -124,6 +131,9 @@
     "backupEmpty": "暂无备份",
     "backupExport": "导出配置",
     "backupDelete": "删除备份",
-    "tsPluginHint": "此插件由 TypeScript 编写并通过前端宿主加载。能力面板接入开发中，当前展示导出的能力清单。"
+    "tsPluginHint": "此插件由 TypeScript 编写并通过前端宿主加载。能力面板接入开发中，当前展示导出的能力清单。",
+    "formStructured": "表单",
+    "formRawJson": "原始 JSON",
+    "rawJsonHint": "直接编辑供应商配置 JSON（提升兼容性）。保存时校验合法性。"
   }
 }

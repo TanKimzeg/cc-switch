@@ -4,6 +4,8 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Plus, RefreshCw, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { getMcpServers, removeMcpServer, setMcpServer } from "@/lib/api";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import JsonEditor from "@/components/JsonEditor";
 import type { McpServerSpec } from "@/types";
 
 export default function McpPanel({ pluginId }: { pluginId: string }) {
@@ -15,6 +17,8 @@ export default function McpPanel({ pluginId }: { pluginId: string }) {
   const [command, setCommand] = useState("");
   const [args, setArgs] = useState("");
   const [url, setUrl] = useState("");
+  const [mcpTab, setMcpTab] = useState<"structured" | "raw">("structured");
+  const [rawSpec, setRawSpec] = useState("{}");
 
   const query = useQuery({
     queryKey: ["plugin-mcp", pluginId],
@@ -30,10 +34,16 @@ export default function McpPanel({ pluginId }: { pluginId: string }) {
       toast.error(t("common.error"));
       return;
     }
-    const spec: McpServerSpec = {
-      id,
-      name: id,
-      spec:
+    let specObj: Record<string, unknown>;
+    if (mcpTab === "raw") {
+      try {
+        specObj = JSON.parse(rawSpec);
+      } catch {
+        toast.error(t("jsonEditor.invalidJson"));
+        return;
+      }
+    } else {
+      specObj =
         type === "stdio"
           ? {
               type: "stdio",
@@ -43,8 +53,9 @@ export default function McpPanel({ pluginId }: { pluginId: string }) {
                 .map((a) => a.trim())
                 .filter(Boolean),
             }
-          : { type: "sse", url: url.trim() },
-    };
+          : { type: "sse", url: url.trim() };
+    }
+    const spec: McpServerSpec = { id, name: id, spec: specObj };
     try {
       await setMcpServer(pluginId, spec);
       await invalidate();
@@ -96,48 +107,84 @@ export default function McpPanel({ pluginId }: { pluginId: string }) {
 
       {showForm && (
         <div className="space-y-2 rounded-lg border border-border p-3">
-          <div className="flex items-center gap-2">
-            <span className="text-xs text-muted-foreground">
-              {t("features.mcpType")}:
-            </span>
-            <select
-              value={type}
-              onChange={(e) => setType(e.target.value as "stdio" | "sse")}
-              className="rounded-md border border-border bg-background px-2 py-1 text-xs"
-            >
-              <option value="stdio">{t("features.mcpTypeStdio")}</option>
-              <option value="sse">{t("features.mcpTypeRemote")}</option>
-            </select>
-          </div>
           <input
             value={name}
             onChange={(e) => setName(e.target.value)}
             placeholder={t("features.mcpName")}
             className="w-full rounded-md border border-border bg-background px-2 py-1 text-xs"
           />
-          {type === "stdio" ? (
-            <>
-              <input
-                value={command}
-                onChange={(e) => setCommand(e.target.value)}
-                placeholder={t("features.mcpCommand")}
-                className="w-full rounded-md border border-border bg-background px-2 py-1 text-xs"
-              />
-              <input
-                value={args}
-                onChange={(e) => setArgs(e.target.value)}
-                placeholder="args…"
-                className="w-full rounded-md border border-border bg-background px-2 py-1 text-xs"
-              />
-            </>
-          ) : (
-            <input
-              value={url}
-              onChange={(e) => setUrl(e.target.value)}
-              placeholder={t("features.mcpUrl")}
-              className="w-full rounded-md border border-border bg-background px-2 py-1 text-xs"
-            />
-          )}
+          <Tabs
+            value={mcpTab}
+            onValueChange={(v) => {
+              if (v === "raw") {
+                setRawSpec(
+                  JSON.stringify(
+                    type === "stdio"
+                      ? {
+                          type: "stdio",
+                          command: command.trim(),
+                          args: args
+                            .split(/\s+/)
+                            .map((a) => a.trim())
+                            .filter(Boolean),
+                        }
+                      : { type: "sse", url: url.trim() },
+                    null,
+                    2,
+                  ),
+                );
+              }
+              setMcpTab(v as "structured" | "raw");
+            }}
+          >
+            <TabsList>
+              <TabsTrigger value="structured">
+                {t("features.formStructured")}
+              </TabsTrigger>
+              <TabsTrigger value="raw">{t("features.formRawJson")}</TabsTrigger>
+            </TabsList>
+            <TabsContent value="structured" className="space-y-2">
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-muted-foreground">
+                  {t("features.mcpType")}:
+                </span>
+                <select
+                  value={type}
+                  onChange={(e) => setType(e.target.value as "stdio" | "sse")}
+                  className="rounded-md border border-border bg-background px-2 py-1 text-xs"
+                >
+                  <option value="stdio">{t("features.mcpTypeStdio")}</option>
+                  <option value="sse">{t("features.mcpTypeRemote")}</option>
+                </select>
+              </div>
+              {type === "stdio" ? (
+                <>
+                  <input
+                    value={command}
+                    onChange={(e) => setCommand(e.target.value)}
+                    placeholder={t("features.mcpCommand")}
+                    className="w-full rounded-md border border-border bg-background px-2 py-1 text-xs"
+                  />
+                  <input
+                    value={args}
+                    onChange={(e) => setArgs(e.target.value)}
+                    placeholder="args…"
+                    className="w-full rounded-md border border-border bg-background px-2 py-1 text-xs"
+                  />
+                </>
+              ) : (
+                <input
+                  value={url}
+                  onChange={(e) => setUrl(e.target.value)}
+                  placeholder={t("features.mcpUrl")}
+                  className="w-full rounded-md border border-border bg-background px-2 py-1 text-xs"
+                />
+              )}
+            </TabsContent>
+            <TabsContent value="raw">
+              <JsonEditor value={rawSpec} onChange={setRawSpec} rows={10} />
+            </TabsContent>
+          </Tabs>
           <button
             type="button"
             onClick={handleAdd}

@@ -163,7 +163,8 @@ it("shows MCP servers when the plugin supports mcp", async () => {
     return null;
   });
   renderApp();
-  fireEvent.click(await screen.findByText("OpenCode"));
+  // 顶部导航进入 MCP 页（默认插件为列表第一个）
+  fireEvent.click(await screen.findByText("MCP"));
   expect(await screen.findByText("Filesystem")).toBeInTheDocument();
 });
 
@@ -186,9 +187,14 @@ it("opens the add-provider form and saves", async () => {
     return null;
   });
   renderApp();
-  fireEvent.click(await screen.findByText("OpenCode"));
+  // 默认 view=providers，点"添加供应商"打开表单
   fireEvent.click(await screen.findByText("添加供应商"));
-  fireEvent.change(screen.getAllByRole("textbox")[1], { target: { value: "New Provider" } });
+  fireEvent.change(screen.getAllByRole("textbox")[0], {
+    target: { value: "new-provider" },
+  });
+  fireEvent.change(screen.getAllByRole("textbox")[1], {
+    target: { value: "New Provider" },
+  });
   fireEvent.click(screen.getByText("保存"));
   await waitFor(() => {
     expect(invoke).toHaveBeenCalledWith("add_provider", expect.anything());

@@ -60,7 +60,14 @@
     "providerRemovedFromLive": "Removed from live config",
     "addProvider": "Add provider",
     "providerIdRequired": "Please enter a provider ID (used as the live config key)",
-    "providerIdInvalid": "Provider ID may only contain lowercase letters, digits and hyphens (e.g. deepseek-r1)"
+    "providerIdInvalid": "Provider ID may only contain lowercase letters, digits and hyphens (e.g. deepseek-r1)",
+    "backfill": "Backfill",
+    "backfillHint": "Read back from live config into the database",
+    "syncAll": "Sync all",
+    "syncAllHint": "Project all database providers to the live config",
+    "editLive": "Edit live config",
+    "editLiveHint": "Edit the plugin's live config file directly (JSON5)",
+    "syncedCount": "Synced {count} providers to live"
   },
   "common": {
     "loading": "Loading…",
@@ -124,6 +131,9 @@
     "backupEmpty": "No backups",
     "backupExport": "Export config",
     "backupDelete": "Delete backup",
-    "tsPluginHint": "This plugin is written in TypeScript and loaded via the frontend host. Capability panels are under development; showing the exported capabilities for now."
+    "tsPluginHint": "This plugin is written in TypeScript and loaded via the frontend host. Capability panels are under development; showing the exported capabilities for now.",
+    "formStructured": "Form",
+    "formRawJson": "Raw JSON",
+    "rawJsonHint": "Edit the provider config JSON directly (improves compatibility). Validated on save."
   }
 }
