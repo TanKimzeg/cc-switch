@@ -2,7 +2,7 @@ import { useTranslation } from "react-i18next";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { RefreshCw } from "lucide-react";
 import { toast } from "sonner";
-import { syncOpencodeUsage, usageDailySummary } from "@/lib/api";
+import { pluginSyncUsage, usageDailySummary } from "@/lib/api";
 
 export default function UsagePanel({ pluginId }: { pluginId: string }) {
   const { t } = useTranslation();
@@ -15,7 +15,7 @@ export default function UsagePanel({ pluginId }: { pluginId: string }) {
 
   const handleSync = async () => {
     try {
-      const count = await syncOpencodeUsage();
+      const count = await pluginSyncUsage(pluginId);
       await queryClient.invalidateQueries({ queryKey: ["usage-daily"] });
       toast.success(t("features.usageSynced", { count }));
     } catch (e) {

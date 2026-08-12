@@ -112,6 +112,23 @@ pub struct SessionMessage {
     pub ts: Option<i64>,
 }
 
+/// 单条用量记录（`sync_usage` 返回值）。
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UsageRecord {
+    /// 去重键（如 `opencode_session:{session}:{message}`）。
+    pub source_id: String,
+    pub session_id: String,
+    pub model: String,
+    pub input_tokens: i64,
+    pub output_tokens: i64,
+    pub reasoning_tokens: i64,
+    pub cache_read_tokens: i64,
+    pub cache_write_tokens: i64,
+    pub cost: f64,
+    pub timestamp_ms: i64,
+}
+
 /// Agent 插件协议。
 ///
 /// 实现方必须同时满足 `Send + Sync`，以便作为 Tauri 全局状态被并发访问。
@@ -189,6 +206,16 @@ pub trait AgentPlugin: Send + Sync {
     fn write_raw_config(&self, _content: &str) -> Result<(), PluginError> {
         Err(PluginError::Capability(format!(
             "插件 '{}' 不支持原始配置写入",
+            self.id()
+        )))
+    }
+
+    /// 从插件自己的会话存储解析 token 用量。
+    ///
+    /// 返回的记录由软件层（命令）写入 `request_logs` 表；插件只负责解析。
+    fn sync_usage(&self) -> Result<Vec<UsageRecord>, PluginError> {
+        Err(PluginError::Capability(format!(
+            "插件 '{}' 不支持用量同步",
             self.id()
         )))
     }

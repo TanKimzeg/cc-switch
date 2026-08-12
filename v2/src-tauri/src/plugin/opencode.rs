@@ -14,7 +14,7 @@ use crate::plugin::mcp::{self, McpPlugin, McpServerSpec};
 use crate::plugin::ops::PluginManagerPlugin;
 use crate::plugin::{
     AgentPlugin, ImportCandidate, LiveConfig, LiveProvider, PluginCapabilities, SessionMessage,
-    SessionMeta,
+    SessionMeta, UsageRecord,
 };
 use crate::types::Provider;
 
@@ -233,6 +233,118 @@ impl AgentPlugin for OpenCodePlugin {
         }
         atomic_write(&path, content.as_bytes())
     }
+
+    fn sync_usage(&self) -> Result<Vec<UsageRecord>, PluginError> {
+        let db_path = data_dir().join("opencode.db");
+        if !db_path.exists() {
+            return Ok(Vec::new());
+        }
+        let conn = match rusqlite::Connection::open_with_flags(
+            &db_path,
+            rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY | rusqlite::OpenFlags::SQLITE_OPEN_NO_MUTEX,
+        ) {
+            Ok(c) => c,
+            Err(e) => {
+                log::warn!("打开 OpenCode 数据库失败: {e}");
+                return Ok(Vec::new());
+            }
+        };
+        scan_usage_from_db(&conn)
+    }
+}
+
+/// 从 opencode.db 扫描 assistant 消息用量。
+fn scan_usage_from_db(conn: &rusqlite::Connection) -> Result<Vec<UsageRecord>, PluginError> {
+    let mut sessions = match conn.prepare(
+        "SELECT s.id, MAX(s.time_updated, COALESCE(MAX(m.time_updated), s.time_updated)), s.time_created
+         FROM session s LEFT JOIN message m ON m.session_id = s.id
+         GROUP BY s.id ORDER BY 2",
+    ) {
+        Ok(s) => s,
+        Err(_) => return Ok(Vec::new()),
+    };
+    let session_rows = match sessions.query_map([], |row| {
+        Ok((row.get::<_, String>(0)?, row.get::<_, i64>(2)?))
+    }) {
+        Ok(rows) => rows,
+        Err(_) => return Ok(Vec::new()),
+    };
+
+    let mut records = Vec::new();
+    for session in session_rows.flatten() {
+        let (session_id, session_created) = session;
+        let mut stmt = match conn.prepare(
+            "SELECT id, data FROM message WHERE session_id = ?1 AND time_created > ?2 ORDER BY time_created",
+        ) {
+            Ok(s) => s,
+            Err(_) => continue,
+        };
+        let rows = match stmt.query_map(
+            rusqlite::params![session_id, session_created],
+            |row| Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?)),
+        ) {
+            Ok(rows) => rows,
+            Err(_) => continue,
+        };
+        for row in rows.flatten() {
+            let (message_id, data) = row;
+            let Ok(value) = serde_json::from_str::<Value>(&data) else {
+                continue;
+            };
+            if value.get("role").and_then(Value::as_str) != Some("assistant") {
+                continue;
+            }
+            if value.get("tokens").is_none() {
+                continue;
+            }
+            // 跳过未完成消息。
+            if value.get("time").and_then(|t| t.get("completed")).is_none() {
+                continue;
+            }
+            let Some(tokens) = value.get("tokens") else {
+                continue;
+            };
+            let input = tokens.get("input").and_then(Value::as_i64).unwrap_or(0);
+            let output = tokens.get("output").and_then(Value::as_i64).unwrap_or(0);
+            let reasoning = tokens.get("reasoning").and_then(Value::as_i64).unwrap_or(0);
+            let cache = tokens.get("cache");
+            let cache_read = cache
+                .and_then(|c| c.get("read"))
+                .and_then(Value::as_i64)
+                .unwrap_or(0);
+            let cache_write = cache
+                .and_then(|c| c.get("write"))
+                .and_then(Value::as_i64)
+                .unwrap_or(0);
+            if input == 0 && output == 0 && reasoning == 0 && cache_read == 0 && cache_write == 0 {
+                continue;
+            }
+            let model = value
+                .get("modelID")
+                .and_then(Value::as_str)
+                .unwrap_or("unknown")
+                .to_string();
+            let cost = value.get("cost").and_then(Value::as_f64).unwrap_or(0.0);
+            let timestamp_ms = value
+                .get("time")
+                .and_then(|t| t.get("created"))
+                .and_then(Value::as_i64)
+                .unwrap_or(0);
+            records.push(UsageRecord {
+                source_id: format!("opencode_session:{session_id}:{message_id}"),
+                session_id: session_id.clone(),
+                model,
+                input_tokens: input,
+                output_tokens: output,
+                reasoning_tokens: reasoning,
+                cache_read_tokens: cache_read,
+                cache_write_tokens: cache_write,
+                cost,
+                timestamp_ms,
+            });
+        }
+    }
+    Ok(records)
 }
 
 impl McpPlugin for OpenCodePlugin {
@@ -1446,5 +1558,61 @@ mod tests {
         assert!(p.write_raw_config("not-json{{{").is_err());
         let raw = p.read_raw_config().unwrap();
         assert!(raw.contains("dark"));
+    }
+
+    #[test]
+    fn sync_usage_parses_assistant_messages() {
+        let _guard = env_lock().lock().unwrap();
+        let temp = tempfile::tempdir().unwrap();
+        let original = std::env::var_os("CC_SWITCH_OPENCODE_DATA_DIR");
+        // override 指向数据目录本身（data_dir() 返回它，再 join opencode.db）。
+        std::env::set_var("CC_SWITCH_OPENCODE_DATA_DIR", temp.path().join("opencode"));
+
+        let base = temp.path().join("opencode");
+        std::fs::create_dir_all(&base).unwrap();
+        let conn = rusqlite::Connection::open(base.join("opencode.db")).unwrap();
+        conn.execute_batch(
+            "CREATE TABLE session (id TEXT PRIMARY KEY, title TEXT NOT NULL, directory TEXT NOT NULL, time_created INTEGER NOT NULL, time_updated INTEGER NOT NULL);
+             CREATE TABLE message (id TEXT PRIMARY KEY, session_id TEXT NOT NULL, time_created INTEGER NOT NULL, time_updated INTEGER NOT NULL, data TEXT NOT NULL);",
+        )
+        .unwrap();
+        conn.execute("INSERT INTO session VALUES ('ses_1', 'T', '/p', 100, 500)", []).unwrap();
+        let msg = serde_json::json!({
+            "role": "assistant",
+            "tokens": { "input": 100, "output": 50, "reasoning": 5, "cache": { "read": 10, "write": 0 } },
+            "cost": 0.001,
+            "modelID": "m1",
+            "time": { "created": 1000, "completed": 2000 }
+        })
+        .to_string();
+        conn.execute(
+            "INSERT INTO message VALUES ('msg_1', 'ses_1', 200, 500, ?1)",
+            rusqlite::params![msg],
+        )
+        .unwrap();
+        // user 消息无 tokens，应跳过
+        conn.execute(
+            "INSERT INTO message VALUES ('msg_2', 'ses_1', 300, 500, '{\"role\":\"user\"}')",
+            [],
+        )
+        .unwrap();
+        drop(conn);
+
+        let p = OpenCodePlugin::new();
+        let records = p.sync_usage().unwrap();
+        assert_eq!(records.len(), 1);
+        assert_eq!(records[0].session_id, "ses_1");
+        assert_eq!(records[0].model, "m1");
+        assert_eq!(records[0].input_tokens, 100);
+        assert_eq!(records[0].output_tokens, 50);
+        assert_eq!(records[0].cache_read_tokens, 10);
+        assert!(records[0].cost > 0.0);
+        assert!(records[0].source_id.contains("msg_1"));
+
+        if let Some(v) = original {
+            std::env::set_var("CC_SWITCH_OPENCODE_DATA_DIR", v);
+        } else {
+            std::env::remove_var("CC_SWITCH_OPENCODE_DATA_DIR");
+        }
     }
 }

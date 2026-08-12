@@ -3,16 +3,28 @@
 use tauri::State;
 
 use crate::db::Database;
+use crate::plugin::AgentPlugin;
+use crate::registry::PluginRegistry;
 use crate::services::usage::{DailyUsageRow, RequestLogRow};
 
-/// 从 OpenCode 会话数据库同步用量到 `request_logs`。
+/// 从插件自己的会话存储同步用量到 `request_logs`（由插件实现解析）。
 #[tauri::command]
-pub fn sync_opencode_usage(db: State<'_, Database>) -> Result<usize, String> {
-    let result = db.sync_opencode_usage();
-    if let Some(e) = result.errors.first() {
-        return Err(e.clone());
+pub fn plugin_sync_usage(
+    db: State<'_, Database>,
+    registry: State<'_, PluginRegistry>,
+    plugin_id: String,
+) -> Result<usize, String> {
+    let plugin = registry.resolve_plugin(&plugin_id).map_err(|e| e.to_string())?;
+    require_usage(plugin.as_ref(), &plugin_id)?;
+    let records = plugin.sync_usage().map_err(|e| e.to_string())?;
+    Ok(db.insert_usage_records(&plugin_id, &records))
+}
+
+fn require_usage(plugin: &dyn AgentPlugin, id: &str) -> Result<(), String> {
+    if !plugin.capabilities().sessions {
+        return Err(format!("插件 '{id}' 不支持用量同步"));
     }
-    Ok(result.imported)
+    Ok(())
 }
 
 /// 查询请求日志。

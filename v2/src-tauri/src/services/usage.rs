@@ -205,6 +205,55 @@ impl Database {
         )?;
         Ok(inserted > 0)
     }
+
+    /// 写入插件解析出的用量记录（`INSERT OR IGNORE` 去重）。返回导入条数。
+    pub fn insert_usage_records(
+        &self,
+        plugin_id: &str,
+        records: &[crate::plugin::UsageRecord],
+    ) -> usize {
+        let mut imported = 0;
+        for r in records {
+            let created_at = if r.timestamp_ms > 0 {
+                r.timestamp_ms / 1000
+            } else {
+                SystemTime::now()
+                    .duration_since(SystemTime::UNIX_EPOCH)
+                    .map(|d| d.as_secs() as i64)
+                    .unwrap_or(0)
+            };
+            let output_with_reasoning = r.output_tokens + r.reasoning_tokens;
+            let conn = self.lock();
+            let inserted = conn
+                .execute(
+                    "INSERT OR IGNORE INTO request_logs (
+                        request_id, provider_id, plugin_id, model, request_model,
+                        input_tokens, output_tokens, cache_read_tokens, cache_creation_tokens,
+                        total_cost_usd, latency_ms, status_code, session_id, is_streaming,
+                        created_at, data_source
+                    ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, 0, 200, ?11, 1, ?12, 'plugin')",
+                    params![
+                        r.source_id,
+                        format!("_{plugin_id}_session"),
+                        plugin_id,
+                        r.model,
+                        r.model,
+                        r.input_tokens,
+                        output_with_reasoning,
+                        r.cache_read_tokens,
+                        r.cache_write_tokens,
+                        r.cost.to_string(),
+                        r.session_id,
+                        created_at,
+                    ],
+                )
+                .unwrap_or(0);
+            if inserted > 0 {
+                imported += 1;
+            }
+        }
+        imported
+    }
 }
 
 fn query_sessions(conn: &Connection) -> Result<Vec<(String, i64, i64)>, String> {

@@ -78,7 +78,7 @@ pub fn run() {
             commands::mcp::mcp_toggle_app,
             commands::mcp::import_mcp_servers_from_plugin,
             commands::mcp::import_mcp_from_plugin,
-            commands::usage::sync_opencode_usage,
+            commands::usage::plugin_sync_usage,
             commands::usage::usage_list_request_logs,
             commands::usage::usage_daily_summary,
             commands::skills::skills_list,

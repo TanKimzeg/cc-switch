@@ -234,8 +234,8 @@ export function importMcpServersFromPlugin(pluginId: string): Promise<number> {
   return invoke<number>("import_mcp_servers_from_plugin", { id: pluginId });
 }
 
-export function syncOpencodeUsage(): Promise<number> {
-  return invoke<number>("sync_opencode_usage");
+export function pluginSyncUsage(pluginId: string): Promise<number> {
+  return invoke<number>("plugin_sync_usage", { pluginId });
 }
 
 export function usageListRequestLogs(
