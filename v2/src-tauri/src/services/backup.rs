@@ -57,10 +57,9 @@ impl Database {
             )
             .map_err(|e| e.to_string())?;
 
-        Ok(self
-            .get_db_backup(&id)
+        self.get_db_backup(&id)
             .map_err(|e| e.to_string())?
-            .ok_or_else(|| "备份记录写入失败".to_string())?)
+            .ok_or_else(|| "备份记录写入失败".to_string())
     }
 
     /// 列出备份记录。

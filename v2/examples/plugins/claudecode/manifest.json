@@ -1,10 +1,10 @@
 {
-  "id": "opencode",
-  "name": "OpenCode",
+  "id": "claudecode",
+  "name": "Claude Code",
   "version": "0.1.0",
   "apiVersion": "1",
   "author": "cc-switch",
-  "description": "OpenCode 插件：管理 opencode 的配置与切换。",
+  "description": "Claude Code 插件：管理 Claude Code 的配置与切换。",
   "entry": {
     "type": "shell",
     "command": "opencode",

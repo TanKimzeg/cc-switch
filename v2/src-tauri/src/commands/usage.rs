@@ -14,7 +14,9 @@ pub fn plugin_sync_usage(
     registry: State<'_, PluginRegistry>,
     plugin_id: String,
 ) -> Result<usize, String> {
-    let plugin = registry.resolve_plugin(&plugin_id).map_err(|e| e.to_string())?;
+    let plugin = registry
+        .resolve_plugin(&plugin_id)
+        .map_err(|e| e.to_string())?;
     require_usage(plugin.as_ref(), &plugin_id)?;
     let records = plugin.sync_usage().map_err(|e| e.to_string())?;
     Ok(db.insert_usage_records(&plugin_id, &records))

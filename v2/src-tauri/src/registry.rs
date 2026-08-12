@@ -555,7 +555,10 @@ mod tests {
         registry.sync_installs(&found).unwrap();
 
         let after = db.get_plugin_install("demo").unwrap().unwrap();
-        assert_eq!(after.source, "local", "重启同步后 local 插件不得变为 builtin");
+        assert_eq!(
+            after.source, "local",
+            "重启同步后 local 插件不得变为 builtin"
+        );
     }
 
     fn write_plugin(dir: &Path, id: &str) {
@@ -626,7 +629,10 @@ mod tests {
 
     #[test]
     fn install_from_real_example() {
-        let example = concat!(env!("CARGO_MANIFEST_DIR"), "/../examples/plugins/claudecode");
+        let example = concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../examples/plugins/claudecode"
+        );
         assert!(Path::new(example).join("manifest.json").exists());
         let dir = tempfile::tempdir().unwrap();
         let (registry, _db) = registry_in(dir.path());

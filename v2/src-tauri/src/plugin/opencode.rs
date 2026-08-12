@@ -279,10 +279,9 @@ fn scan_usage_from_db(conn: &rusqlite::Connection) -> Result<Vec<UsageRecord>, P
             Ok(s) => s,
             Err(_) => continue,
         };
-        let rows = match stmt.query_map(
-            rusqlite::params![session_id, session_created],
-            |row| Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?)),
-        ) {
+        let rows = match stmt.query_map(rusqlite::params![session_id, session_created], |row| {
+            Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
+        }) {
             Ok(rows) => rows,
             Err(_) => continue,
         };
@@ -1576,7 +1575,11 @@ mod tests {
              CREATE TABLE message (id TEXT PRIMARY KEY, session_id TEXT NOT NULL, time_created INTEGER NOT NULL, time_updated INTEGER NOT NULL, data TEXT NOT NULL);",
         )
         .unwrap();
-        conn.execute("INSERT INTO session VALUES ('ses_1', 'T', '/p', 100, 500)", []).unwrap();
+        conn.execute(
+            "INSERT INTO session VALUES ('ses_1', 'T', '/p', 100, 500)",
+            [],
+        )
+        .unwrap();
         let msg = serde_json::json!({
             "role": "assistant",
             "tokens": { "input": 100, "output": 50, "reasoning": 5, "cache": { "read": 10, "write": 0 } },
