@@ -18,6 +18,9 @@ pub const SUPPORTED_API_VERSION: &str = "1";
 const OPENCLAW_MANIFEST: &str = include_str!("../plugins/openclaw/manifest.json");
 const OPENCODE_MANIFEST: &str = include_str!("../plugins/opencode/manifest.json");
 
+/// 内置插件 id（随应用分发，启动时 seed 覆盖）。
+const BUILTIN_IDS: [&str; 2] = ["openclaw", "opencode"];
+
 /// 磁盘上的 manifest.json 文件格式。
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -277,11 +280,19 @@ impl PluginRegistry {
         Ok(plugins)
     }
 
-    /// 将发现的插件同步到 `plugin_installs` 表（内置插件标记为 builtin）。
+    /// 将发现的插件同步到 `plugin_installs` 表。
+    ///
+    /// 内置插件标记为 builtin；手动安装（local）的插件**保留其原有来源**，
+    /// 仅更新版本 —— 避免重启后把本地插件误标为 builtin。
     pub fn sync_installs(&self, manifests: &[PluginManifest]) -> rusqlite::Result<()> {
         for m in manifests {
+            let source = if BUILTIN_IDS.contains(&m.id.as_str()) {
+                "builtin"
+            } else {
+                "local"
+            };
             self.db
-                .upsert_plugin_install(&m.id, &m.version, "builtin", None)?;
+                .insert_plugin_install_if_absent(&m.id, &m.version, source, None)?;
         }
         Ok(())
     }
@@ -526,6 +537,27 @@ mod tests {
         assert_eq!(source, "builtin");
     }
 
+    #[test]
+    fn sync_installs_preserves_local_source() {
+        let dir = tempfile::tempdir().unwrap();
+        let (registry, db) = registry_in(dir.path());
+
+        // 手动安装的本地插件：先记录为 local，再 sync_installs 不应覆盖。
+        let source = dir.path().join("demo-src");
+        write_plugin(&source, "demo");
+        registry.install_from_dir(&source).unwrap();
+        assert_eq!(
+            db.get_plugin_install("demo").unwrap().unwrap().source,
+            "local"
+        );
+
+        let found = registry.discover().unwrap();
+        registry.sync_installs(&found).unwrap();
+
+        let after = db.get_plugin_install("demo").unwrap().unwrap();
+        assert_eq!(after.source, "local", "重启同步后 local 插件不得变为 builtin");
+    }
+
     fn write_plugin(dir: &Path, id: &str) {
         std::fs::create_dir_all(dir).unwrap();
         let manifest = SAMPLE.replace("\"id\": \"openclaw\"", &format!("\"id\": \"{id}\""));
@@ -594,13 +626,13 @@ mod tests {
 
     #[test]
     fn install_from_real_example() {
-        let example = concat!(env!("CARGO_MANIFEST_DIR"), "/../examples/plugins/opencode");
+        let example = concat!(env!("CARGO_MANIFEST_DIR"), "/../examples/plugins/claudecode");
         assert!(Path::new(example).join("manifest.json").exists());
         let dir = tempfile::tempdir().unwrap();
         let (registry, _db) = registry_in(dir.path());
         let installed = registry.install_from_dir(Path::new(example)).unwrap();
-        assert_eq!(installed.manifest.id, "opencode");
-        assert_eq!(installed.manifest.name, "OpenCode");
+        assert_eq!(installed.manifest.id, "claudecode");
+        assert_eq!(installed.manifest.name, "Claude Code");
     }
 
     #[test]

@@ -254,6 +254,35 @@ impl Database {
         Ok(())
     }
 
+    /// 仅当不存在记录时写入安装信息；已存在则保留原来源，仅更新版本。
+    pub fn insert_plugin_install_if_absent(
+        &self,
+        plugin_id: &str,
+        version: &str,
+        source: &str,
+        sha256: Option<&str>,
+    ) -> rusqlite::Result<()> {
+        let conn = self.lock();
+        let exists: i64 = conn.query_row(
+            "SELECT COUNT(*) FROM plugin_installs WHERE plugin_id = ?1",
+            params![plugin_id],
+            |r| r.get(0),
+        )?;
+        if exists > 0 {
+            conn.execute(
+                "UPDATE plugin_installs SET version = ?2 WHERE plugin_id = ?1",
+                params![plugin_id, version],
+            )?;
+        } else {
+            conn.execute(
+                "INSERT INTO plugin_installs (plugin_id, version, source, sha256, installed_at)
+                 VALUES (?1, ?2, ?3, ?4, datetime('now'))",
+                params![plugin_id, version, source, sha256],
+            )?;
+        }
+        Ok(())
+    }
+
     /// 读取单个插件安装记录。
     pub fn get_plugin_install(&self, plugin_id: &str) -> rusqlite::Result<Option<PluginInstall>> {
         self.lock()
