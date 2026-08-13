@@ -4,10 +4,17 @@
   "version": "0.1.0",
   "apiVersion": "1",
   "author": "cc-switch",
-  "description": "Claude Code 插件：管理 Claude Code 的配置与切换。",
+  "description": "Claude Code 插件：管理 ~/.claude/settings.json 配置、会话与 MCP（原生实现）。",
+  "capabilities": {
+    "readLive": true,
+    "apply": true,
+    "remove": true,
+    "import": true,
+    "sessions": true,
+    "mcp": true
+  },
   "entry": {
-    "type": "shell",
-    "command": "opencode",
-    "args": ["--version"]
+    "type": "native",
+    "module": "claudecode"
   }
 }

@@ -187,50 +187,6 @@ pub fn plugin_mcp_remove(
         .map_err(|e| e.to_string())
 }
 
-/// 读取插件的插件内插件列表（如 OMO）。
-#[tauri::command]
-pub fn plugin_get_plugins(
-    registry: State<'_, PluginRegistry>,
-    id: String,
-) -> Result<Vec<String>, String> {
-    let plugin = registry.resolve_plugin(&id).map_err(|e| e.to_string())?;
-    require_capability(plugin.as_ref(), plugin.capabilities().plugins, "plugins")?;
-    let ops = plugin
-        .as_plugin_manager()
-        .ok_or_else(|| format!("插件 '{id}' 不支持插件管理"))?;
-    ops.get_plugins().map_err(|e| e.to_string())
-}
-
-/// 向插件的 live 配置添加一个插件（如 OMO）。
-#[tauri::command]
-pub fn plugin_add_plugin(
-    registry: State<'_, PluginRegistry>,
-    id: String,
-    name: String,
-) -> Result<(), String> {
-    let plugin = registry.resolve_plugin(&id).map_err(|e| e.to_string())?;
-    require_capability(plugin.as_ref(), plugin.capabilities().plugins, "plugins")?;
-    let ops = plugin
-        .as_plugin_manager()
-        .ok_or_else(|| format!("插件 '{id}' 不支持插件管理"))?;
-    ops.add_plugin(&name).map_err(|e| e.to_string())
-}
-
-/// 从插件的 live 配置移除一个插件。
-#[tauri::command]
-pub fn plugin_remove_plugin(
-    registry: State<'_, PluginRegistry>,
-    id: String,
-    name: String,
-) -> Result<(), String> {
-    let plugin = registry.resolve_plugin(&id).map_err(|e| e.to_string())?;
-    require_capability(plugin.as_ref(), plugin.capabilities().plugins, "plugins")?;
-    let ops = plugin
-        .as_plugin_manager()
-        .ok_or_else(|| format!("插件 '{id}' 不支持插件管理"))?;
-    ops.remove_plugin(&name).map_err(|e| e.to_string())
-}
-
 /// 读取插件的 live 配置原始文本（供用户手动编辑）。
 #[tauri::command]
 pub fn plugin_read_raw_config(

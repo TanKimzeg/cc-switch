@@ -12,6 +12,6 @@
   },
   "entry": {
     "type": "ts",
-    "main": "main.ts"
+    "main": "main.js"
   }
 }

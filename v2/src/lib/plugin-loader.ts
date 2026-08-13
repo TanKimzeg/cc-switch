@@ -15,6 +15,7 @@ import type {
   PluginCapabilities,
   SessionMessage,
   SessionMeta,
+  UsageRecord,
 } from "@/types";
 
 /** 宿主 API：TS 插件可调用的全部命令。 */
@@ -43,6 +44,11 @@ export interface TsPluginExports {
   getMcpServers?: () => Promise<McpServerSpec[]>;
   setMcpServer?: (server: McpServerSpec) => Promise<void>;
   removeMcpServer?: (id: string) => Promise<void>;
+  /** 读取/写入 live 配置原始文本。 */
+  readRawConfig?: () => Promise<string>;
+  writeRawConfig?: (content: string) => Promise<void>;
+  /** 从插件自己的会话存储解析用量（对应后端 sync_usage）。 */
+  syncUsage?: () => Promise<UsageRecord[]>;
 }
 
 /** 构建宿主对象（绑定插件 id，文件操作限定插件目录）。 */
@@ -65,8 +71,9 @@ export function makeHost(pluginId: string): TsHost {
 export async function loadTsPlugin(
   pluginId: string,
   source: string,
+  hostOverride?: TsHost,
 ): Promise<TsPluginExports> {
-  const host = makeHost(pluginId);
+  const host = hostOverride ?? makeHost(pluginId);
 
   // 用 Function 构造器执行脚本；脚本可通过 `host` 调用命令。
   // eslint-disable-next-line @typescript-eslint/no-implied-eval
@@ -98,4 +105,30 @@ export async function loadTsPluginById(
     main,
   });
   return loadTsPlugin(pluginId, source);
+}
+
+const tsCache = new Map<string, Promise<TsPluginExports | null>>();
+
+/**
+ * 若插件是 TS 插件（entryType === "ts"），加载并缓存其导出对象；
+ * 否则返回 null（调用方回退到后端命令）。
+ */
+export async function loadTsPluginIfTs(
+  pluginId: string,
+): Promise<TsPluginExports | null> {
+  if (!tsCache.has(pluginId)) {
+    tsCache.set(
+      pluginId,
+      (async () => {
+        const plugins =
+          await invoke<
+            Array<{ id: string; entryType?: string; main?: string | null }>
+          >("get_plugins");
+        const p = plugins.find((x) => x.id === pluginId);
+        if (p?.entryType !== "ts" || !p.main) return null;
+        return loadTsPluginById(pluginId, p.main);
+      })(),
+    );
+  }
+  return tsCache.get(pluginId)!;
 }

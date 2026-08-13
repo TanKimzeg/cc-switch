@@ -1,9 +1,7 @@
 //! Prompts 服务。
 //!
 //! 统一存储在 `prompts` 表；`enabled` 启用时把内容写入指定插件的
-//! prompt 文件（如 opencode 的 `AGENTS.md`）。
-
-use std::path::PathBuf;
+//! prompt 文件（路径由插件协议 `AgentPlugin::prompt_file_path` 提供）。
 
 use rusqlite::{params, OptionalExtension, Row};
 
@@ -107,15 +105,6 @@ impl Database {
             params![id, if enabled { 1 } else { 0 }],
         )?;
         Ok(())
-    }
-}
-
-/// 插件 prompt 文件路径（约定）。
-pub fn plugin_prompt_file(plugin_id: &str) -> Option<PathBuf> {
-    let home = dirs::home_dir().unwrap_or_else(|| PathBuf::from("."));
-    match plugin_id {
-        "opencode" => Some(home.join(".config").join("opencode").join("AGENTS.md")),
-        _ => None,
     }
 }
 

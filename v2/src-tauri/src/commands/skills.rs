@@ -5,7 +5,8 @@ use std::path::Path;
 use tauri::State;
 
 use crate::db::Database;
-use crate::services::skills::{plugin_skills_dir, SkillRecord};
+use crate::registry::PluginRegistry;
+use crate::services::skills::SkillRecord;
 use crate::AppPaths;
 
 fn skills_root(paths: &AppPaths) -> std::path::PathBuf {
@@ -49,6 +50,7 @@ pub fn skills_uninstall(
 pub fn skills_toggle_plugin(
     db: State<'_, Database>,
     paths: State<'_, AppPaths>,
+    registry: State<'_, PluginRegistry>,
     id: String,
     plugin_id: String,
     enabled: bool,
@@ -56,11 +58,17 @@ pub fn skills_toggle_plugin(
     let Some(skill) = db.get_skill(&id).map_err(|e| e.to_string())? else {
         return Err(format!("技能不存在: {id}"));
     };
+    let plugin = registry
+        .resolve_plugin(&plugin_id)
+        .map_err(|e| e.to_string())?;
+    let dest_dir = plugin
+        .skills_dir()
+        .ok_or_else(|| format!("插件 '{plugin_id}' 不支持 skills 同步"))?;
     db.set_skill_plugin_enabled(&id, &plugin_id, enabled)
         .map_err(|e| e.to_string())?;
 
     let src = skills_root(&paths).join(&skill.directory);
-    let dest = plugin_skills_dir(&plugin_id).join(&skill.directory);
+    let dest = dest_dir.join(&skill.directory);
     if enabled {
         std::fs::create_dir_all(dest.parent().unwrap_or(dest.as_path()))
             .map_err(|e| e.to_string())?;

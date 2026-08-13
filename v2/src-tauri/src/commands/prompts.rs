@@ -3,7 +3,8 @@
 use tauri::State;
 
 use crate::db::Database;
-use crate::services::prompts::{plugin_prompt_file, PromptRecord};
+use crate::registry::PluginRegistry;
+use crate::services::prompts::PromptRecord;
 
 /// 列出 prompts（可按插件过滤）。
 #[tauri::command]
@@ -38,14 +39,22 @@ pub fn prompts_delete(db: State<'_, Database>, id: String) -> Result<(), String>
 
 /// 启用/停用 prompt，并写入（或移除）插件的 prompt 文件。
 #[tauri::command]
-pub fn prompts_toggle(db: State<'_, Database>, id: String, enabled: bool) -> Result<(), String> {
+pub fn prompts_toggle(
+    db: State<'_, Database>,
+    registry: State<'_, PluginRegistry>,
+    id: String,
+    enabled: bool,
+) -> Result<(), String> {
     let prompt = db
         .get_prompt(&id)
         .map_err(|e| e.to_string())?
         .ok_or_else(|| format!("prompt 不存在: {id}"))?;
-    let Some(file) = plugin_prompt_file(&prompt.plugin_id) else {
-        return Err(format!("插件 '{}' 不支持 prompt 文件", prompt.plugin_id));
-    };
+    let plugin = registry
+        .resolve_plugin(&prompt.plugin_id)
+        .map_err(|e| e.to_string())?;
+    let file = plugin
+        .prompt_file_path()
+        .ok_or_else(|| format!("插件 '{}' 不支持 prompt 文件", prompt.plugin_id))?;
 
     if enabled {
         if let Some(parent) = file.parent() {

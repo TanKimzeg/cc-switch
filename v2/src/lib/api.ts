@@ -1,4 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
+import { loadTsPluginIfTs } from "@/lib/plugin-loader";
 import type {
   Provider,
   ProviderInput,
@@ -14,6 +15,7 @@ import type {
   Profile,
   RequestLogRow,
   DailyUsageRow,
+  UsageRecord,
   BackupRecord,
   ExportPayload,
 } from "@/types";
@@ -30,17 +32,53 @@ export function getProvider(id: string): Promise<Provider | null> {
   return invoke<Provider | null>("get_provider", { id });
 }
 
-export function addProvider(
+export async function addProvider(
   input: ProviderInput,
   addToLive?: boolean,
 ): Promise<Provider> {
+  const ts = await loadTsPluginIfTs(input.pluginId);
+  if (ts?.apply) {
+    // TS 插件：DB 写入与 live 投影分离（live 由前端脚本执行）。
+    const provider = await invoke<Provider>("add_provider", {
+      input,
+      addToLive: false,
+    });
+    if (addToLive !== false) {
+      await ts.apply(
+        {
+          id: provider.id,
+          name: provider.name,
+          settingsConfig: provider.settingsConfig,
+        },
+        false,
+      );
+    }
+    return provider;
+  }
   return invoke<Provider>("add_provider", { input, addToLive });
 }
 
-export function updateProvider(
+export async function updateProvider(
   id: string,
   input: ProviderInput,
 ): Promise<Provider> {
+  const ts = await loadTsPluginIfTs(input.pluginId);
+  if (ts?.apply) {
+    const provider = await invoke<Provider>("update_provider", {
+      id,
+      input,
+      applyLive: false,
+    });
+    await ts.apply(
+      {
+        id: provider.id,
+        name: provider.name,
+        settingsConfig: provider.settingsConfig,
+      },
+      false,
+    );
+    return provider;
+  }
   return invoke<Provider>("update_provider", { id, input });
 }
 
@@ -104,23 +142,45 @@ export function setSetting(key: string, value: string): Promise<void> {
   return invoke<void>("set_setting", { key, value });
 }
 
-export function readLiveConfig(pluginId: string): Promise<LiveConfig> {
+export async function readLiveConfig(pluginId: string): Promise<LiveConfig> {
+  const ts = await loadTsPluginIfTs(pluginId);
+  if (ts?.readLive) return ts.readLive();
   return invoke<LiveConfig>("plugin_read_live", { id: pluginId });
 }
 
-export function importFromLive(pluginId: string): Promise<ImportCandidate[]> {
+export async function importFromLive(
+  pluginId: string,
+): Promise<ImportCandidate[]> {
+  const ts = await loadTsPluginIfTs(pluginId);
+  if (ts?.import) return ts.import();
   return invoke<ImportCandidate[]>("plugin_import", { id: pluginId });
 }
 
-export function listSessions(pluginId: string): Promise<SessionMeta[]> {
+export async function listSessions(pluginId: string): Promise<SessionMeta[]> {
+  const ts = await loadTsPluginIfTs(pluginId);
+  if (ts?.sessions) return ts.sessions();
   return invoke<SessionMeta[]>("plugin_sessions", { id: pluginId });
 }
 
-export function applyProvider(
+export async function applyProvider(
   pluginId: string,
   providerId: string,
   current?: boolean,
 ): Promise<void> {
+  const ts = await loadTsPluginIfTs(pluginId);
+  if (ts?.apply) {
+    const provider = await getProvider(providerId);
+    if (!provider) throw new Error(`provider not found: ${providerId}`);
+    await ts.apply(
+      {
+        id: provider.id,
+        name: provider.name,
+        settingsConfig: provider.settingsConfig,
+      },
+      current ?? true,
+    );
+    return;
+  }
   return invoke<void>("plugin_apply", {
     id: pluginId,
     providerId,
@@ -128,28 +188,37 @@ export function applyProvider(
   });
 }
 
-export function removeProviderFromLive(
+export async function removeProviderFromLive(
   pluginId: string,
   providerId: string,
 ): Promise<void> {
+  const ts = await loadTsPluginIfTs(pluginId);
+  if (ts?.removeProvider) {
+    await ts.removeProvider(providerId);
+    return;
+  }
   return invoke<void>("plugin_remove_provider", { id: pluginId, providerId });
 }
 
-export function loadSessionMessages(
+export async function loadSessionMessages(
   pluginId: string,
   source: string,
 ): Promise<SessionMessage[]> {
+  const ts = await loadTsPluginIfTs(pluginId);
+  if (ts?.loadMessages) return ts.loadMessages(source);
   return invoke<SessionMessage[]>("plugin_load_messages", {
     id: pluginId,
     source,
   });
 }
 
-export function deleteSession(
+export async function deleteSession(
   pluginId: string,
   sessionId: string,
   source: string,
 ): Promise<boolean> {
+  const ts = await loadTsPluginIfTs(pluginId);
+  if (ts?.deleteSession) return ts.deleteSession(sessionId, source);
   return invoke<boolean>("plugin_delete_session", {
     id: pluginId,
     sessionId,
@@ -157,50 +226,53 @@ export function deleteSession(
   });
 }
 
-export function getMcpServers(pluginId: string): Promise<McpServerSpec[]> {
+export async function getMcpServers(
+  pluginId: string,
+): Promise<McpServerSpec[]> {
+  const ts = await loadTsPluginIfTs(pluginId);
+  if (ts?.getMcpServers) return ts.getMcpServers();
   return invoke<McpServerSpec[]>("plugin_mcp_get", { id: pluginId });
 }
 
-export function setMcpServer(
+export async function setMcpServer(
   pluginId: string,
   server: McpServerSpec,
 ): Promise<void> {
+  const ts = await loadTsPluginIfTs(pluginId);
+  if (ts?.setMcpServer) {
+    await ts.setMcpServer(server);
+    return;
+  }
   return invoke<void>("plugin_mcp_set", { id: pluginId, server });
 }
 
-export function removeMcpServer(
+export async function removeMcpServer(
   pluginId: string,
   serverId: string,
 ): Promise<void> {
+  const ts = await loadTsPluginIfTs(pluginId);
+  if (ts?.removeMcpServer) {
+    await ts.removeMcpServer(serverId);
+    return;
+  }
   return invoke<void>("plugin_mcp_remove", { id: pluginId, serverId });
 }
 
-export function getPluginSubPlugins(pluginId: string): Promise<string[]> {
-  return invoke<string[]>("plugin_get_plugins", { id: pluginId });
-}
-
-export function addPluginSubPlugin(
-  pluginId: string,
-  name: string,
-): Promise<void> {
-  return invoke<void>("plugin_add_plugin", { id: pluginId, name });
-}
-
-export function removePluginSubPlugin(
-  pluginId: string,
-  name: string,
-): Promise<void> {
-  return invoke<void>("plugin_remove_plugin", { id: pluginId, name });
-}
-
-export function readRawConfig(pluginId: string): Promise<string> {
+export async function readRawConfig(pluginId: string): Promise<string> {
+  const ts = await loadTsPluginIfTs(pluginId);
+  if (ts?.readRawConfig) return ts.readRawConfig();
   return invoke<string>("plugin_read_raw_config", { id: pluginId });
 }
 
-export function writeRawConfig(
+export async function writeRawConfig(
   pluginId: string,
   content: string,
 ): Promise<void> {
+  const ts = await loadTsPluginIfTs(pluginId);
+  if (ts?.writeRawConfig) {
+    await ts.writeRawConfig(content);
+    return;
+  }
   return invoke<void>("plugin_write_raw_config", { id: pluginId, content });
 }
 
@@ -234,8 +306,21 @@ export function importMcpServersFromPlugin(pluginId: string): Promise<number> {
   return invoke<number>("import_mcp_servers_from_plugin", { id: pluginId });
 }
 
-export function pluginSyncUsage(pluginId: string): Promise<number> {
+export async function pluginSyncUsage(pluginId: string): Promise<number> {
+  const ts = await loadTsPluginIfTs(pluginId);
+  if (ts?.syncUsage) {
+    const records = (await ts.syncUsage()) ?? [];
+    return usageInsertRecords(pluginId, records);
+  }
   return invoke<number>("plugin_sync_usage", { pluginId });
+}
+
+/** 持久化 TS 插件在前端解析出的用量记录（INSERT OR IGNORE 去重）。 */
+export function usageInsertRecords(
+  pluginId: string,
+  records: UsageRecord[],
+): Promise<number> {
+  return invoke<number>("usage_insert_records", { pluginId, records });
 }
 
 export function usageListRequestLogs(

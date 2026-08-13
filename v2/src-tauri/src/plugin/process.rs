@@ -203,7 +203,6 @@ mod tests {
             import: true,
             sessions: true,
             mcp: true,
-            plugins: true,
         }
     }
 

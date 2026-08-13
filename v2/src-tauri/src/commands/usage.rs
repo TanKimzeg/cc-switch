@@ -3,7 +3,7 @@
 use tauri::State;
 
 use crate::db::Database;
-use crate::plugin::AgentPlugin;
+use crate::plugin::{AgentPlugin, UsageRecord};
 use crate::registry::PluginRegistry;
 use crate::services::usage::{DailyUsageRow, RequestLogRow};
 
@@ -19,6 +19,18 @@ pub fn plugin_sync_usage(
         .map_err(|e| e.to_string())?;
     require_usage(plugin.as_ref(), &plugin_id)?;
     let records = plugin.sync_usage().map_err(|e| e.to_string())?;
+    Ok(db.insert_usage_records(&plugin_id, &records))
+}
+
+/// 写入 TS 插件在前端解析出的用量记录（`INSERT OR IGNORE` 去重）。返回导入条数。
+///
+/// TS 插件在 WebView 中运行，其 `syncUsage()` 结果由前端通过本命令持久化。
+#[tauri::command]
+pub fn usage_insert_records(
+    db: State<'_, Database>,
+    plugin_id: String,
+    records: Vec<UsageRecord>,
+) -> Result<usize, String> {
     Ok(db.insert_usage_records(&plugin_id, &records))
 }
 

@@ -5,6 +5,8 @@
 //! 一个 [`TsPluginStub`]，让 [`crate::registry`] 的统一分派不因入口类型而
 //! 中断；其协议方法返回「由前端宿主执行」的错误。
 
+use std::path::PathBuf;
+
 use crate::plugin::error::PluginError;
 use crate::plugin::{AgentPlugin, ImportCandidate, LiveConfig, PluginCapabilities, SessionMeta};
 use crate::types::Provider;
@@ -13,11 +15,23 @@ use crate::types::Provider;
 pub struct TsPluginStub {
     id: String,
     capabilities: PluginCapabilities,
+    prompt_file: Option<PathBuf>,
+    skills_dir: Option<PathBuf>,
 }
 
 impl TsPluginStub {
-    pub fn new(id: String, capabilities: PluginCapabilities) -> Self {
-        Self { id, capabilities }
+    pub fn new(
+        id: String,
+        capabilities: PluginCapabilities,
+        prompt_file: Option<PathBuf>,
+        skills_dir: Option<PathBuf>,
+    ) -> Self {
+        Self {
+            id,
+            capabilities,
+            prompt_file,
+            skills_dir,
+        }
     }
 }
 
@@ -28,6 +42,14 @@ impl AgentPlugin for TsPluginStub {
 
     fn capabilities(&self) -> &PluginCapabilities {
         &self.capabilities
+    }
+
+    fn prompt_file_path(&self) -> Option<PathBuf> {
+        self.prompt_file.clone()
+    }
+
+    fn skills_dir(&self) -> Option<PathBuf> {
+        self.skills_dir.clone()
     }
 
     fn read_live(&self) -> Result<LiveConfig, PluginError> {

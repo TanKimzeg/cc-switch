@@ -8,7 +8,9 @@ use std::path::{Path, PathBuf};
 use serde::{Deserialize, Serialize};
 
 use crate::db::Database;
-use crate::plugin::{AgentPlugin, OpenCodePlugin, PluginCapabilities, ProcessPlugin, TsPluginStub};
+use crate::plugin::{
+    AgentPlugin, ClaudeCodePlugin, OpenCodePlugin, PluginCapabilities, ProcessPlugin, TsPluginStub,
+};
 use crate::types::{InstalledPlugin, PluginManifest};
 
 /// 当前支持的 manifest 协议版本。
@@ -41,6 +43,12 @@ pub struct ManifestFile {
     /// provider 设置表单的 JSON Schema（M3，可选）。
     #[serde(default)]
     pub settings_schema: Option<serde_json::Value>,
+    /// 提示词文件路径（相对 home，如 `~/.claude/CLAUDE.md`；可选）。
+    #[serde(default)]
+    pub prompt_file: Option<String>,
+    /// Skills 同步目录（相对 home，如 `~/.claude/skills`；可选）。
+    #[serde(default)]
+    pub skills_dir: Option<String>,
     /// 插件入口。M1 仅解析为元数据；M3 按类型分派到原生/进程插件执行。
     pub entry: ManifestEntry,
 }
@@ -134,6 +142,18 @@ impl ManifestFile {
     }
 }
 
+/// 展开 `~` 开头的路径为用户主目录下的绝对路径。
+fn expand_home(path: &str) -> PathBuf {
+    let home = dirs::home_dir().unwrap_or_else(|| PathBuf::from("."));
+    if let Some(rest) = path.strip_prefix("~/") {
+        home.join(rest)
+    } else if path == "~" {
+        home
+    } else {
+        PathBuf::from(path)
+    }
+}
+
 #[derive(Debug, thiserror::Error)]
 pub enum ManifestError {
     #[error("读取 {path} 失败: {source}")]
@@ -209,11 +229,14 @@ impl PluginRegistry {
         }
         let mf = load_manifest(&manifest_path)?;
         let capabilities = mf.capabilities.clone();
+        let prompt_file = mf.prompt_file.as_deref().map(expand_home);
+        let skills_dir = mf.skills_dir.as_deref().map(expand_home);
         match &mf.entry {
             ManifestEntry::Native { module } => {
                 let module = if module.is_empty() { &mf.id } else { module };
                 match module.as_str() {
                     "opencode" => Ok(Box::new(OpenCodePlugin::new())),
+                    "claudecode" => Ok(Box::new(ClaudeCodePlugin::new())),
                     other => Err(ManifestError::Invalid {
                         id: mf.id.clone(),
                         reason: format!("未知的原生插件模块: {other}"),
@@ -226,9 +249,12 @@ impl PluginRegistry {
                 args.clone(),
                 capabilities,
             ))),
-            ManifestEntry::Ts { .. } => {
-                Ok(Box::new(TsPluginStub::new(mf.id.clone(), capabilities)))
-            }
+            ManifestEntry::Ts { .. } => Ok(Box::new(TsPluginStub::new(
+                mf.id.clone(),
+                capabilities,
+                prompt_file,
+                skills_dir,
+            ))),
         }
     }
 

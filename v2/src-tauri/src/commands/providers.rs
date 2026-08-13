@@ -125,6 +125,7 @@ pub fn update_provider(
     registry: State<'_, PluginRegistry>,
     id: String,
     input: ProviderInput,
+    apply_live: Option<bool>,
 ) -> Result<Provider, String> {
     let input = input.normalize();
     let meta = input
@@ -159,7 +160,7 @@ pub fn update_provider(
     let provider = get_provider_by_id(&db, &id)?;
 
     // additive 模式：更新后同步写 live（幂等 upsert），仅在 live_config_managed 时。
-    if live_managed {
+    if live_managed && apply_live.unwrap_or(true) {
         if let Ok(plugin) = registry.resolve_plugin(&provider.plugin_id) {
             if plugin.capabilities().apply {
                 plugin.apply(&provider, false).map_err(|e| e.to_string())?;

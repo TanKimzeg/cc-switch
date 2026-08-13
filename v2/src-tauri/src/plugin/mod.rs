@@ -14,18 +14,20 @@
 //! - 第三方插件通过 manifest 的 `entry.shell` 声明一个外部命令，
 //!   由 [`super::registry`] 包装成进程插件调用。
 
+pub mod claudecode;
 pub mod error;
 pub mod mcp;
 pub mod opencode;
-pub mod ops;
 pub mod process;
 pub mod ts;
 
+pub use claudecode::ClaudeCodePlugin;
 pub use error::PluginError;
 pub use opencode::OpenCodePlugin;
-pub use ops::PluginManagerPlugin;
 pub use process::ProcessPlugin;
 pub use ts::TsPluginStub;
+
+use std::path::PathBuf;
 
 use serde::{Deserialize, Serialize};
 
@@ -55,9 +57,6 @@ pub struct PluginCapabilities {
     /// 支持 MCP 服务器管理。
     #[serde(default)]
     pub mcp: bool,
-    /// 支持插件管理（如 OMO 等 opencode 插件）。
-    #[serde(default)]
-    pub plugins: bool,
 }
 
 /// 从 live 配置中读到的单个 provider 视图。
@@ -189,8 +188,17 @@ pub trait AgentPlugin: Send + Sync {
         None
     }
 
-    /// 若插件支持插件内插件管理（如 OMO），返回对应的 trait 对象引用。
-    fn as_plugin_manager(&self) -> Option<&dyn PluginManagerPlugin> {
+    /// 提示词文件路径（如 `~/.claude/CLAUDE.md`、`~/.config/opencode/AGENTS.md`）。
+    ///
+    /// 返回 `None` 表示该插件不支持 Prompts（启用 prompt 时软件层据此写入文件）。
+    fn prompt_file_path(&self) -> Option<PathBuf> {
+        None
+    }
+
+    /// Skills 同步目录（如 `~/.claude/skills`、`~/.config/opencode/skills`）。
+    ///
+    /// 返回 `None` 表示该插件不支持 Skills 同步。
+    fn skills_dir(&self) -> Option<PathBuf> {
         None
     }
 

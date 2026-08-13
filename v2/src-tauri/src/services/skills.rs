@@ -2,9 +2,9 @@
 //!
 //! SSOT：技能存储在 `{app_data_dir}/skills/`；`skills` 表记录清单，
 //! `skill_apps` 记录各插件启用状态。启用时把技能目录复制到插件的
-//! skills 目录（约定路径）。
+//! skills 目录（路径由插件协议 `AgentPlugin::skills_dir` 提供）。
 
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 use rusqlite::{params, OptionalExtension, Row};
 
@@ -196,15 +196,6 @@ fn parse_skill_metadata(dir: &Path, fallback_name: &str) -> (String, Option<Stri
         }
     }
     (name, description)
-}
-
-/// 插件 skills 目录（约定路径）。
-pub fn plugin_skills_dir(plugin_id: &str) -> PathBuf {
-    let home = dirs::home_dir().unwrap_or_else(|| PathBuf::from("."));
-    match plugin_id {
-        "opencode" => home.join(".config").join("opencode").join("skill"),
-        _ => home.join(".cc-switch").join("skills").join(plugin_id),
-    }
 }
 
 #[cfg(test)]

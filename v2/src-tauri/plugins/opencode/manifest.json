@@ -12,8 +12,7 @@
     "remove": true,
     "import": true,
     "sessions": true,
-    "mcp": true,
-    "plugins": true
+    "mcp": true
   },
   "entry": {
     "type": "native",

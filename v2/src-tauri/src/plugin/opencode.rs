@@ -11,7 +11,6 @@ use serde_json::{json, Map, Value};
 
 use crate::plugin::error::PluginError;
 use crate::plugin::mcp::{self, McpPlugin, McpServerSpec};
-use crate::plugin::ops::PluginManagerPlugin;
 use crate::plugin::{
     AgentPlugin, ImportCandidate, LiveConfig, LiveProvider, PluginCapabilities, SessionMessage,
     SessionMeta, UsageRecord,
@@ -83,7 +82,6 @@ impl AgentPlugin for OpenCodePlugin {
             import: true,
             sessions: true,
             mcp: true,
-            plugins: true,
         };
         &CAPS
     }
@@ -206,8 +204,12 @@ impl AgentPlugin for OpenCodePlugin {
         Some(self)
     }
 
-    fn as_plugin_manager(&self) -> Option<&dyn PluginManagerPlugin> {
-        Some(self)
+    fn prompt_file_path(&self) -> Option<PathBuf> {
+        Some(config_dir().join("AGENTS.md"))
+    }
+
+    fn skills_dir(&self) -> Option<PathBuf> {
+        Some(config_dir().join("skills"))
     }
 
     fn read_raw_config(&self) -> Result<String, PluginError> {
@@ -387,117 +389,6 @@ impl McpPlugin for OpenCodePlugin {
         }
         write_config(&path, &config)
     }
-}
-
-impl PluginManagerPlugin for OpenCodePlugin {
-    fn get_plugins(&self) -> Result<Vec<String>, PluginError> {
-        let config = read_config(&config_path())?;
-        Ok(config
-            .get("plugin")
-            .and_then(Value::as_array)
-            .map(|arr| {
-                arr.iter()
-                    .filter_map(Value::as_str)
-                    .map(|s| s.to_string())
-                    .collect()
-            })
-            .unwrap_or_default())
-    }
-
-    fn add_plugin(&self, name: &str) -> Result<(), PluginError> {
-        let path = config_path();
-        let mut config = read_config(&path)?;
-        let normalized = canonicalize_plugin_name(name);
-        let target_is_omo = is_omo_plugin(&normalized);
-        let mut changed = false;
-
-        let plugins = config.get_mut("plugin").and_then(Value::as_array_mut);
-        match plugins {
-            Some(arr) => {
-                let mut found_target = false;
-                arr.retain(|value| {
-                    let Some(existing) = value.as_str() else {
-                        return true;
-                    };
-                    if existing == normalized {
-                        if found_target {
-                            changed = true;
-                            return false;
-                        }
-                        found_target = true;
-                        return true;
-                    }
-                    // Standard OMO 与 OMO Slim 互斥。
-                    if target_is_omo && is_omo_plugin(existing) {
-                        changed = true;
-                        return false;
-                    }
-                    true
-                });
-                if !found_target {
-                    arr.push(Value::String(normalized.clone()));
-                    changed = true;
-                }
-            }
-            None => {
-                config["plugin"] = json!([normalized.clone()]);
-                changed = true;
-            }
-        }
-
-        if changed {
-            write_config(&path, &config)?;
-        }
-        Ok(())
-    }
-
-    fn remove_plugin(&self, name: &str) -> Result<(), PluginError> {
-        let path = config_path();
-        let mut config = read_config(&path)?;
-        let mut changed = false;
-        if let Some(arr) = config.get_mut("plugin").and_then(Value::as_array_mut) {
-            let before = arr.len();
-            arr.retain(|v| v.as_str() != Some(name));
-            changed = arr.len() != before;
-            if arr.is_empty() {
-                config.as_object_mut().map(|o| o.remove("plugin"));
-            }
-        }
-        if changed {
-            write_config(&path, &config)?;
-        }
-        Ok(())
-    }
-}
-
-const STANDARD_OMO_PREFIXES: [&str; 2] = ["oh-my-openagent", "oh-my-opencode"];
-const SLIM_OMO_PREFIXES: [&str; 1] = ["oh-my-opencode-slim"];
-
-/// 判断插件名是否为 OMO/OMO-Slim 系列（含 `@scope` 变体）。
-fn is_omo_plugin(name: &str) -> bool {
-    matches_any_prefix(name, &STANDARD_OMO_PREFIXES) || matches_any_prefix(name, &SLIM_OMO_PREFIXES)
-}
-
-fn matches_prefix(plugin_name: &str, prefix: &str) -> bool {
-    plugin_name == prefix
-        || plugin_name
-            .strip_prefix(prefix)
-            .map(|suffix| suffix.starts_with('@'))
-            .unwrap_or(false)
-}
-
-fn matches_any_prefix(plugin_name: &str, prefixes: &[&str]) -> bool {
-    prefixes.iter().any(|p| matches_prefix(plugin_name, p))
-}
-
-/// 规范化插件名：`oh-my-opencode` → `oh-my-openagent`。
-fn canonicalize_plugin_name(plugin_name: &str) -> String {
-    if let Some(suffix) = plugin_name.strip_prefix("oh-my-opencode") {
-        if suffix.is_empty() || suffix.starts_with('@') {
-            return format!("oh-my-openagent{suffix}");
-        }
-    }
-    plugin_name.to_string()
 }
 
 /// 解析 provider 的 `settings_config` 为写入 live 的 JSON 片段。
@@ -1469,67 +1360,6 @@ mod tests {
         } else {
             std::env::remove_var("XDG_DATA_HOME");
         }
-    }
-
-    #[test]
-    fn add_plugin_appends_and_dedups() {
-        let temp = tempfile::tempdir().unwrap();
-        let _guard = HomeGuard::set(temp.path());
-        let p = OpenCodePlugin::new();
-
-        p.add_plugin("some-plugin").unwrap();
-        p.add_plugin("some-plugin").unwrap();
-        let plugins = p.get_plugins().unwrap();
-        assert_eq!(plugins, vec!["some-plugin".to_string()]);
-    }
-
-    #[test]
-    fn add_omo_normalizes_and_removes_conflicting() {
-        let temp = tempfile::tempdir().unwrap();
-        let _guard = HomeGuard::set(temp.path());
-        write_config_file(
-            temp.path(),
-            r#"{"plugin": ["oh-my-opencode@latest", "unrelated"]}"#,
-        );
-        let p = OpenCodePlugin::new();
-
-        p.add_plugin("oh-my-opencode-slim@latest").unwrap();
-        let plugins = p.get_plugins().unwrap();
-        assert!(!plugins.iter().any(|s| s.starts_with("oh-my-opencode@")));
-        assert!(plugins
-            .iter()
-            .any(|s| s.starts_with("oh-my-opencode-slim@")));
-        assert!(plugins.contains(&"unrelated".to_string()));
-    }
-
-    #[test]
-    fn remove_plugin_clears_empty_array() {
-        let temp = tempfile::tempdir().unwrap();
-        let _guard = HomeGuard::set(temp.path());
-        write_config_file(temp.path(), r#"{"plugin": ["only-one"]}"#);
-        let p = OpenCodePlugin::new();
-
-        p.remove_plugin("only-one").unwrap();
-        let config = read_config(&config_path()).unwrap();
-        assert!(config.get("plugin").is_none());
-        assert!(p.get_plugins().unwrap().is_empty());
-    }
-
-    #[test]
-    fn canonicalize_omo_names() {
-        assert_eq!(
-            canonicalize_plugin_name("oh-my-opencode"),
-            "oh-my-openagent"
-        );
-        assert_eq!(
-            canonicalize_plugin_name("oh-my-opencode@latest"),
-            "oh-my-openagent@latest"
-        );
-        assert_eq!(
-            canonicalize_plugin_name("oh-my-opencode-slim"),
-            "oh-my-opencode-slim"
-        );
-        assert_eq!(canonicalize_plugin_name("other"), "other");
     }
 
     #[test]

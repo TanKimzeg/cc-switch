@@ -58,7 +58,6 @@ export interface PluginCapabilities {
   import?: boolean;
   sessions?: boolean;
   mcp?: boolean;
-  plugins?: boolean;
 }
 
 /** 已安装插件：清单字段 + 安装来源信息。 */
@@ -156,6 +155,20 @@ export interface Profile {
   sortOrder?: number | null;
   createdAt?: number | null;
   updatedAt?: number | null;
+}
+
+/** 单条用量记录（plugin_sync_usage / TS 插件 syncUsage 返回值）。 */
+export interface UsageRecord {
+  sourceId: string;
+  sessionId: string;
+  model: string;
+  inputTokens: number;
+  outputTokens: number;
+  reasoningTokens: number;
+  cacheReadTokens: number;
+  cacheWriteTokens: number;
+  cost: number;
+  timestampMs: number;
 }
 
 /** 请求日志行。 */

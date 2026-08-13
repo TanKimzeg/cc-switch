@@ -1,27 +1,26 @@
 // TypeScript 插件示例。
 // 通过注入的 host API 调用 Tauri 宿主命令读写插件自有配置。
 // 运行前由后端 `plugin_get_script` 返回本文件内容，前端受限作用域执行。
-
-declare const host: {
-  readFile(path: string): string;
-  writeFile(path: string, content: string): void;
-  listFiles(dir?: string): string[];
-  invoke<T>(command: string, args?: Record<string, unknown>): Promise<T>;
-};
+//
+// 注意：加载器用 `new Function` 执行脚本，宿主不转译 TypeScript，因此本文件
+// 必须是合法 JavaScript（用 JSDoc 标注类型，不使用 interface/declare/类型注解），
+// 文件名用 .js。
 
 const CONFIG_PATH = "state.json";
 
-function readConfig(): { providers?: Array<Record<string, unknown>>; current?: string } {
+/** @returns {Promise<{ providers?: Array<Record<string, unknown>>, current?: string }>} */
+async function readConfig() {
   try {
-    const raw = host.readFile(CONFIG_PATH);
+    const raw = await host.readFile(CONFIG_PATH);
     return raw ? JSON.parse(raw) : { providers: [] };
   } catch {
     return { providers: [] };
   }
 }
 
-function writeConfig(config: Record<string, unknown>): void {
-  host.writeFile(CONFIG_PATH, JSON.stringify(config, null, 2));
+/** @param {Record<string, unknown>} config */
+async function writeConfig(config) {
+  await host.writeFile(CONFIG_PATH, JSON.stringify(config, null, 2));
 }
 
 const plugin = {
@@ -32,8 +31,8 @@ const plugin = {
     sessions: false,
     mcp: false,
   },
-  readLive() {
-    const config = readConfig();
+  async readLive() {
+    const config = await readConfig();
     return {
       providers: (config.providers || []).map((p) => ({
         id: p.id,
@@ -43,12 +42,12 @@ const plugin = {
       current: config.current || null,
     };
   },
-  apply(provider: { id: string; name?: string; settingsConfig?: string }, current: boolean) {
-    const config = readConfig();
+  async apply(provider, current) {
+    const config = await readConfig();
     const id = provider.id;
     const existing = config.providers || [];
     const idx = existing.findIndex((p) => p.id === id);
-    let parsed: Record<string, unknown> = {};
+    let parsed = {};
     try {
       parsed = JSON.parse(provider.settingsConfig || "{}");
     } catch {
@@ -59,6 +58,6 @@ const plugin = {
     } else {
       existing.push({ ...parsed, id, name: provider.name || id });
     }
-    writeConfig({ ...config, providers: existing, current: id });
+    await writeConfig({ ...config, providers: existing, current: id });
   },
 };
