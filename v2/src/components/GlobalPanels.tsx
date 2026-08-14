@@ -72,6 +72,7 @@ import MarkdownEditor from "@/components/MarkdownEditor";
 import { PanelHeader, EmptyState } from "@/components/PanelHeader";
 import { Card, CardContent } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Dialog,
   DialogContent,
@@ -945,7 +946,16 @@ function McpGlobalPanel() {
   const [showForm, setShowForm] = useState(false);
   const [newId, setNewId] = useState("");
   const [newName, setNewName] = useState("");
-  const [newSpec, setNewSpec] = useState("{}");
+  const [mcpTab, setMcpTab] = useState<"structured" | "raw">("structured");
+  // 结构化表单字段（对齐 v1 引导式配置）。
+  const [mcpType, setMcpType] = useState<"stdio" | "sse">("stdio");
+  const [mcpCommand, setMcpCommand] = useState("");
+  const [mcpArgs, setMcpArgs] = useState("");
+  const [mcpEnv, setMcpEnv] = useState("");
+  const [mcpUrl, setMcpUrl] = useState("");
+  const [mcpHeaders, setMcpHeaders] = useState("");
+  const [rawSpec, setRawSpec] = useState("{}");
+  const [enabledApps, setEnabledApps] = useState<Record<string, boolean>>({});
 
   const query = useQuery({ queryKey: ["mcp-all"], queryFn: mcpList });
   const pluginsQuery = useQuery({ queryKey: ["plugins"], queryFn: getPlugins });
@@ -955,34 +965,109 @@ function McpGlobalPanel() {
   const invalidate = () =>
     queryClient.invalidateQueries({ queryKey: ["mcp-all"] });
 
+  /** 把结构化表单字段组装成统一 spec（对齐 v1 的 wizard 逻辑）。 */
+  const buildSpec = (validate: boolean): Record<string, unknown> | null => {
+    if (mcpType === "stdio") {
+      if (!mcpCommand.trim()) {
+        if (validate) toast.error(t("mcpRequired"));
+        return null;
+      }
+      const spec: Record<string, unknown> = {
+        type: "stdio",
+        command: mcpCommand.trim(),
+      };
+      const args = mcpArgs
+        .split(/\r?\n/)
+        .map((a) => a.trim())
+        .filter(Boolean);
+      if (args.length > 0) spec.args = args;
+      const env: Record<string, string> = {};
+      for (const line of mcpEnv.split(/\r?\n/)) {
+        const idx = line.indexOf("=");
+        if (idx > 0) {
+          const k = line.slice(0, idx).trim();
+          const v = line.slice(idx + 1).trim();
+          if (k) env[k] = v;
+        }
+      }
+      if (Object.keys(env).length > 0) spec.env = env;
+      return spec;
+    }
+    if (!mcpUrl.trim()) {
+      if (validate) toast.error(t("mcpRequired"));
+      return null;
+    }
+    const spec: Record<string, unknown> = { type: "sse", url: mcpUrl.trim() };
+    const headers: Record<string, string> = {};
+    for (const line of mcpHeaders.split(/\r?\n/)) {
+      const idx = line.indexOf(":");
+      if (idx > 0) {
+        const k = line.slice(0, idx).trim();
+        const v = line.slice(idx + 1).trim();
+        if (k) headers[k] = v;
+      }
+    }
+    if (Object.keys(headers).length > 0) spec.headers = headers;
+    return spec;
+  };
+
   const handleUpsert = async () => {
     if (!newId.trim()) {
       toast.error(t("common.error"));
       return;
     }
     let spec: Record<string, unknown>;
-    try {
-      spec = JSON.parse(newSpec || "{}");
-    } catch {
-      toast.error(t("jsonEditor.invalidJson"));
-      return;
+    if (mcpTab === "structured") {
+      const built = buildSpec(true);
+      if (!built) return;
+      spec = built;
+    } else {
+      try {
+        const parsed = JSON.parse(rawSpec || "{}");
+        if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+          toast.error(t("jsonEditor.invalidJson"));
+          return;
+        }
+        spec = parsed as Record<string, unknown>;
+      } catch {
+        toast.error(t("jsonEditor.invalidJson"));
+        return;
+      }
     }
+    const apps = plugins.map((p): [string, boolean] => [
+      p.id,
+      enabledApps[p.id] ?? false,
+    ]);
     try {
       await mcpUpsert({
         id: newId.trim(),
         name: newName.trim() || newId.trim(),
         spec,
-        apps: [],
+        apps,
       });
       await invalidate();
       setShowForm(false);
       setNewId("");
       setNewName("");
-      setNewSpec("{}");
+      setRawSpec("{}");
+      setEnabledApps({});
       toast.success(t("common.save"));
     } catch (e) {
       toast.error(String(e));
     }
+  };
+
+  const resetForm = () => {
+    setNewId("");
+    setNewName("");
+    setMcpType("stdio");
+    setMcpCommand("");
+    setMcpArgs("");
+    setMcpEnv("");
+    setMcpUrl("");
+    setMcpHeaders("");
+    setRawSpec("{}");
+    setEnabledApps({});
   };
 
   const handleDelete = async (id: string) => {
@@ -1034,7 +1119,10 @@ function McpGlobalPanel() {
         </button>
         <button
           type="button"
-          onClick={() => setShowForm((v) => !v)}
+          onClick={() => {
+            if (!showForm) resetForm();
+            setShowForm((v) => !v);
+          }}
           className="inline-flex items-center gap-1 rounded-md bg-primary px-2 py-1 text-xs text-primary-foreground transition-colors hover:bg-primary/90"
         >
           <Plus className="h-3.5 w-3.5" />
@@ -1043,12 +1131,12 @@ function McpGlobalPanel() {
       </PanelHeader>
 
       {showForm && (
-        <div className="space-y-2 rounded-xl border border-border bg-card p-3 shadow-sm">
+        <div className="space-y-3 rounded-xl border border-border bg-card p-3 shadow-sm">
           <div className="flex gap-2">
             <input
               value={newId}
               onChange={(e) => setNewId(e.target.value)}
-              placeholder="server-id"
+              placeholder={t("features.mcpId")}
               className="flex-1 rounded-md border border-border bg-background px-2 py-1 text-xs"
             />
             <input
@@ -1058,7 +1146,111 @@ function McpGlobalPanel() {
               className="flex-1 rounded-md border border-border bg-background px-2 py-1 text-xs"
             />
           </div>
-          <JsonEditor value={newSpec} onChange={setNewSpec} rows={8} />
+
+          <Tabs
+            value={mcpTab}
+            onValueChange={(v) => {
+              if (v === "raw") {
+                // 从结构化切到 JSON：预填当前表单生成的 spec（不校验必填）。
+                const built = buildSpec(false);
+                if (built) setRawSpec(JSON.stringify(built, null, 2));
+              }
+              setMcpTab(v as "structured" | "raw");
+            }}
+          >
+            <TabsList>
+              <TabsTrigger value="structured">
+                {t("features.mcpFormStructured")}
+              </TabsTrigger>
+              <TabsTrigger value="raw">{t("features.mcpFormRaw")}</TabsTrigger>
+            </TabsList>
+
+            <TabsContent value="structured" className="space-y-2">
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-muted-foreground">
+                  {t("features.mcpType")}:
+                </span>
+                <select
+                  value={mcpType}
+                  onChange={(e) =>
+                    setMcpType(e.target.value as "stdio" | "sse")
+                  }
+                  className="rounded-md border border-border bg-background px-2 py-1 text-xs"
+                >
+                  <option value="stdio">{t("features.mcpTypeStdio")}</option>
+                  <option value="sse">{t("features.mcpTypeRemote")}</option>
+                </select>
+              </div>
+              {mcpType === "stdio" ? (
+                <>
+                  <input
+                    value={mcpCommand}
+                    onChange={(e) => setMcpCommand(e.target.value)}
+                    placeholder={t("features.mcpCommand")}
+                    className="w-full rounded-md border border-border bg-background px-2 py-1 text-xs"
+                  />
+                  <textarea
+                    value={mcpArgs}
+                    onChange={(e) => setMcpArgs(e.target.value)}
+                    placeholder={t("features.mcpArgs")}
+                    rows={2}
+                    className="w-full rounded-md border border-border bg-background px-2 py-1 text-xs"
+                  />
+                  <textarea
+                    value={mcpEnv}
+                    onChange={(e) => setMcpEnv(e.target.value)}
+                    placeholder={t("features.mcpEnv")}
+                    rows={2}
+                    className="w-full rounded-md border border-border bg-background px-2 py-1 text-xs"
+                  />
+                </>
+              ) : (
+                <>
+                  <input
+                    value={mcpUrl}
+                    onChange={(e) => setMcpUrl(e.target.value)}
+                    placeholder={t("features.mcpUrl")}
+                    className="w-full rounded-md border border-border bg-background px-2 py-1 text-xs"
+                  />
+                  <textarea
+                    value={mcpHeaders}
+                    onChange={(e) => setMcpHeaders(e.target.value)}
+                    placeholder={t("features.mcpHeaders")}
+                    rows={2}
+                    className="w-full rounded-md border border-border bg-background px-2 py-1 text-xs"
+                  />
+                </>
+              )}
+
+              {/* 启用插件勾选 */}
+              {plugins.length > 0 && (
+                <div className="flex flex-wrap gap-3 pt-1">
+                  {plugins.map((p) => (
+                    <label
+                      key={p.id}
+                      className="flex items-center gap-1.5 text-xs text-muted-foreground"
+                    >
+                      <Checkbox
+                        checked={enabledApps[p.id] ?? false}
+                        onCheckedChange={(v) =>
+                          setEnabledApps((prev) => ({
+                            ...prev,
+                            [p.id]: v === true,
+                          }))
+                        }
+                      />
+                      {p.name}
+                    </label>
+                  ))}
+                </div>
+              )}
+            </TabsContent>
+
+            <TabsContent value="raw">
+              <JsonEditor value={rawSpec} onChange={setRawSpec} rows={8} />
+            </TabsContent>
+          </Tabs>
+
           <button
             type="button"
             onClick={handleUpsert}

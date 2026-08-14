@@ -338,4 +338,32 @@ mod tests {
         McpService::sync_server_to_plugin(&db, &registry, &server, "ts-demo").unwrap();
         McpService::remove_server_from_plugin(&db, &registry, &server.id, "ts-demo").unwrap();
     }
+
+    #[test]
+    fn upsert_with_empty_apps_succeeds() {
+        // 复现「添加 MCP 点击保存报错」：apps 为空时同步循环为空，应成功落库。
+        let dir = tempfile::tempdir().unwrap();
+        let db = Database::new(&dir.path().join("test.db")).unwrap();
+        let registry = crate::registry::PluginRegistry::new(
+            dir.path().join("plugins"),
+            db.clone(),
+        );
+
+        let server = McpServer {
+            id: "fs".into(),
+            name: "Filesystem".into(),
+            spec: serde_json::json!({ "type": "stdio", "command": "npx" }),
+            description: None,
+            homepage: None,
+            docs: None,
+            tags: vec![],
+            apps: vec![],
+        };
+        db.upsert_mcp_server(&server).unwrap();
+        McpService::sync_server_to_enabled(&db, &registry, &server).unwrap();
+
+        let stored = db.get_mcp_server("fs").unwrap().unwrap();
+        assert_eq!(stored.name, "Filesystem");
+        assert!(stored.apps.is_empty());
+    }
 }

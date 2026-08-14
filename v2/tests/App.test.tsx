@@ -3,6 +3,7 @@ import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import App from "@/App";
 import "@/i18n";
+import { __clearTsPluginCache } from "@/lib/plugin-loader";
 
 vi.mock("@tauri-apps/api/core", () => ({
   invoke: vi.fn(),
@@ -27,6 +28,7 @@ const renderApp = () => {
 
 beforeEach(() => {
   vi.mocked(invoke).mockReset();
+  __clearTsPluginCache();
 });
 
 it("renders the shell title", async () => {
@@ -231,4 +233,41 @@ it("renders the full provider panel for a TS plugin (no placeholder)", async () 
   // 应显示真实面板的标题/能力徽章，而不是占位提示。
   expect(await screen.findByText(/读取: ✓/)).toBeInTheDocument();
   expect(screen.queryByText(/能力面板接入开发中/)).not.toBeInTheDocument();
+});
+
+it("MCP global import reads from TS plugin via the script", async () => {
+  vi.mocked(invoke).mockImplementation(async (cmd: string) => {
+    if (cmd === "get_plugins")
+      return [
+        {
+          id: "claudecode",
+          name: "Claude Code",
+          version: "0.1.0",
+          apiVersion: "1",
+          source: "local",
+          installedAt: "2026-08-08",
+          entryType: "ts",
+          main: "main.js",
+        },
+      ];
+    if (cmd === "plugin_get_script")
+      return "const plugin={id:'claudecode',capabilities:{mcp:true},getMcpServers:async()=>[{id:'fs',name:'fs',spec:{command:'npx'}}]};";
+    if (cmd === "mcp_upsert") return null;
+    if (cmd === "mcp_list") return [];
+    return null;
+  });
+  renderApp();
+  // 顶部导航进入 MCP 页
+  fireEvent.click(await screen.findByText("MCP"));
+  // 点击"从 live 导入 MCP"
+  fireEvent.click(await screen.findByText("从 live 导入 MCP"));
+  await waitFor(() => {
+    expect(invoke).toHaveBeenCalledWith("mcp_upsert", expect.anything());
+  });
+  expect(invoke).toHaveBeenCalledWith(
+    "mcp_upsert",
+    expect.objectContaining({
+      server: expect.objectContaining({ id: "fs" }),
+    }),
+  );
 });
