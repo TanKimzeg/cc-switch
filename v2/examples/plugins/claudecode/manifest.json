@@ -4,7 +4,7 @@
   "version": "0.1.0",
   "apiVersion": "1",
   "author": "cc-switch",
-  "description": "Claude Code 插件：管理 ~/.claude/settings.json 配置、会话与 MCP（原生实现）。",
+  "description": "Claude Code TS 插件：经宿主资源白名单读写 ~/.claude/settings.json、~/.claude.json 与会话 jsonl。",
   "capabilities": {
     "readLive": true,
     "apply": true,
@@ -13,8 +13,15 @@
     "sessions": true,
     "mcp": true
   },
+  "resources": {
+    "config": "~/.claude/settings.json",
+    "mcp": "~/.claude.json",
+    "projects": "~/.claude/projects"
+  },
+  "promptFile": "~/.claude/CLAUDE.md",
+  "skillsDir": "~/.claude/skills",
   "entry": {
-    "type": "native",
-    "module": "claudecode"
+    "type": "ts",
+    "main": "main.js"
   }
 }

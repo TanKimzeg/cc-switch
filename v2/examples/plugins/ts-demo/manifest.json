@@ -10,6 +10,9 @@
     "apply": true,
     "sessions": true
   },
+  "resources": {
+    "demo": "~/.cc-switch-demo"
+  },
   "entry": {
     "type": "ts",
     "main": "main.js"
