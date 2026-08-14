@@ -285,7 +285,16 @@ const plugin = {
     const root = await readMcpRoot();
     const map = root.mcpServers || {};
     return Object.keys(map)
-      .map((id) => ({ id, name: id, spec: map[id] }))
+      .map((id) => {
+        // 反向格式转换（对齐 v1 Gemini 的做法）：Claude 的 mcpServers 条目
+        // 通常缺省 type，这里按字段补全统一格式，便于展示与后续转换。
+        const spec = { ...map[id] };
+        if (typeof spec === "object" && spec !== null && spec.type == null) {
+          if (spec.command != null) spec.type = "stdio";
+          else if (spec.url != null) spec.type = "sse";
+        }
+        return { id, name: id, spec };
+      })
       .sort((a, b) => a.id.localeCompare(b.id));
   },
 

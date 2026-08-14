@@ -241,4 +241,27 @@ describe("claudecode TS plugin (real main.js, resource host)", () => {
     await plugin.removeMcpServer?.("filesystem");
     expect(await plugin.getMcpServers?.()).toHaveLength(0);
   });
+
+  it("getMcpServers backfills missing type (Claude legacy format)", async () => {
+    // Claude Code 的 mcpServers 条目常缺省 type，导入统一格式时应补全。
+    const { host } = resourceHost({
+      mcp: {
+        mcpServers: {
+          fs: {
+            command: "npx",
+            args: ["-y", "@modelcontextprotocol/server-filesystem"],
+          },
+          remote: { url: "https://example.com/mcp" },
+          typed: { type: "http", url: "https://x/mcp" },
+        },
+      },
+    });
+    const plugin = await loadTsPlugin("claudecode", mainSource(), host);
+    const servers = await plugin.getMcpServers?.();
+    const byId = new Map((servers ?? []).map((s) => [s.id, s.spec]));
+    expect(byId.get("fs")?.type).toBe("stdio");
+    expect(byId.get("remote")?.type).toBe("sse");
+    expect(byId.get("typed")?.type).toBe("http");
+    expect(byId.get("fs")?.command).toBe("npx");
+  });
 });
