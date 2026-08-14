@@ -280,20 +280,51 @@ export function mcpList(): Promise<McpServer[]> {
   return invoke<McpServer[]>("mcp_list");
 }
 
-export function mcpUpsert(server: McpServer): Promise<void> {
-  return invoke<void>("mcp_upsert", { server });
+/** 新增/更新 MCP 服务器并同步到启用的插件；TS 插件的 live 同步由前端脚本执行。 */
+export async function mcpUpsert(server: McpServer): Promise<void> {
+  await invoke<void>("mcp_upsert", { server });
+  // TS 插件：后端跳过其 live 同步（as_mcp 为 None），这里由前端脚本写 live。
+  for (const [pluginId, enabled] of server.apps) {
+    if (!enabled) continue;
+    const ts = await loadTsPluginIfTs(pluginId);
+    if (ts?.setMcpServer) {
+      await ts.setMcpServer({
+        id: server.id,
+        name: server.name,
+        spec: server.spec,
+      });
+    }
+  }
 }
 
 export function mcpDelete(id: string): Promise<void> {
   return invoke<void>("mcp_delete", { id });
 }
 
-export function mcpToggleApp(
+/** 切换某 MCP 服务器在指定插件的启用状态；TS 插件同步由前端脚本执行。 */
+export async function mcpToggleApp(
   id: string,
   pluginId: string,
   enabled: boolean,
 ): Promise<void> {
-  return invoke<void>("mcp_toggle_app", { id, pluginId, enabled });
+  await invoke<void>("mcp_toggle_app", { id, pluginId, enabled });
+  const ts = await loadTsPluginIfTs(pluginId);
+  if (!ts) return;
+  if (enabled) {
+    if (ts.setMcpServer) {
+      const all = await mcpList();
+      const server = all.find((s) => s.id === id);
+      if (server) {
+        await ts.setMcpServer({
+          id: server.id,
+          name: server.name,
+          spec: server.spec,
+        });
+      }
+    }
+  } else if (ts.removeMcpServer) {
+    await ts.removeMcpServer(id);
+  }
 }
 
 export function importMcpFromPlugin(

@@ -1,5 +1,6 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
 import { loadTsPlugin, makeHost } from "./plugin-loader";
+import { mcpToggleApp } from "./api";
 import { invoke } from "@tauri-apps/api/core";
 
 vi.mock("@tauri-apps/api/core", () => ({
@@ -126,6 +127,60 @@ describe("plugin-loader", () => {
     await host.usageDailySummary();
     expect(invoke).toHaveBeenCalledWith("usage_daily_summary", {
       pluginId: "my-plugin",
+    });
+  });
+
+  it("mcpToggleApp routes live sync through the TS plugin script", async () => {
+    // 插件是 TS（entryType ts），其脚本声明 setMcpServer / removeMcpServer。
+    vi.mocked(invoke).mockImplementation(async (cmd: string) => {
+      if (cmd === "get_plugins")
+        return [
+          {
+            id: "claudecode",
+            name: "Claude Code",
+            version: "0.1.0",
+            apiVersion: "1",
+            source: "local",
+            installedAt: "",
+            entryType: "ts",
+            main: "main.js",
+          },
+        ];
+      if (cmd === "plugin_get_script")
+        return "const plugin={id:'claudecode',capabilities:{mcp:true},setMcpServer:async(s)=>{await host.writeResource('mcp',JSON.stringify({mcpServers:{[s.id]:s.spec}}),'')},removeMcpServer:async(id)=>{await host.writeResource('mcp',JSON.stringify({mcpServers:{}}),'')}};";
+      if (cmd === "mcp_toggle_app") return null;
+      if (cmd === "mcp_list")
+        return [
+          {
+            id: "fs",
+            name: "fs",
+            spec: { command: "npx" },
+            apps: [["claudecode", true]],
+          },
+        ];
+      return null;
+    });
+
+    await mcpToggleApp("fs", "claudecode", true);
+    expect(invoke).toHaveBeenCalledWith("mcp_toggle_app", {
+      id: "fs",
+      pluginId: "claudecode",
+      enabled: true,
+    });
+    // TS 插件同步：前端脚本的 setMcpServer 被调用（经 host 写资源 mcp）。
+    expect(invoke).toHaveBeenCalledWith("host_write_resource", {
+      id: "claudecode",
+      name: "mcp",
+      content: JSON.stringify({ mcpServers: { fs: { command: "npx" } } }),
+      rel: "",
+    });
+
+    await mcpToggleApp("fs", "claudecode", false);
+    expect(invoke).toHaveBeenCalledWith("host_write_resource", {
+      id: "claudecode",
+      name: "mcp",
+      content: JSON.stringify({ mcpServers: {} }),
+      rel: "",
     });
   });
 });

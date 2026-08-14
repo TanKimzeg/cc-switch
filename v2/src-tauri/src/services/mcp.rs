@@ -183,6 +183,9 @@ impl McpService {
     }
 
     /// 把服务器同步到单个插件（若插件支持 MCP）。
+    ///
+    /// 跳过无 MCP 能力的插件（如 TS 插件，其 live 同步由前端脚本处理），
+    /// 不阻塞全局 MCP 面板的保存/勾选。
     pub fn sync_server_to_plugin(
         _db: &Database,
         registry: &PluginRegistry,
@@ -192,9 +195,9 @@ impl McpService {
         let plugin = registry
             .resolve_plugin(plugin_id)
             .map_err(|e| e.to_string())?;
-        let mcp_plugin = plugin
-            .as_mcp()
-            .ok_or_else(|| format!("插件 '{plugin_id}' 不支持 MCP"))?;
+        let Some(mcp_plugin) = plugin.as_mcp() else {
+            return Ok(());
+        };
         let spec = McpServerSpec {
             id: server.id.clone(),
             name: server.name.clone(),
@@ -204,6 +207,8 @@ impl McpService {
     }
 
     /// 从指定插件移除服务器。
+    ///
+    /// 跳过无 MCP 能力的插件（同 [`Self::sync_server_to_plugin`]）。
     pub fn remove_server_from_plugin(
         _db: &Database,
         registry: &PluginRegistry,
@@ -213,9 +218,9 @@ impl McpService {
         let plugin = registry
             .resolve_plugin(plugin_id)
             .map_err(|e| e.to_string())?;
-        let mcp_plugin = plugin
-            .as_mcp()
-            .ok_or_else(|| format!("插件 '{plugin_id}' 不支持 MCP"))?;
+        let Some(mcp_plugin) = plugin.as_mcp() else {
+            return Ok(());
+        };
         mcp_plugin
             .remove_mcp_server(server_id)
             .map_err(|e| e.to_string())
@@ -302,5 +307,35 @@ mod tests {
         assert!(db.delete_mcp_server("filesystem").unwrap());
         assert!(db.get_mcp_server("filesystem").unwrap().is_none());
         assert!(!db.delete_mcp_server("filesystem").unwrap());
+    }
+
+    #[test]
+    fn sync_skips_plugins_without_mcp_capability() {
+        let dir = tempfile::tempdir().unwrap();
+        let db = Database::new(&dir.path().join("test.db")).unwrap();
+        let registry = crate::registry::PluginRegistry::new(
+            dir.path().join("plugins"),
+            db.clone(),
+        );
+
+        // TS 插件（TsPluginStub 无 as_mcp）：同步应跳过而非报错。
+        let plugins = dir.path().join("plugins/ts-demo");
+        std::fs::create_dir_all(&plugins).unwrap();
+        std::fs::write(
+            plugins.join("manifest.json"),
+            r#"{
+                "id": "ts-demo",
+                "name": "TS Demo",
+                "version": "0.1.0",
+                "apiVersion": "1",
+                "entry": { "type": "ts", "main": "main.js" }
+            }"#,
+        )
+        .unwrap();
+
+        let server = sample_server();
+        // 断言不报错（TS 插件被跳过，返回 Ok）。
+        McpService::sync_server_to_plugin(&db, &registry, &server, "ts-demo").unwrap();
+        McpService::remove_server_from_plugin(&db, &registry, &server.id, "ts-demo").unwrap();
     }
 }
