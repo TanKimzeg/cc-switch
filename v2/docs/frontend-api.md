@@ -47,6 +47,8 @@ export async function readLiveConfig(pluginId) {
 
 **DB 写操作特殊处理**（`addProvider` / `updateProvider`）：TS 插件时，后端 DB 写入与 live 投影分离——先以 `addToLive=false` / `applyLive=false` 落库，再在前端调 `ts.apply(provider, false)` 投影 live。
 
+> TS 插件脚本内部如需访问 DB（暂存 provider、写用量），用 `TsHost` 的类型化 DB 方法（`host.providers()` / `host.upsertProvider()` / `host.saveUsageRecords()` 等，自动绑定当前插件 id），无需手写 `invoke`（见 [ts-plugin.md](ts-plugin.md)）。
+
 ## 3. `api.ts` 函数分组
 
 ### Provider
@@ -82,12 +84,9 @@ export async function readLiveConfig(pluginId) {
 | `SkillsPanel` | Skill | 技能安装/卸载/按插件启用 |
 | `PromptsPanel` | Prompt 管理 | prompt 增删改、启用/停用（写插件 prompt 文件） |
 | `ProfilesPanel` / `BackupPanel` | 配置方案 / 备份 | 方案 CRUD + 应用；备份与导入导出 |
-| `TsPluginView` | — | TS 插件的调试视图（加载脚本、展示能力清单；**不是**功能面板） |
 
 ## 5. 应用入口（App.tsx）
 
 - 左侧导航：providers / sessions / mcp / skills / usage / prompts / profiles / backup。
-- 选中插件后进入 `plugin-detail` 视图；**native / shell** 插件渲染 `PluginDetail`（含 provider 管理），**TS** 插件渲染 `TsPluginView` 调试视图。
+- 选中插件后进入 `plugin-detail` 视图，**统一渲染 `PluginDetail`**（含 provider 管理、live 配置视图）。TS 插件的操作经 `api.ts` 的 TS 路由自动调用加载的脚本（见上文第 2 节），因此 **native / shell / ts 三形态共用同一套功能面板**。
 - 未进入详情时，`GlobalPanels` 按当前 `pluginId` 渲染各 Panel。
-
-> ⚠️ **已知局限**：TS 插件目前没有完整的功能面板（`TsPluginView` 只是调试占位），provider 配置等操作走的是 `api.ts` 的 TS 路由。沙箱放宽后（见 [ts-plugin.md](ts-plugin.md) 方案 A/B），TS 插件也应渲染完整 Panel。

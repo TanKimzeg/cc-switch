@@ -123,6 +123,11 @@ pub struct PluginCapabilities {
   },
   "promptFile": "~/.claude/CLAUDE.md",  // 可选，prompt 文件路径（~ 展开）
   "skillsDir": "~/.claude/skills",      // 可选，skills 目录（~ 展开）
+  "resources": {                        // 可选，TS 插件资源白名单（~ 展开）
+    "config":   "~/.claude/settings.json",
+    "projects": "~/.claude/projects",
+    "mcp":      "~/.claude.json"
+  },
   "entry": {                  // 必填，入口（tag = type）
     "type": "native",          // native | shell | ts
     "module": "claudecode"     // native：原生模块标识
@@ -138,10 +143,12 @@ pub struct PluginCapabilities {
 | `shell` | `command`, `args` | 包装为 `ProcessPlugin`，调用外部命令的子命令（`read-live` / `apply` / `import` / `sessions`） |
 | `ts` | `main`（如 `main.js`） | `TsPluginStub` 占位；实际逻辑由前端加载脚本执行 |
 
-### `promptFile` / `skillsDir` 解析
+### `promptFile` / `skillsDir` / `resources` 解析
 
 - **native 插件**：可直接在 trait 实现中计算（如 opencode 返回 `~/.config/opencode/AGENTS.md`），也可用 manifest 声明。
-- **TS / shell 插件**：后端无法执行其脚本，因此 prompt/skill 路径必须在 manifest 声明（`~` 展开为 home 目录），由 `TsPluginStub` / registry 暴露 `prompt_file_path()` / `skills_dir()`。
+- **TS / shell 插件**：后端无法执行其脚本，因此这些路径必须在 manifest 声明（`~` 展开为 home 目录）：
+  - `promptFile` / `skillsDir` → `TsPluginStub` / registry 暴露 `prompt_file_path()` / `skills_dir()`。
+  - `resources` → `registry.resource_roots()` 暴露资源白名单，供 TS 宿主命令 `host_read/write/list_resource` 校验路径（见 [ts-plugin.md](ts-plugin.md)）。
 
 ## 7. 插件生命周期（registry）
 
@@ -157,5 +164,5 @@ pub struct PluginCapabilities {
 |----|------|----------|------|
 | `opencode` | native | `~/.config/opencode/opencode.json`（additive）+ `~/.config/opencode/opencode.db`（会话/用量） | Provider/MCP/Sessions/Usage/Prompt/Skills |
 | `openclaw` | shell | 外部 `openclaw` 命令 | Provider（read_live/apply/import） |
-| `claudecode`（示例，需手动安装） | native | `~/.claude/settings.json` + `~/.claude.json` + `~/.claude/projects/**/*.jsonl` | Provider/MCP/Sessions/Usage/Prompt/Skills |
-| `ts-demo`（示例） | ts | 插件目录内 `state.json` | Provider（readLive/apply） |
+| `claudecode`（示例，需手动安装） | ts | `~/.claude/settings.json` + `~/.claude.json` + `~/.claude/projects/**/*.jsonl`（经 manifest `resources` 白名单） | Provider/MCP/Sessions/Usage/Prompt/Skills |
+| `ts-demo`（示例） | ts | 插件目录内 `state.json` + `~/.cc-switch-demo`（资源白名单） | Provider（readLive/apply） |

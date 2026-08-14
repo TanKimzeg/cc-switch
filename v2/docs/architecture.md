@@ -25,11 +25,11 @@ v2 的核心目标是：**把 v1 散落分布的 Agent 特点，用「插件设�
 
 | 形态 | 执行位置 | 沙箱 | 适用场景 | v2 现状 |
 |------|----------|------|----------|---------|
-| **native** | 后端二进制内（Rust） | 无限制 | 真实 Agent，配置在用户目录 | ✅ `opencode`、`claudecode` |
+| **native** | 后端二进制内（Rust） | 无限制 | 真实 Agent，配置在用户目录 | ✅ `opencode` |
 | **shell** | 后端调用外部命令 | 无限制（后端执行） | 外部 CLI（`openclaw config ...`） | ✅ `openclaw` |
-| **ts** | 前端 WebView 脚本 | **仅插件目录** | 自包含、逻辑简单的第三方插件 | ⚠️ `ts-demo`，边界过窄 |
+| **ts** | 前端 WebView 脚本 | 插件目录 + manifest `resources` 白名单 | 自包含 / 资源白名单声明的第三方插件 | ✅ `claudecode`（示例）、`ts-demo` |
 
-> **关键结论**：`native` / `shell` 都在**后端**执行，没有沙箱限制，能读写 `~/.claude/`、`~/.config/opencode/` 等真实配置。只有 **TS 插件的宿主 API 被限制在插件目录内**，因此它无法管理「配置在用户目录」的真实 Agent——这是当前 TS 插件的主要局限，也是后续演进的重点（见 [ts-plugin.md](ts-plugin.md) 的「沙箱演进方向」）。
+> **关键结论**：`native` / `shell` 都在**后端**执行，没有沙箱限制，能读写 `~/.claude/`、`~/.config/opencode/` 等真实配置。**TS 插件**的宿主文件操作限定在「插件目录 + manifest `resources` 白名单」内（见 [ts-plugin.md](ts-plugin.md)），白名单声明后后端代劳文件 I/O——claudecode 示例正是用 TS + 资源白名单管理 `~/.claude/`。
 
 ## 4. 数据流
 
@@ -50,9 +50,9 @@ v2 的核心目标是：**把 v1 散落分布的 Agent 特点，用「插件设�
 │     │ registry.resolve_plugin(id) → Box<dyn AgentPlugin>     │
 │     ▼                                                        │
 │   plugin/（AgentPlugin trait 实现）                           │
-│     ├─ native: opencode.rs / claudecode.rs                   │
-│     ├─ shell:  process.rs（调外部命令）                       │
-│     └─ ts:     ts.rs（TsPluginStub，实际逻辑在前端）          │
+│     ├─ native: opencode.rs                                    │
+│     ├─ shell:  process.rs（调外部命令）                        │
+│     └─ ts:     ts.rs（TsPluginStub，实际逻辑在前端）           │
 │     ▼                                                        │
 │   services/（DB、去重、汇总、复制）                           │
 └──────────────────────────────────────────────────────────────┘
@@ -77,9 +77,9 @@ v2/
 │   ├── commands/     # Tauri 命令（IPC API 层）
 │   ├── plugin/       # 插件协议（trait + 各实现）
 │   │   ├── mod.rs    # AgentPlugin trait、PluginCapabilities、数据类型
-│   │   ├── opencode.rs   # 原生插件：~/.config/opencode/opencode.json
-│   │   ├── claudecode.rs # 原生插件：~/.claude/settings.json + projects/*.jsonl
-│   │   ├── process.rs    # shell 插件：调用外部命令
+│   │   ├── opencode.rs    # 原生插件：~/.config/opencode/opencode.json
+│   │   ├── claudecode.rs  # 原生参考实现（示例已切换为 TS 插件）
+│   │   ├── process.rs     # shell 插件：调用外部命令
 │   │   ├── mcp.rs        # McpPlugin trait + 格式转换
 │   │   ├── ts.rs         # TS 插件占位（TsPluginStub）
 │   │   └── error.rs      # PluginError
@@ -91,11 +91,10 @@ v2/
 │   ├── lib/api.ts    # 前端 → 后端 IPC 封装
 │   ├── lib/plugin-loader.ts  # TS 插件加载器
 │   └── components/   # 各 Panel
-└── examples/plugins/ # 示例插件（ts-demo / claudecode）
+└── examples/plugins/ # 示例插件（claudecode 为 TS + 资源白名单，ts-demo）
 ```
 
 ## 7. 演进方向（摘要）
 
-- **TS 插件沙箱放宽**：manifest 声明资源白名单（如 `~/.claude/`、`~/.claude.json`），后端提供通用资源命令，TS 插件只写解析/转换逻辑（详见 [ts-plugin.md](ts-plugin.md)）。
-- **声明式插件**：manifest 声明 config 路径 + 格式，后端用通用解析器实现常见 Agent，80% 场景免写代码。
+- **TS 插件沙箱放宽（部分完成）**：manifest `resources` 白名单 + 后端通用资源命令 `host_read/write/list_resource` 已实现，TS 插件可管理声明的用户目录资源（详见 [ts-plugin.md](ts-plugin.md)）；声明式插件（方案 B，后端通用解析器）仍为规划。
 - 与 v1 的能力差距清单见 [v1-gap-analysis.md](v1-gap-analysis.md)。

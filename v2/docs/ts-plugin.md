@@ -5,9 +5,10 @@ TS 插件由**前端（WebView）动态加载脚本执行**，通过注入的宿
 ## 1. 为什么需要 TS 插件
 
 - **无需重编译**：第三方可以分发一个 `.js` 脚本就完成插件接入，不需要用户编译 Rust。
-- **轻量自包含**：适合「配置就放在自己插件目录内」的简单 Agent 或实验性插件。
+- **轻量自包含**：适合自包含插件，也适合通过 manifest `resources` 白名单管理用户目录配置的真实 Agent（如 claudecode 示例）。
+- **统一功能面板**：TS 插件与 native/shell 共用同一套 `PluginDetail` 面板，操作经 `api.ts` 的 TS 路由自动调用加载的脚本。
 
-> ⚠️ **定位边界**：TS 插件的宿主文件操作被**沙箱限制在插件目录内**，因此它**无法**管理配置在用户目录（`~/.claude/`、`~/.config/...`）的真实 Agent。这类 Agent 请用 **native**（Rust）插件。详见下文「沙箱演进方向」。
+> **定位边界**：TS 插件的宿主文件操作限定在「插件目录 + manifest `resources` 白名单」内。未声明 `resources` 的脚本无法读写用户目录；声明后可管理 `~/.claude/` 等真实 Agent 配置（见下文「沙箱模型与演进」）。
 
 ## 2. 导出契约 `TsPluginExports`
 
@@ -47,12 +48,30 @@ interface TsHost {
   writeFile(path: string, content: string): Promise<void>;
   /** 列出插件目录内容。 */
   listFiles(dir?: string): Promise<string[]>;
+  /** 读取 manifest `resources` 白名单内声明的资源文件（后端执行，可访问用户目录）。 */
+  readResource(name: string, rel?: string): Promise<string>;
+  /** 写入 manifest `resources` 白名单内声明的资源文件。 */
+  writeResource(name: string, content: string, rel?: string): Promise<void>;
+  /** 列出 manifest `resources` 白名单内声明的资源目录。 */
+  listResource(name: string, rel?: string): Promise<string[]>;
+  /** 读取当前插件的全部 provider（SSOT）。 */
+  providers(): Promise<Provider[]>;
+  /** 新增/更新一个 provider（写入 SSOT，不投影 live）。 */
+  upsertProvider(input: ProviderInput): Promise<Provider>;
+  /** 删除一个 provider（DB 记录，不碰 live）。 */
+  deleteProvider(providerId: string): Promise<void>;
+  /** 写入用量记录（INSERT OR IGNORE 去重），返回导入条数。 */
+  saveUsageRecords(records: UsageRecord[]): Promise<number>;
+  /** 按日汇总当前插件用量。 */
+  usageDailySummary(): Promise<DailyUsageRow[]>;
   /** 调用任意已注册的 Tauri 命令（由调用方保证参数合法）。 */
   invoke<T>(command: string, args?: Record<string, unknown>): Promise<T>;
 }
 ```
 
 - `readFile` / `writeFile` / `listFiles` 对应后端 `host_read_file` / `host_write_file` / `host_list_files` 命令，**路径被校验限定在 `plugins/<id>/` 内**。
+- `readResource` / `writeResource` / `listResource` 对应后端 `host_read_resource` / `host_write_resource` / `host_list_resource`，**路径被校验限定在 manifest `resources` 声明的白名单根内**（可指向用户目录，如 `~/.claude/`）。
+- **DB 方法**（`providers` / `upsertProvider` / `deleteProvider` / `saveUsageRecords` / `usageDailySummary`）：**自动绑定当前插件 id**，脚本无需手写 `invoke` 参数，也不会写错其他插件的数据。脚本保持纯逻辑，落库由宿主交给后端命令（`get_providers` / `add_provider` / `delete_provider` / `usage_insert_records` / `usage_daily_summary`）。
 - `invoke` 可调用任何已注册 Tauri 命令（如 `usage_insert_records` 把用量写库）。
 
 ## 4. 加载机制
@@ -68,11 +87,12 @@ interface TsHost {
 
 ## 5. 沙箱模型
 
-- 后端 `host.rs` 的 `resolve_plugin_path` 会 **canonicalize 后校验目标路径必须位于 `plugins/<id>/` 内**，越界（如 `../`、绝对路径）一律拒绝。
-- 好处：第三方脚本无法读写用户敏感文件。
-- 代价：TS 插件无法管理真实 Agent 的配置/会话/用量（那些都在用户目录）。
+两级访问，均在后端做路径校验（canonicalize 后校验命中白名单，防符号链接/`..` 越界）：
 
-**前端路由**：`api.ts` 通过 `loadTsPluginIfTs(pluginId)` 判断插件是否为 TS（`entryType === "ts"`）；若是，则**直接调脚本方法**（`readLive/apply/...`），跳过后端命令（后端只有 `TsPluginStub` 占位，会报「请通过前端宿主执行」）。
+- **插件目录**：`readFile`/`writeFile`/`listFiles` 限定在 `plugins/<id>/` 内。
+- **资源白名单**：`readResource`/`writeResource`/`listResource` 限定在 manifest `resources` 声明的根内（可指向用户目录，如 `~/.claude/`）。
+
+**前端路由**：`api.ts` 通过 `loadTsPluginIfTs(pluginId)` 判断插件是否为 TS（`entryType === "ts"`）；若是，则**直接调脚本方法**（`readLive/apply/...`），跳过后端命令（后端只有 `TsPluginStub` 占位，会报「请通过前端宿主执行」）。TS 插件与 native/shell 共用同一套 `PluginDetail` 面板。
 
 ## 6. 写一个 TS 插件（教程）
 
@@ -87,6 +107,9 @@ interface TsHost {
   "version": "0.1.0",
   "apiVersion": "1",
   "capabilities": { "readLive": true, "apply": true },
+  "resources": {
+    "demo": "~/.cc-switch-demo"   // 资源白名单：TS 插件只能访问这里声明的根
+  },
   "entry": { "type": "ts", "main": "main.js" }
 }
 ```
@@ -130,37 +153,54 @@ const plugin = {
     if (idx >= 0) existing[idx] = { ...existing[idx], ...parsed, id };
     else existing.push({ ...parsed, id, name: provider.name || id });
     await host.writeFile(CONFIG_PATH, JSON.stringify({ ...config, providers: existing, current: id }, null, 2));
+    // 资源白名单示例：把当前 provider 记到 manifest `resources.demo` 声明的文件
+    await host.writeResource("demo", `current provider: ${id}`, "note.txt");
   },
 };
 ```
+
+### 数据库读写（暂存 Provider / 用量同步）
+
+TS 插件**不直接碰 SQL**，脚本只做解析/转换，落库交给宿主自动绑定当前插件 id 的方法：
+
+```js
+// 用量同步：解析自己的会话存储 → 交给宿主写 request_logs（去重）
+async function syncUsage() {
+  const records = JSON.parse(await host.readFile("usage.json") || "[]");
+  await host.saveUsageRecords(records);
+  return records;
+}
+
+// 暂存 Provider：写入 SSOT，不投影 live
+await host.upsertProvider({
+  name: "My Provider",
+  settingsConfig: JSON.stringify({ npm: "@ai-sdk/openai", options: { baseURL: "..." } }),
+});
+
+// 读取自己插件的 provider 列表
+const providers = await host.providers();
+```
+
+> 安全边界：DB 方法在 `makeHost` 里强制注入 `pluginId`，脚本无法用 `upsertProvider` 写别的插件的 provider；`deleteProvider` 也只删自己的记录。
 
 ### 安装与使用
 
 1. 把 `ts-demo` 目录通过「添加插件」从本地目录安装。
 2. 应用将其注册为 TS 插件；前端 `api.ts` 会在操作时自动加载 `main.js` 并调用其方法。
 
-## 7. 沙箱演进方向（规划，未实现）
+> **真实示例**：`examples/plugins/claudecode/` 是一个完整的 TS 插件，用资源白名单管理 Claude Code 的真实配置——`config` → `~/.claude/settings.json`、`mcp` → `~/.claude.json`、`projects` → `~/.claude/projects/**/*.jsonl`，实现 readLive/apply/import/sessions/loadMessages/deleteSession/MCP/rawConfig/syncUsage 全套能力。
 
-TS 插件沙箱过窄，无法管理真实 Agent。两条演进路径：
+## 7. 沙箱模型与演进
 
-### 方案 A：manifest 声明「资源白名单」+ 后端通用资源命令（推荐中间态）
+### 现状：两级访问
 
-- manifest 新增 `resources` 声明允许访问的用户目录根，如：
-  ```jsonc
-  "resources": {
-    "config":  "~/.claude/settings.json",
-    "projects": "~/.claude/projects",
-    "mcp":     "~/.claude.json"
-  }
-  ```
-- 后端新增通用命令 `host_read_resource` / `host_write_resource` / `host_list_resource`，路径校验从「仅插件目录」放宽为「命中 manifest 声明的根」。
-- TS 插件仍写解析/转换逻辑，文件 I/O 全走后端；安全性不丢（白名单显式声明、可审计）。
-- 需要后端在 `host.rs` 增加基于 manifest `resources` 的路径校验，并在 `plugin-loader.ts` 的 `TsHost` 暴露对应方法。
+- **插件目录**（`readFile`/`writeFile`/`listFiles`）：沙箱限定 `plugins/<id>/` 内。
+- **资源白名单**（`readResource`/`writeResource`/`listResource`）：**已实现（方案 A）**。manifest `resources` 声明允许访问的用户目录根（`~` 展开），后端校验路径命中声明的根后执行文件 I/O。TS 插件因此能管理真实 Agent 配置（如 `~/.claude/settings.json`），安全性由白名单保证。
 
-### 方案 B：声明式插件（更激进，80% 场景免写代码）
+### 方案 B：声明式插件（更激进，80% 场景免写代码，未实现）
 
 - manifest 声明 config 路径 + 格式（JSON / JSON5 / YAML）+ 会话目录 + 会话格式（jsonl 等）。
 - 后端用**通用解析器**直接实现 `read_live` / `apply` / `import` / `sessions` / `sync_usage`，无需任何脚本。
 - TS / native 只留给需要自定义逻辑的 Agent。
 
-> 两者不冲突：A 是 B 的中间态。实现优先级与更多背景见 [v1-gap-analysis.md](v1-gap-analysis.md)。
+> 实现细节与更多背景见 [plugin-protocol.md](plugin-protocol.md) 与 [v1-gap-analysis.md](v1-gap-analysis.md)。

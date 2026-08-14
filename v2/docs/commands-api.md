@@ -111,6 +111,9 @@
 | `host_read_file` | `id`, `path` | `string` | 读插件目录内文件（沙箱） |
 | `host_write_file` | `id`, `path`, `content` | `()` | 写插件目录内文件（沙箱） |
 | `host_list_files` | `id`, `dir?` | `string[]` | 列插件目录内容（沙箱） |
+| `host_read_resource` | `id`, `name`, `rel?` | `string` | 读 manifest `resources` 白名单资源（可访问用户目录） |
+| `host_write_resource` | `id`, `name`, `content`, `rel?` | `()` | 写白名单资源（自动建父目录） |
+| `host_list_resource` | `id`, `name`, `rel?` | `string[]` | 列白名单资源目录 |
 
 ## 10. 设置（settings）
 

@@ -171,8 +171,8 @@
 
 ## 4. TS 插件沙箱演进（架构差距，非 v1 对齐）
 
-- **现状**：TS 插件沙箱限定插件目录，无法管理用户目录配置（见 [ts-plugin.md](ts-plugin.md)）。
-- **方向**：方案 A（manifest `resources` 白名单 + 后端通用资源命令）/ 方案 B（声明式插件，后端通用解析器）。
+- **现状（已实现方案 A）**：manifest `resources` 白名单 + 后端通用资源命令 `host_read/write/list_resource` 已落地，TS 插件可管理声明的用户目录资源；宿主文件 I/O 仍限定插件目录 + 白名单（见 [ts-plugin.md](ts-plugin.md)）。
+- **方向（方案 B，未实现）**：声明式插件——manifest 声明 config 路径 + 格式，后端用通用解析器实现常见 Agent，80% 场景免写代码。
 - **与 v1 关系**：v1 没有 TS 插件（全是 native descriptor）。此差距是 v2 新增的能力设计问题，不影响 v1 对齐。
 
 ## 5. 建议实施顺序
