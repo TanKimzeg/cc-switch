@@ -200,3 +200,35 @@ it("opens the add-provider form and saves", async () => {
     expect(invoke).toHaveBeenCalledWith("add_provider", expect.anything());
   });
 });
+
+it("renders the full provider panel for a TS plugin (no placeholder)", async () => {
+  vi.mocked(invoke).mockImplementation(async (cmd: string) => {
+    if (cmd === "get_plugins")
+      return [
+        {
+          id: "claudecode",
+          name: "Claude Code",
+          version: "0.1.0",
+          apiVersion: "1",
+          source: "local",
+          installedAt: "2026-08-08",
+          entryType: "ts",
+          main: "main.js",
+          capabilities: { readLive: true, apply: true, import: true },
+        },
+      ];
+    if (cmd === "get_providers") return [];
+    // TS 插件：readLive 经前端加载脚本后由脚本调 host，测试里 get_plugins 已返回 ts；
+    // 此处 loadTsPluginIfTs 会调用 plugin_get_script → 返回脚本内容。
+    if (cmd === "plugin_get_script")
+      return "const plugin={id:'claudecode',capabilities:{},readLive:async()=>({providers:[{id:'default',name:'Claude Code',settingsConfig:{}}],current:'default'})};";
+    if (cmd === "plugin_read_live")
+      return { providers: [], current: null };
+    return null;
+  });
+  renderApp();
+  fireEvent.click(await screen.findByText("Claude Code"));
+  // 应显示真实面板的标题/能力徽章，而不是占位提示。
+  expect(await screen.findByText(/读取: ✓/)).toBeInTheDocument();
+  expect(screen.queryByText(/能力面板接入开发中/)).not.toBeInTheDocument();
+});

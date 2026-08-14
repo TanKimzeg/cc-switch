@@ -136,7 +136,6 @@
     "backupImportHint": "选择配置 JSON 文件",
     "backupImported": "已导入 {count} 条配置",
     "backupDelete": "删除备份",
-    "tsPluginHint": "此插件由 TypeScript 编写并通过前端宿主加载。能力面板接入开发中，当前展示导出的能力清单。",
     "formStructured": "表单",
     "formRawJson": "原始 JSON",
     "rawJsonHint": "直接编辑供应商配置 JSON（提升兼容性）。保存时校验合法性。"

@@ -136,7 +136,6 @@
     "backupImportHint": "Select a config JSON file",
     "backupImported": "Imported {count} records",
     "backupDelete": "Delete backup",
-    "tsPluginHint": "This plugin is written in TypeScript and loaded via the frontend host. Capability panels are under development; showing the exported capabilities for now.",
     "formStructured": "Form",
     "formRawJson": "Raw JSON",
     "rawJsonHint": "Edit the provider config JSON directly (improves compatibility). Validated on save."
