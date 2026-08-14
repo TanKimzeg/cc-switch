@@ -198,6 +198,16 @@ export interface DailyUsageRow {
   costUsd: number;
 }
 
+/** 用量查看的时间范围预设。 */
+export type UsageRangePreset = "today" | "1d" | "7d" | "14d" | "30d" | "custom";
+
+/** 用量时间范围选择（preset 快捷项或自定义起止日期）。 */
+export interface UsageRangeSelection {
+  preset: UsageRangePreset;
+  customStartDate?: number;
+  customEndDate?: number;
+}
+
 /** 数据库备份记录。 */
 export interface BackupRecord {
   id: string;
