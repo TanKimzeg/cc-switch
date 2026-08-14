@@ -9,10 +9,13 @@
 
 import { invoke } from "@tauri-apps/api/core";
 import type {
+  DailyUsageRow,
   ImportCandidate,
   LiveConfig,
   McpServerSpec,
   PluginCapabilities,
+  Provider,
+  ProviderInput,
   SessionMessage,
   SessionMeta,
   UsageRecord,
@@ -26,6 +29,25 @@ export interface TsHost {
   writeFile(path: string, content: string): Promise<void>;
   /** 列出插件目录内容。 */
   listFiles(dir?: string): Promise<string[]>;
+  /** 读取 manifest `resources` 白名单内声明的资源文件。 */
+  readResource(name: string, rel?: string): Promise<string>;
+  /** 写入 manifest `resources` 白名单内声明的资源文件。 */
+  writeResource(name: string, content: string, rel?: string): Promise<void>;
+  /** 列出 manifest `resources` 白名单内声明的资源目录。 */
+  listResource(name: string, rel?: string): Promise<string[]>;
+
+  // ---- 数据库（绑定当前插件 id，脚本无需手写参数）----
+  /** 读取当前插件的全部 provider（SSOT）。 */
+  providers(): Promise<Provider[]>;
+  /** 新增/更新一个 provider（写入 SSOT，不投影 live）。 */
+  upsertProvider(input: ProviderInput): Promise<Provider>;
+  /** 删除一个 provider（DB 记录，不碰 live）。 */
+  deleteProvider(providerId: string): Promise<void>;
+  /** 写入用量记录（INSERT OR IGNORE 去重），返回导入条数。 */
+  saveUsageRecords(records: UsageRecord[]): Promise<number>;
+  /** 按日汇总当前插件用量。 */
+  usageDailySummary(): Promise<DailyUsageRow[]>;
+
   /** 调用任意已注册的 Tauri 命令（由调用方保证参数合法）。 */
   invoke<T>(command: string, args?: Record<string, unknown>): Promise<T>;
 }
@@ -51,13 +73,32 @@ export interface TsPluginExports {
   syncUsage?: () => Promise<UsageRecord[]>;
 }
 
-/** 构建宿主对象（绑定插件 id，文件操作限定插件目录）。 */
+/** 构建宿主对象（绑定插件 id，文件操作限定插件目录 + manifest 资源白名单）。 */
 export function makeHost(pluginId: string): TsHost {
   return {
     readFile: (path) => invoke("host_read_file", { id: pluginId, path }),
     writeFile: (path, content) =>
       invoke("host_write_file", { id: pluginId, path, content }),
     listFiles: (dir) => invoke("host_list_files", { id: pluginId, dir }),
+    readResource: (name, rel) =>
+      invoke("host_read_resource", { id: pluginId, name, rel }),
+    writeResource: (name, content, rel) =>
+      invoke("host_write_resource", { id: pluginId, name, content, rel }),
+    listResource: (name, rel) =>
+      invoke("host_list_resource", { id: pluginId, name, rel }),
+
+    providers: () => invoke("get_providers", { pluginId }),
+    upsertProvider: (input) =>
+      invoke("add_provider", {
+        input: { ...input, pluginId },
+        addToLive: false,
+      }),
+    deleteProvider: (providerId) =>
+      invoke("delete_provider", { id: providerId }),
+    saveUsageRecords: (records) =>
+      invoke("usage_insert_records", { pluginId, records }),
+    usageDailySummary: () => invoke("usage_daily_summary", { pluginId }),
+
     invoke: (command, args) => invoke(command, args),
   };
 }

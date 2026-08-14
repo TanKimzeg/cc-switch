@@ -49,6 +49,12 @@ pub struct ManifestFile {
     /// Skills 同步目录（相对 home，如 `~/.claude/skills`；可选）。
     #[serde(default)]
     pub skills_dir: Option<String>,
+    /// 资源白名单：TS 插件可访问的用户目录根（`~` 展开）。
+    ///
+    /// 键为资源名（如 `config` / `projects` / `mcp`），值为路径（可指向文件或目录）。
+    /// TS 插件通过 `host_read/write/list_resource` 只允许访问此处声明的根。
+    #[serde(default)]
+    pub resources: std::collections::HashMap<String, String>,
     /// 插件入口。M1 仅解析为元数据；M3 按类型分派到原生/进程插件执行。
     pub entry: ManifestEntry,
 }
@@ -256,6 +262,23 @@ impl PluginRegistry {
                 skills_dir,
             ))),
         }
+    }
+
+    /// 返回插件 manifest 声明的资源白名单（`~` 已展开为绝对路径）。
+    ///
+    /// 供 TS 插件的宿主资源命令（`host_read/write/list_resource`）做路径校验：
+    /// 只允许访问 manifest `resources` 里声明的根。
+    pub fn resource_roots(&self, id: &str) -> Result<Vec<(String, PathBuf)>, ManifestError> {
+        let manifest_path = self.dir.join(id).join("manifest.json");
+        if !manifest_path.exists() {
+            return Err(ManifestError::NotFound(id.to_string()));
+        }
+        let mf = load_manifest(&manifest_path)?;
+        Ok(mf
+            .resources
+            .iter()
+            .map(|(k, v)| (k.clone(), expand_home(v)))
+            .collect())
     }
 
     /// 首次运行：将内置插件写入插件目录。
@@ -660,11 +683,40 @@ mod tests {
             "/../examples/plugins/claudecode"
         );
         assert!(Path::new(example).join("manifest.json").exists());
+        assert!(Path::new(example).join("main.js").exists());
         let dir = tempfile::tempdir().unwrap();
         let (registry, _db) = registry_in(dir.path());
         let installed = registry.install_from_dir(Path::new(example)).unwrap();
         assert_eq!(installed.manifest.id, "claudecode");
         assert_eq!(installed.manifest.name, "Claude Code");
+        assert_eq!(installed.manifest.entry_type, "ts");
+        assert_eq!(installed.manifest.main.as_deref(), Some("main.js"));
+    }
+
+    #[test]
+    fn real_example_resource_roots_expand_home() {
+        let example = concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../examples/plugins/claudecode"
+        );
+        let dir = tempfile::tempdir().unwrap();
+        let (registry, _db) = registry_in(dir.path());
+        registry.install_from_dir(Path::new(example)).unwrap();
+
+        let roots = registry.resource_roots("claudecode").unwrap();
+        let root_map: std::collections::HashMap<&str, &Path> = roots
+            .iter()
+            .map(|(k, v)| (k.as_str(), v.as_path()))
+            .collect();
+        assert_eq!(root_map.len(), 3);
+        // `~` 展开为 home 目录下的绝对路径。
+        let home = dirs::home_dir().unwrap();
+        assert_eq!(
+            root_map["config"],
+            home.join(".claude").join("settings.json")
+        );
+        assert_eq!(root_map["mcp"], home.join(".claude.json"));
+        assert_eq!(root_map["projects"], home.join(".claude").join("projects"));
     }
 
     #[test]
