@@ -10,7 +10,7 @@
 |--------|----|---------|------|
 | Provider 配置与切换 | ✅ 8 工具、50+ 预设、一键切换、托盘 | ✅ 插件化 read_live/apply/import；native 两插件 | 预设/托盘/通用供应商缺失 |
 | MCP | ✅ 统一面板、双向同步、Deep Link 导入 | ✅ mcp_servers + 插件同步 | 缺 Deep Link 导入、部分 Agent 原生适配 |
-| Skill | ✅ GitHub 仓库 / ZIP 安装、软链/复制 | ✅ 本地目录安装 + 按插件复制 | 缺仓库/ZIP 安装、软链 |
+| Skill | ✅ GitHub 仓库 / ZIP 安装、skills.sh 公共注册表、SHA-256 更新检测、备份恢复、软链/复制 | ⚠️ 仅本地目录安装 + 按插件复制 | **缺仓库/ZIP 安装、skills.sh 搜索、更新检测、备份恢复、软链** |
 | Prompt | ✅ Markdown 编辑、跨应用同步、回填保护 | ✅ prompts 表 + 写插件文件 | 缺跨应用一键同步、回填保护 |
 | 用量 | ✅ 用量仪表盘、趋势、请求日志、自定义定价 | ✅ request_logs + 日汇总 + sync_usage | 缺仪表盘图表、model_pricing 接线 |
 | 会话 | ✅ 浏览/搜索/恢复，SQLite 会话 | ✅ sessions/load/delete（claude/opencode） | 缺搜索、更多 Agent 会话源 |
@@ -19,7 +19,7 @@
 | 云端同步 | ✅ Dropbox/OneDrive/iCloud/WebDAV/S3 | ❌ 无 | P1 |
 | Deep Link | ✅ `ccswitch://` 导入 | ❌ 无 | P1 |
 | 托盘快捷切换 | ✅ | ❌（仅托盘创建窗口） | P1 |
-| 配置方案 Profile | ✅ | ✅ profiles 表 + CRUD | 基本对齐（缺 apply 到 live 的完整链路） |
+| 配置方案 Profile | ✅ 项目级配置快照（供应商/MCP/Skills/记忆文件），一键应用 | ⚠️ 仅 profiles 表 CRUD 存 JSON，apply 未真正恢复现场 | **缺快照语义 + 应用到 live** |
 | 备份/导入导出 | ✅ 自动备份、导入导出 | ✅ db_backups + export/import | 基本对齐（缺自动备份轮换） |
 | 工作区编辑器（OpenClaw） | ✅ AGENTS.md/SOUL.md 编辑 | ❌ 无 | P2 |
 | 速度测试 / 健康监控 | ✅ SpeedtestService、供应商健康 | ❌ 无 | P2 |
@@ -114,18 +114,41 @@
 1. `providers` 表新增「通用」概念（或 meta 标记 `universal: true`）。
 2. `sync_all_providers_to_live` 遍历时，把该 provider 投影到多个插件的 live 配置（复用各插件的 `apply`）。
 
-### 3.9 Skill：GitHub 仓库 / ZIP 安装、软链 —— P2
+### 3.9 Skill：仓库安装 / skills.sh / 更新检测 / 备份恢复 / 软链 —— **P1（用户点名）**
 
-**v1**：从 GitHub 仓库或 ZIP 文件一键安装技能；支持软连接与文件复制两种模式。
+**v1（完整能力，见 `docs/user-manual/zh/3-extensions/3.3-skills.md`）**：
+- **SSOT 存储**：技能源存在 `~/.cc-switch/skills/`，分发到各应用 `~/.claude/skills/`、`~/.codex/skills/`、`~/.gemini/skills/`、`~/.config/opencode/skills/`、`~/.hermes/skills/`。
+- **预配置仓库**：Anthropic 官方、ComposioHQ、社区精选等 GitHub 仓库。
+- **仓库管理**：添加/删除自定义 GitHub 仓库（owner/name/branch/subdirectory）。
+- **skills.sh 公共注册表搜索**：仓库管理对话框内输入关键词实时筛选社区 skill，点击即加入仓库列表。
+- **SHA-256 更新检测**：比对本地与远端内容哈希，自动标记「有新版本」，支持单项/全部更新。
+- **卸载自动备份 + 从备份恢复**：卸载前备份到 `~/.cc-switch/skill-backups/`，可恢复。
+- **软链 / 复制两种分发方式**（个性化设置）。
 
-**v2 现状**：`skills_install` 仅从本地目录；`skill_repos` 表预留。
+**v2 现状**：仅「本地目录安装到 SSOT + 按插件复制/移除」；`skill_repos`/`content_hash` 表已预留但未用。
 
 **实现思路**：
-1. `skills_install_from_zip(source)`：解压 → 扫描 `SKILL.md` → 复制到 SSOT。
-2. `skills_install_from_repo(owner, name, branch)`：git clone（或下载 tarball）→ 同上；记录到 `skill_repos`。
-3. 可选：`skills_toggle_plugin` 支持软链模式（`std::os::unix::fs::symlink`，Windows 用 `junction`）。
+1. `skills_install_from_zip(source)`：解压 → 扫描 `SKILL.md` → 复制到 SSOT，写入 `skills` 表。
+2. `skills_install_from_repo(owner, name, branch, subdir)`：下载 GitHub tarball（`https://codeload.github.com/{owner}/{name}/tar.gz/refs/heads/{branch}`）→ 同上；记录 `skill_repos`。
+3. `skills_list_repos` / `skills_add_repo` / `skills_remove_repo`：仓库 CRUD；`skills_scan_repos` 拉取全部仓库技能并 diff。
+4. `skills_search_skillsh(query)`：请求 skills.sh 注册表 API，返回候选（对齐 v1 的搜索框）。
+5. 更新检测：`content_hash` 存安装时目录 SHA-256，扫描时比对远端，标记可更新；提供单项/全部更新命令。
+6. 卸载时备份目录到 `~/.cc-switch/skill-backups/{id}-{ts}`，提供 `skills_list_backups` / `skills_restore_backup`。
+7. 分发模式：`skills_toggle_plugin` 支持软链（unix symlink / windows junction）或复制（设置项）。
 
-### 3.10 Prompt：跨应用一键同步、回填保护 —— P2
+### 3.10 Profile（配置方案）：对齐 v1「项目快照」语义 —— **P1（用户点名）**
+
+**v1（`src/components/profiles/`）**：Profile 是**项目级配置快照**——把某应用分组（Claude 组 / Codex 组）当前的供应商、MCP、Skills、记忆文件（prompt）快照存为命名 profile，可一键切换回某项目配置。UI 是 header 的 ProfileSwitcher（"从当前创建"、下拉切换、管理对话框）。**切换会真正把快照恢复到各应用的 live 配置**。
+
+**v2 现状**：`profiles` 表 CRUD 存 JSON payload；`profiles_apply` 只把 id 写进 `settings.current_profile_id`，**未真正应用到 live**——本质是占位，不是 v1 的项目快照。
+
+**实现思路**：
+1. `profiles_upsert` 生成快照：遍历某插件分组的 provider/MCP/skills/prompt 实际状态，序列化为 payload（对齐 v1 的 snapshot 结构）。
+2. `profiles_apply`：解析 payload → 恢复 provider（`apply`/`set_current_provider`）、MCP（`mcp_upsert` + 同步）、skills（`skills_toggle_plugin`）、prompt（`prompts_toggle`）到 live。
+3. 前端：header 加 ProfileSwitcher（对齐 v1：当前分组显示当前 profile、从当前创建、下拉切换、管理对话框）；`GlobalPanels` 的 ProfilesPanel 改为承载该交互。
+4. 快照按插件分组（Claude 组 vs Codex 组各自独立 current），对齐 v1 `APP_PROFILE_SCOPE`。
+
+### 3.11 Prompt：跨应用一键同步、回填保护 —— P2
 
 **v1**：同一个 prompt 内容跨多应用同步（CLAUDE.md / AGENTS.md / GEMINI.md），回填保护防止覆盖用户手改内容。
 
@@ -135,7 +158,7 @@
 1. `prompts` 表加 `apps` 字段（或按 `name` 绑定多插件），`prompts_toggle` 写多个 `prompt_file_path()`。
 2. 启用前比对文件当前内容与上次写入内容，若被用户修改则提示（回填保护）。
 
-### 3.11 用量仪表盘（趋势图表、请求日志页）—— P1
+### 3.12 用量仪表盘（趋势图表、请求日志页）—— P1
 
 **v1**：趋势图表、详细请求日志、自定义模型定价。
 
@@ -143,7 +166,7 @@
 
 **实现思路**：前端用图表库（如 recharts）基于 `usage_daily_summary` 画趋势；已有数据接口，纯前端工作量。
 
-### 3.12 会话搜索与更多会话源 —— P2
+### 3.13 会话搜索与更多会话源 —— P2
 
 **v1**：浏览/搜索/恢复；codex 的 SQLite 会话、grok 等。
 
@@ -151,19 +174,19 @@
 
 **实现思路**：后续新增 Agent 时实现 `sessions()`；前端加搜索框过滤 `title`/`project_dir`。
 
-### 3.13 自动备份轮换 —— P2
+### 3.14 自动备份轮换 —— P2
 
 **v1**：自动备份 + 轮换（保留 N 份）。
 
 **实现思路**：`backup_create` 触发时机（定时/启动）+ 按数量/时间清理旧备份（`db_backups` 已有）。
 
-### 3.14 工作区编辑器（OpenClaw）—— P2
+### 3.15 工作区编辑器（OpenClaw）—— P2
 
 **v1**：编辑 OpenClaw 的 AGENTS.md / SOUL.md，Markdown 预览。
 
 **实现思路**：`AgentPlugin` 加 `config_dir()` 返回目录，前端 Markdown 编辑器列出并编辑该目录下的 Agent 文件。
 
-### 3.15 速度测试 / 供应商健康监控 —— P2
+### 3.16 速度测试 / 供应商健康监控 —— P2
 
 **v1**：SpeedtestService 测 API 端点延迟；proxy 的供应商健康监控。
 
@@ -178,7 +201,7 @@
 ## 5. 建议实施顺序
 
 1. **P0**：本地代理（3.1）—— 先跑通 1 个 Agent 闭环。
-2. **P1 快速项**：模型定价接线（3.3）、供应商预设（3.7）、用量图表（3.11）、托盘切换（3.6）。
-3. **P1 中型项**：余额/订阅（3.2）、Deep Link（3.5）、通用供应商（3.8）、云端同步（3.4）。
-4. **P2**：Skill 仓库/ZIP（3.9）、Prompt 跨应用（3.10）、其余。
+2. **P1 快速项**：模型定价接线（3.3）、供应商预设（3.7）、用量图表（3.12）、托盘切换（3.6）。
+3. **P1 中型项**：余额/订阅（3.2）、Deep Link（3.5）、通用供应商（3.8）、云端同步（3.4）、**Skill 仓库/skills.sh（3.9）**、**Profile 项目快照（3.10）**。
+4. **P2**：Prompt 跨应用（3.11）、会话搜索（3.13）、备份轮换（3.14）、工作区（3.15）、速度测试（3.16）。
 5. **TS 沙箱**：方案 A → B，作为贯穿性的架构演进。

@@ -204,6 +204,8 @@ v2 使用 SQLite，单一数据库文件 `{app_data_dir}/cc-switch-v2.db`。Sche
 
 当前激活的 profile 存储在 `settings` 表，键为 `current_profile_id`。
 
+> ⚠️ **现状**：v2 的 profiles 目前只是「命名 + JSON payload」的 CRUD，`profiles_apply` 仅记录 current 而不真正恢复到 live。v1 的语义是「项目快照」（把某分组当前 provider/MCP/Skills/prompt 状态存下、一键恢复现场），差距与实现思路见 [v1-gap-analysis.md](v1-gap-analysis.md) §3.10。
+
 ## 16. db_backups
 
 | 字段 | 类型 | 说明 |

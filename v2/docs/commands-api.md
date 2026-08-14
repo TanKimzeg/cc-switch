@@ -90,6 +90,8 @@
 | `profiles_apply` | `id` | `()` | 激活某 profile |
 | `profiles_clear_current` | — | `()` | 清除当前激活 |
 
+> ⚠️ **现状差距**：v2 的 `profiles_apply` 只记录 current_profile_id，**未真正把快照恢复到各插件 live**。v1 是「项目快照」（存/恢复某分组 provider/MCP/Skills/prompt 现场），见 [v1-gap-analysis.md](v1-gap-analysis.md) §3.10。
+
 ## 8. 备份 / 导入导出（backup）
 
 | 命令 | 参数 | 返回 | 说明 |
