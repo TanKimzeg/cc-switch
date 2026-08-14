@@ -45,7 +45,7 @@ import {
   deleteProvider,
   getProviders,
   importFromLive,
-  importMcpServersFromPlugin,
+  importMcpServersFromAllPlugins,
   importProvidersFromLive,
   mcpDelete,
   mcpList,
@@ -1009,7 +1009,7 @@ function McpGlobalPanel() {
 
   const handleImport = async () => {
     try {
-      const n = await importMcpServersFromPlugin("opencode");
+      const n = await importMcpServersFromAllPlugins();
       await invalidate();
       toast.success(t("features.mcpImported", { count: n }));
     } catch (e) {

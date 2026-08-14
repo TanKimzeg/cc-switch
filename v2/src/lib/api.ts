@@ -333,8 +333,44 @@ export function importMcpFromPlugin(
   return invoke<McpServerSpec[]>("import_mcp_from_plugin", { id: pluginId });
 }
 
-export function importMcpServersFromPlugin(pluginId: string): Promise<number> {
+/** 从插件 live 导入 MCP 服务器到统一表；TS 插件经前端脚本读取。返回导入数。 */
+export async function importMcpServersFromPlugin(
+  pluginId: string,
+): Promise<number> {
+  const ts = await loadTsPluginIfTs(pluginId);
+  if (ts?.getMcpServers) {
+    const servers = await ts.getMcpServers();
+    let imported = 0;
+    for (const spec of servers) {
+      try {
+        await mcpUpsert({
+          id: spec.id,
+          name: spec.name,
+          spec: spec.spec,
+          apps: [[pluginId, true]],
+        });
+        imported += 1;
+      } catch {
+        // 跳过冲突条目
+      }
+    }
+    return imported;
+  }
   return invoke<number>("import_mcp_servers_from_plugin", { id: pluginId });
+}
+
+/** 从全部已安装插件导入 MCP 服务器，返回总导入数（best-effort）。 */
+export async function importMcpServersFromAllPlugins(): Promise<number> {
+  const plugins = await getPlugins();
+  let total = 0;
+  for (const p of plugins) {
+    try {
+      total += await importMcpServersFromPlugin(p.id);
+    } catch {
+      // best-effort：单个插件失败不阻断其余
+    }
+  }
+  return total;
 }
 
 export async function pluginSyncUsage(pluginId: string): Promise<number> {

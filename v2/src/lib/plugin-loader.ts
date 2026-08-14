@@ -173,3 +173,8 @@ export async function loadTsPluginIfTs(
   }
   return tsCache.get(pluginId)!;
 }
+
+/** 测试辅助：清空 TS 插件缓存（仅测试用，勿在业务代码调用）。 */
+export function __clearTsPluginCache(): void {
+  tsCache.clear();
+}

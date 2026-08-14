@@ -1,6 +1,6 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
-import { loadTsPlugin, makeHost } from "./plugin-loader";
-import { mcpToggleApp } from "./api";
+import { loadTsPlugin, makeHost, __clearTsPluginCache } from "./plugin-loader";
+import { mcpToggleApp, importMcpServersFromPlugin } from "./api";
 import { invoke } from "@tauri-apps/api/core";
 
 vi.mock("@tauri-apps/api/core", () => ({
@@ -10,6 +10,7 @@ vi.mock("@tauri-apps/api/core", () => ({
 describe("plugin-loader", () => {
   beforeEach(() => {
     vi.mocked(invoke).mockReset();
+    __clearTsPluginCache();
   });
 
   it("loads a TS plugin that exports via plugin object", async () => {
@@ -181,6 +182,45 @@ describe("plugin-loader", () => {
       name: "mcp",
       content: JSON.stringify({ mcpServers: {} }),
       rel: "",
+    });
+  });
+
+  it("importMcpServersFromPlugin reads TS plugin MCP via the script", async () => {
+    // TS 插件声明 getMcpServers；经脚本读取后走 mcp_upsert 落库。
+    let mcpWrites = 0;
+    vi.mocked(invoke).mockImplementation(async (cmd: string) => {
+      if (cmd === "get_plugins")
+        return [
+          {
+            id: "claudecode",
+            name: "Claude Code",
+            version: "0.1.0",
+            apiVersion: "1",
+            source: "local",
+            installedAt: "",
+            entryType: "ts",
+            main: "main.js",
+          },
+        ];
+      if (cmd === "plugin_get_script")
+        return "const plugin={id:'claudecode',capabilities:{mcp:true},getMcpServers:async()=>[{id:'fs',name:'fs',spec:{command:'npx'}}]};";
+      if (cmd === "mcp_upsert") {
+        mcpWrites += 1;
+        return null;
+      }
+      return null;
+    });
+
+    const n = await importMcpServersFromPlugin("claudecode");
+    expect(n).toBe(1);
+    expect(mcpWrites).toBe(1);
+    expect(invoke).toHaveBeenCalledWith("mcp_upsert", {
+      server: {
+        id: "fs",
+        name: "fs",
+        spec: { command: "npx" },
+        apps: [["claudecode", true]],
+      },
     });
   });
 });

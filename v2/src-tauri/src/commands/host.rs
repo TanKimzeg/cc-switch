@@ -36,47 +36,73 @@ fn resolve_plugin_path(plugin_dir: &Path, rel: &str) -> Result<PathBuf, String> 
 ///
 /// - `root` 指向文件：`rel` 必须为空，目标即文件本身。
 /// - `root` 指向目录：`rel` 是其相对路径，目标须位于目录内。
-/// 先做词法规范化（`..` 归一）再校验，允许目标文件尚不存在（写入场景）。
+///
+/// 根或目标尚不存在时（首次写入）也允许：对「最近存在的祖先」做 canonicalize 校验
+/// 仍在白名单根内，防止符号链接越界；文件本身用词法路径返回（写入时建父目录）。
 fn resolve_resource_path(root: &Path, rel: &str) -> Result<PathBuf, String> {
-    let base = root
-        .canonicalize()
-        .map_err(|e| format!("无法解析资源根: {e}"))?;
-    if base.is_file() {
+    let base = lexical_absolute(root);
+    if base.exists() && base.is_file() {
         if rel.trim().is_empty() {
             return Ok(base);
         }
         return Err("资源指向单个文件，不允许再指定相对路径".to_string());
     }
     let normalized_rel = normalize_rel(rel)?;
-    let target = base.join(&normalized_rel);
+    let target = if normalized_rel.as_os_str().is_empty() {
+        base.clone()
+    } else {
+        base.join(&normalized_rel)
+    };
 
     // 目标存在：canonicalize 后校验仍在根内（防符号链接越界）。
     if target.exists() {
         let canonical = target
             .canonicalize()
             .map_err(|e| format!("无法解析目标路径: {e}"))?;
-        if !canonical.starts_with(&base) {
+        if !canonical.starts_with(&canonical_base(&base)) {
             return Err("路径越出资源白名单范围".to_string());
         }
         return Ok(canonical);
     }
 
-    // 目标尚不存在（写入新文件）：向上找最近存在的祖先，canonicalize 校验它在根内；
-    // 词法上 normalized_rel 已保证不会 `..` 越出根。
-    let mut ancestor = target.as_path();
-    while !ancestor.exists() {
-        match ancestor.parent() {
-            Some(p) if !p.as_os_str().is_empty() => ancestor = p,
-            _ => break,
-        }
-    }
-    let canonical_ancestor = ancestor
-        .canonicalize()
-        .map_err(|e| format!("无法解析父目录: {e}"))?;
-    if !canonical_ancestor.starts_with(&base) {
+    // 目标尚不存在（写入）：词法上 normalized_rel 已保证不越出根；再对
+    // 「目标与根的最近存在祖先」做 canonicalize 校验，防符号链接越界。
+    let canonical_target_anc = nearest_existing_canonical(&target)?;
+    let canonical_root_anc = nearest_existing_canonical(&base)?;
+    if !canonical_target_anc.starts_with(&canonical_root_anc) {
         return Err("路径越出资源白名单范围".to_string());
     }
     Ok(target)
+}
+
+/// 词法绝对化：绝对路径原样返回（保留 Windows `\\?\` 前缀），相对路径拼到 cwd。
+fn lexical_absolute(path: &Path) -> PathBuf {
+    if path.is_absolute() {
+        path.to_path_buf()
+    } else {
+        std::env::current_dir()
+            .unwrap_or_else(|_| PathBuf::from("."))
+            .join(path)
+    }
+}
+
+/// 对「最近存在的祖先」做 canonicalize。
+fn nearest_existing_canonical(path: &Path) -> Result<PathBuf, String> {
+    let mut ancestor = path.to_path_buf();
+    while !ancestor.exists() {
+        match ancestor.parent() {
+            Some(p) if !p.as_os_str().is_empty() => ancestor = p.to_path_buf(),
+            _ => break,
+        }
+    }
+    ancestor
+        .canonicalize()
+        .map_err(|e| format!("无法解析路径: {e}"))
+}
+
+/// 根存在时的 canonical 基（用于目标存在分支的 `starts_with` 校验）。
+fn canonical_base(base: &Path) -> PathBuf {
+    base.canonicalize().unwrap_or_else(|_| base.to_path_buf())
 }
 
 /// 词法规范化相对路径：合并 `..`、去掉 `.`；越出根（`..` 弹出空栈）或绝对路径则报错。
@@ -301,7 +327,7 @@ mod tests {
         let file = dir.path().join("cfg.json");
         std::fs::write(&file, "{}").unwrap();
         let t = resolve_resource_path(&file, "").unwrap();
-        assert_eq!(t, file.canonicalize().unwrap());
+        assert_eq!(t, lexical_absolute(&file));
     }
 
     #[test]
@@ -313,7 +339,41 @@ mod tests {
     }
 
     #[test]
-    fn resolve_resource_rejects_escape() {
+    fn resolve_resource_allows_new_file_in_dir_root() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path().join("root");
+        std::fs::create_dir_all(&root).unwrap();
+        let base = lexical_absolute(&root);
+        let t = resolve_resource_path(&root, "new/file.json").unwrap();
+        assert!(t.ends_with("new/file.json"));
+        assert!(t.starts_with(&base));
+    }
+
+    #[test]
+    fn resolve_resource_allows_missing_file_root() {
+        // 复现「添加 MCP 保存报错」：资源根指向尚不存在的文件（如 ~/.claude.json）。
+        let dir = tempfile::tempdir().unwrap();
+        let missing = dir.path().join("nonexistent.json");
+        let t = resolve_resource_path(&missing, "").unwrap();
+        assert_eq!(t, lexical_absolute(&missing));
+        // 且父目录创建后能写入。
+        std::fs::write(&t, "{}").unwrap();
+        assert!(t.exists());
+    }
+
+    #[test]
+    fn resolve_resource_allows_missing_dir_root() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path().join("missing/projects");
+        let t = resolve_resource_path(&root, "sub/a.json").unwrap();
+        assert!(t.ends_with("sub/a.json"));
+        std::fs::create_dir_all(t.parent().unwrap()).unwrap();
+        std::fs::write(&t, "x").unwrap();
+        assert!(t.exists());
+    }
+
+    #[test]
+    fn resolve_resource_rejects_escape_when_root_exists() {
         let dir = tempfile::tempdir().unwrap();
         let root = dir.path().join("root");
         std::fs::create_dir_all(&root).unwrap();
@@ -321,16 +381,5 @@ mod tests {
         assert!(resolve_resource_path(&root, "../secret.txt").is_err());
         assert!(resolve_resource_path(&root, "../../etc/passwd").is_err());
         assert!(resolve_resource_path(&root, "/abs/path").is_err());
-    }
-
-    #[test]
-    fn resolve_resource_allows_new_file_in_dir_root() {
-        let dir = tempfile::tempdir().unwrap();
-        let root = dir.path().join("root");
-        std::fs::create_dir_all(&root).unwrap();
-        let base = root.canonicalize().unwrap();
-        let t = resolve_resource_path(&root, "new/file.json").unwrap();
-        assert!(t.ends_with("new/file.json"));
-        assert!(t.starts_with(&base));
     }
 }
