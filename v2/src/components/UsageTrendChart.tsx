@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { fmtInt, fmtUsd, getLocaleFromLanguage } from "@/lib/formatters";
 
@@ -144,22 +145,25 @@ export default function UsageTrendChart({
     dayPoints.map((p, i) => [x(i), yCost(p.cost)] as [number, number]),
   );
 
-  const tooltipText = (p: (typeof dayPoints)[number]) =>
-    `${p.day}\n${t("features.requests")}: ${fmtInt(p.requests, locale)}\n${t(
-      "features.usageInput",
-    )}: ${fmtInt(p.input, locale)}\n${t("features.usageOutput")}: ${fmtInt(
-      p.output,
-      locale,
-    )}\n${t("features.usageCacheWrite")}: ${fmtInt(
-      p.cacheWrite,
-      locale,
-    )}\n${t("features.usageCacheRead")}: ${fmtInt(
-      p.cacheRead,
-      locale,
-    )}\n${t("features.cost")}: ${fmtUsd(p.cost, 4)}`;
+  const [hoverIdx, setHoverIdx] = useState<number | null>(null);
+  const hoverPoint = hoverIdx != null ? dayPoints[hoverIdx] : null;
+  const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
+    const rect = e.currentTarget.getBoundingClientRect();
+    const ratio = Math.min(
+      Math.max((e.clientX - rect.left) / rect.width, 0),
+      1,
+    );
+    setHoverIdx(Math.round(ratio * (n - 1)));
+  };
+  const tooltipLeft =
+    hoverIdx != null ? Math.min(Math.max((x(hoverIdx) / W) * 100, 15), 85) : 0;
 
   return (
-    <div>
+    <div
+      className="relative cursor-crosshair"
+      onMouseMove={handleMouseMove}
+      onMouseLeave={() => setHoverIdx(null)}
+    >
       <div className="mb-3 flex flex-wrap items-center gap-x-4 gap-y-1">
         {series.map((s) => (
           <span
@@ -283,19 +287,80 @@ export default function UsageTrendChart({
           strokeLinejoin="round"
         />
 
-        {dayPoints.map((p, i) => (
-          <rect
-            key={p.day}
-            x={x(i) - 12}
-            y={PAD.top}
-            width={24}
-            height={plotH}
-            fill="transparent"
-          >
-            <title>{tooltipText(p)}</title>
-          </rect>
-        ))}
+        {hoverIdx != null && hoverPoint && (
+          <>
+            <line
+              x1={x(hoverIdx)}
+              y1={PAD.top}
+              x2={x(hoverIdx)}
+              y2={baseline}
+              stroke="hsl(var(--muted-foreground))"
+              strokeOpacity={0.5}
+              strokeWidth={1}
+              strokeDasharray="3 3"
+            />
+            {series.map((s) => (
+              <circle
+                key={s.key}
+                cx={x(hoverIdx)}
+                cy={yToken(hoverPoint[s.key] as number)}
+                r={3}
+                fill={s.color}
+                stroke="hsl(var(--card))"
+                strokeWidth={1.5}
+              />
+            ))}
+            <circle
+              cx={x(hoverIdx)}
+              cy={yCost(hoverPoint.cost)}
+              r={3}
+              fill={COST_COLOR}
+              stroke="hsl(var(--card))"
+              strokeWidth={1.5}
+            />
+          </>
+        )}
       </svg>
+
+      {hoverPoint && hoverIdx != null && (
+        <div
+          className="pointer-events-none absolute top-2 z-10 -translate-x-1/2 rounded-lg border border-border bg-background/95 px-3 py-2 text-xs shadow-lg backdrop-blur"
+          style={{ left: `${tooltipLeft}%` }}
+        >
+          <div className="mb-1.5 whitespace-nowrap font-medium">
+            {dayLabel(hoverPoint.day, locale)}
+          </div>
+          {series.map((s) => (
+            <div
+              key={s.key}
+              className="flex items-center justify-between gap-4"
+            >
+              <span className="flex items-center gap-1.5 text-muted-foreground">
+                <span
+                  className="h-2 w-2 rounded-full"
+                  style={{ background: s.color }}
+                />
+                {s.label}
+              </span>
+              <span className="font-medium tabular-nums">
+                {fmtInt(hoverPoint[s.key] as number, locale)}
+              </span>
+            </div>
+          ))}
+          <div className="mt-1 flex items-center justify-between gap-4 border-t border-border pt-1">
+            <span className="flex items-center gap-1.5 text-muted-foreground">
+              <span
+                className="h-0 w-3 border-t-2 border-dashed"
+                style={{ borderColor: COST_COLOR }}
+              />
+              {t("features.cost")}
+            </span>
+            <span className="font-medium tabular-nums">
+              {fmtUsd(hoverPoint.cost, 4)}
+            </span>
+          </div>
+        </div>
+      )}
 
       <div className="relative mt-1 h-4">
         {labels.map(({ p, i }) => (
