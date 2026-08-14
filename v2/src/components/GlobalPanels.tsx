@@ -3,11 +3,17 @@ import { useTranslation } from "react-i18next";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Archive,
+  Blocks,
   Copy,
   Download,
   FileJson,
+  History,
+  Layers,
   Plus,
+  Puzzle,
   RefreshCw,
+  ScrollText,
+  Sparkles,
   Trash2,
   Upload,
 } from "lucide-react";
@@ -63,6 +69,8 @@ import SessionList from "@/components/SessionList";
 import UsagePanel from "@/components/UsagePanel";
 import JsonEditor from "@/components/JsonEditor";
 import MarkdownEditor from "@/components/MarkdownEditor";
+import { PanelHeader, EmptyState } from "@/components/PanelHeader";
+import { Card, CardContent } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
   Dialog,
@@ -109,9 +117,12 @@ function SkillsPanel({ pluginId }: { pluginId: string }) {
   };
 
   return (
-    <section className="space-y-2">
-      <div className="flex items-center justify-between">
-        <h3 className="text-sm font-medium">{t("features.skillsTitle")}</h3>
+    <div className="space-y-4">
+      <PanelHeader
+        icon={<Sparkles className="h-5 w-5" />}
+        title={t("features.skillsTitle")}
+        subtitle={t("features.skillsSubtitle")}
+      >
         <button
           type="button"
           onClick={handleInstall}
@@ -120,55 +131,62 @@ function SkillsPanel({ pluginId }: { pluginId: string }) {
           <Plus className="h-3 w-3" />
           {t("features.skillsInstall")}
         </button>
-      </div>
+      </PanelHeader>
       {query.isLoading ? (
-        <p className="text-xs text-muted-foreground">{t("common.loading")}</p>
+        <Card>
+          <CardContent className="py-10 text-center text-xs text-muted-foreground">
+            {t("common.loading")}
+          </CardContent>
+        </Card>
       ) : skills.length === 0 ? (
-        <p className="text-xs text-muted-foreground">
-          {t("features.skillsEmpty")}
-        </p>
+        <EmptyState
+          icon={<Sparkles className="h-8 w-8" />}
+          message={t("features.skillsEmpty")}
+        />
       ) : (
-        <ul className="divide-y divide-border rounded-lg border border-border">
-          {skills.map((s: SkillRecord) => (
-            <li
-              key={s.id}
-              className="flex items-center justify-between gap-2 px-3 py-2"
-            >
-              <div className="min-w-0 flex-1">
-                <div className="truncate text-sm">{s.name}</div>
-                {s.description && (
-                  <div className="truncate text-xs text-muted-foreground">
-                    {s.description}
-                  </div>
-                )}
+        <Card>
+          <ul className="divide-y divide-border">
+            {skills.map((s: SkillRecord) => (
+              <li
+                key={s.id}
+                className="flex items-center justify-between gap-2 px-4 py-3 transition-colors hover:bg-muted/40"
+              >
+                <div className="min-w-0 flex-1">
+                  <div className="truncate text-sm font-medium">{s.name}</div>
+                  {s.description && (
+                    <div className="truncate text-xs text-muted-foreground">
+                      {s.description}
+                    </div>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => handleToggle(s, pluginId)}
+                    className={`mt-1.5 rounded-full px-2 py-0.5 text-xs transition-colors ${
+                      s.enabledPlugins.includes(pluginId)
+                        ? "bg-primary/10 text-primary hover:bg-primary/20"
+                        : "border border-border text-muted-foreground hover:bg-muted"
+                    }`}
+                  >
+                    {pluginId} ·{" "}
+                    {s.enabledPlugins.includes(pluginId)
+                      ? t("features.skillsEnable")
+                      : t("features.skillsDisable")}
+                  </button>
+                </div>
                 <button
                   type="button"
-                  onClick={() => handleToggle(s, pluginId)}
-                  className={`mt-1 rounded-full px-2 py-0.5 text-xs ${
-                    s.enabledPlugins.includes(pluginId)
-                      ? "bg-primary/10 text-primary"
-                      : "border border-border text-muted-foreground"
-                  }`}
+                  onClick={() => handleUninstall(s.id)}
+                  className="shrink-0 rounded p-1.5 text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
+                  title={t("common.delete")}
                 >
-                  {pluginId} ·{" "}
-                  {s.enabledPlugins.includes(pluginId)
-                    ? t("features.skillsEnable")
-                    : t("features.skillsDisable")}
+                  <Trash2 className="h-4 w-4" />
                 </button>
-              </div>
-              <button
-                type="button"
-                onClick={() => handleUninstall(s.id)}
-                className="shrink-0 rounded p-1 text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
-                title={t("common.delete")}
-              >
-                <Trash2 className="h-3.5 w-3.5" />
-              </button>
-            </li>
-          ))}
-        </ul>
+              </li>
+            ))}
+          </ul>
+        </Card>
       )}
-    </section>
+    </div>
   );
 }
 
@@ -221,9 +239,12 @@ function PromptsPanel({ pluginId }: { pluginId: string }) {
   };
 
   return (
-    <section className="space-y-2">
-      <div className="flex items-center justify-between">
-        <h3 className="text-sm font-medium">{t("features.promptsTitle")}</h3>
+    <div className="space-y-4">
+      <PanelHeader
+        icon={<ScrollText className="h-5 w-5" />}
+        title={t("features.promptsTitle")}
+        subtitle={t("features.promptsSubtitle")}
+      >
         <button
           type="button"
           onClick={() => setShowForm((v) => !v)}
@@ -232,9 +253,9 @@ function PromptsPanel({ pluginId }: { pluginId: string }) {
           <Plus className="h-3 w-3" />
           {t("features.promptsAdd")}
         </button>
-      </div>
+      </PanelHeader>
       {showForm && (
-        <div className="space-y-2 rounded-lg border border-border p-3">
+        <div className="space-y-2 rounded-xl border border-border bg-card p-3 shadow-sm">
           <input
             value={name}
             onChange={(e) => setName(e.target.value)}
@@ -257,54 +278,64 @@ function PromptsPanel({ pluginId }: { pluginId: string }) {
         </div>
       )}
       {query.isLoading ? (
-        <p className="text-xs text-muted-foreground">{t("common.loading")}</p>
+        <Card>
+          <CardContent className="py-10 text-center text-xs text-muted-foreground">
+            {t("common.loading")}
+          </CardContent>
+        </Card>
       ) : prompts.length === 0 ? (
-        <p className="text-xs text-muted-foreground">
-          {t("features.promptsEmpty")}
-        </p>
+        <EmptyState
+          icon={<ScrollText className="h-8 w-8" />}
+          message={t("features.promptsEmpty")}
+        />
       ) : (
-        <ul className="divide-y divide-border rounded-lg border border-border">
-          {prompts.map((p: PromptRecord) => (
-            <li key={p.id} className="px-3 py-2">
-              <div className="flex items-center justify-between gap-2">
-                <div className="min-w-0 flex-1">
-                  <div className="truncate text-sm">{p.name}</div>
-                  <div className="truncate text-xs text-muted-foreground">
-                    {p.pluginId}
+        <Card>
+          <ul className="divide-y divide-border">
+            {prompts.map((p: PromptRecord) => (
+              <li
+                key={p.id}
+                className="px-4 py-3 transition-colors hover:bg-muted/40"
+              >
+                <div className="flex items-center justify-between gap-2">
+                  <div className="min-w-0 flex-1">
+                    <div className="truncate text-sm font-medium">{p.name}</div>
+                    <div className="truncate text-xs text-muted-foreground">
+                      {p.pluginId}
+                    </div>
                   </div>
+                  <button
+                    type="button"
+                    onClick={() => handleToggle(p)}
+                    className={`shrink-0 rounded-full px-2 py-0.5 text-xs transition-colors ${
+                      p.enabled
+                        ? "bg-primary/10 text-primary hover:bg-primary/20"
+                        : "border border-border text-muted-foreground hover:bg-muted"
+                    }`}
+                  >
+                    {p.enabled
+                      ? t("features.promptsEnable")
+                      : t("features.promptsDisable")}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleDelete(p.id)}
+                    className="shrink-0 rounded p-1.5 text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
+                    title={t("common.delete")}
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </button>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => handleToggle(p)}
-                  className={`shrink-0 rounded-full px-2 py-0.5 text-xs ${
-                    p.enabled
-                      ? "bg-primary/10 text-primary"
-                      : "border border-border text-muted-foreground"
-                  }`}
-                >
-                  {p.enabled
-                    ? t("features.promptsEnable")
-                    : t("features.promptsDisable")}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => handleDelete(p.id)}
-                  className="shrink-0 rounded p-1 text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
-                  title={t("common.delete")}
-                >
-                  <Trash2 className="h-3.5 w-3.5" />
-                </button>
-              </div>
-              {p.enabled && (
-                <pre className="mt-1 whitespace-pre-wrap break-words rounded bg-muted/50 p-2 text-xs">
-                  {p.content}
-                </pre>
-              )}
-            </li>
-          ))}
-        </ul>
+                {p.enabled && (
+                  <pre className="mt-2 whitespace-pre-wrap break-words rounded bg-muted/50 p-2 text-xs">
+                    {p.content}
+                  </pre>
+                )}
+              </li>
+            ))}
+          </ul>
+        </Card>
       )}
-    </section>
+    </div>
   );
 }
 
@@ -378,9 +409,12 @@ function ProfilesPanel() {
   };
 
   return (
-    <section className="space-y-2">
-      <div className="flex items-center justify-between">
-        <h3 className="text-sm font-medium">{t("features.profilesTitle")}</h3>
+    <div className="space-y-4">
+      <PanelHeader
+        icon={<Layers className="h-5 w-5" />}
+        title={t("features.profilesTitle")}
+        subtitle={t("features.profilesSubtitle")}
+      >
         <button
           type="button"
           onClick={() => setShowForm((v) => !v)}
@@ -389,10 +423,13 @@ function ProfilesPanel() {
           <Plus className="h-3 w-3" />
           {t("features.profilesAdd")}
         </button>
-      </div>
+      </PanelHeader>
       {currentQuery.data && (
-        <div className="flex items-center justify-between rounded-lg border border-primary/30 bg-primary/5 px-3 py-2 text-xs">
-          <span className="text-primary">{t("features.profilesCurrent")}</span>
+        <div className="flex items-center justify-between rounded-lg border border-primary/30 bg-primary/5 px-4 py-2.5 text-xs">
+          <span className="flex items-center gap-2 text-primary">
+            <span className="h-2 w-2 rounded-full bg-primary" />
+            {t("features.profilesCurrent")}
+          </span>
           <button
             type="button"
             onClick={handleClear}
@@ -403,7 +440,7 @@ function ProfilesPanel() {
         </div>
       )}
       {showForm && (
-        <div className="space-y-2">
+        <div className="space-y-2 rounded-xl border border-border bg-card p-3 shadow-sm">
           <input
             value={name}
             onChange={(e) => setName(e.target.value)}
@@ -414,48 +451,55 @@ function ProfilesPanel() {
           <button
             type="button"
             onClick={handleAdd}
-            className="rounded-md bg-primary px-3 py-1 text-xs text-primary-foreground"
+            className="rounded-md bg-primary px-3 py-1 text-xs text-primary-foreground transition-colors hover:bg-primary/90"
           >
             {t("common.save")}
           </button>
         </div>
       )}
       {query.isLoading ? (
-        <p className="text-xs text-muted-foreground">{t("common.loading")}</p>
+        <Card>
+          <CardContent className="py-10 text-center text-xs text-muted-foreground">
+            {t("common.loading")}
+          </CardContent>
+        </Card>
       ) : profiles.length === 0 ? (
-        <p className="text-xs text-muted-foreground">
-          {t("features.profilesEmpty")}
-        </p>
+        <EmptyState
+          icon={<Layers className="h-8 w-8" />}
+          message={t("features.profilesEmpty")}
+        />
       ) : (
-        <ul className="divide-y divide-border rounded-lg border border-border">
-          {profiles.map((p: Profile) => (
-            <li
-              key={p.id}
-              className="flex items-center justify-between gap-2 px-3 py-2"
-            >
-              <div className="min-w-0 flex-1">
-                <div className="truncate text-sm">{p.name}</div>
-              </div>
-              <button
-                type="button"
-                onClick={() => handleApply(p.id)}
-                className="shrink-0 rounded-md border border-border px-2 py-1 text-xs transition-colors hover:bg-accent"
+        <Card>
+          <ul className="divide-y divide-border">
+            {profiles.map((p: Profile) => (
+              <li
+                key={p.id}
+                className="flex items-center justify-between gap-2 px-4 py-3 transition-colors hover:bg-muted/40"
               >
-                {t("features.profilesApply")}
-              </button>
-              <button
-                type="button"
-                onClick={() => handleDelete(p.id)}
-                className="shrink-0 rounded p-1 text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
-                title={t("common.delete")}
-              >
-                <Trash2 className="h-3.5 w-3.5" />
-              </button>
-            </li>
-          ))}
-        </ul>
+                <div className="min-w-0 flex-1">
+                  <div className="truncate text-sm font-medium">{p.name}</div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => handleApply(p.id)}
+                  className="shrink-0 rounded-md bg-primary px-2.5 py-1 text-xs text-primary-foreground transition-colors hover:bg-primary/90"
+                >
+                  {t("features.profilesApply")}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleDelete(p.id)}
+                  className="shrink-0 rounded p-1.5 text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
+                  title={t("common.delete")}
+                >
+                  <Trash2 className="h-4 w-4" />
+                </button>
+              </li>
+            ))}
+          </ul>
+        </Card>
       )}
-    </section>
+    </div>
   );
 }
 
@@ -514,69 +558,77 @@ function BackupPanel() {
   };
 
   return (
-    <section className="space-y-2">
-      <div className="flex items-center justify-between">
-        <h3 className="text-sm font-medium">{t("features.backupTitle")}</h3>
-        <div className="flex items-center gap-1">
-          <button
-            type="button"
-            onClick={handleCreate}
-            className="inline-flex items-center gap-1 rounded-md border border-border px-2 py-1 text-xs transition-colors hover:bg-accent"
-          >
-            <Archive className="h-3 w-3" />
-            {t("features.backupCreate")}
-          </button>
-          <button
-            type="button"
-            onClick={handleExport}
-            className="inline-flex items-center gap-1 rounded-md border border-border px-2 py-1 text-xs transition-colors hover:bg-accent"
-          >
-            <Download className="h-3 w-3" />
-            {t("features.backupExport")}
-          </button>
-          <button
-            type="button"
-            onClick={handleImport}
-            className="inline-flex items-center gap-1 rounded-md border border-border px-2 py-1 text-xs transition-colors hover:bg-accent"
-          >
-            <Upload className="h-3 w-3" />
-            {t("features.backupImport")}
-          </button>
-        </div>
-      </div>
+    <div className="space-y-4">
+      <PanelHeader
+        icon={<Archive className="h-5 w-5" />}
+        title={t("features.backupTitle")}
+        subtitle={t("features.backupSubtitle")}
+      >
+        <button
+          type="button"
+          onClick={handleCreate}
+          className="inline-flex items-center gap-1 rounded-md border border-border px-2 py-1 text-xs transition-colors hover:bg-accent"
+        >
+          <Archive className="h-3 w-3" />
+          {t("features.backupCreate")}
+        </button>
+        <button
+          type="button"
+          onClick={handleExport}
+          className="inline-flex items-center gap-1 rounded-md border border-border px-2 py-1 text-xs transition-colors hover:bg-accent"
+        >
+          <Download className="h-3 w-3" />
+          {t("features.backupExport")}
+        </button>
+        <button
+          type="button"
+          onClick={handleImport}
+          className="inline-flex items-center gap-1 rounded-md border border-border px-2 py-1 text-xs transition-colors hover:bg-accent"
+        >
+          <Upload className="h-3 w-3" />
+          {t("features.backupImport")}
+        </button>
+      </PanelHeader>
       {query.isLoading ? (
-        <p className="text-xs text-muted-foreground">{t("common.loading")}</p>
+        <Card>
+          <CardContent className="py-10 text-center text-xs text-muted-foreground">
+            {t("common.loading")}
+          </CardContent>
+        </Card>
       ) : backups.length === 0 ? (
-        <p className="text-xs text-muted-foreground">
-          {t("features.backupEmpty")}
-        </p>
+        <EmptyState
+          icon={<Archive className="h-8 w-8" />}
+          message={t("features.backupEmpty")}
+        />
       ) : (
-        <ul className="divide-y divide-border rounded-lg border border-border">
-          {backups.map((b: BackupRecord) => (
-            <li
-              key={b.id}
-              className="flex items-center justify-between gap-2 px-3 py-2"
-            >
-              <div className="min-w-0 flex-1">
-                <div className="truncate text-sm">{b.name}</div>
-                <div className="text-xs text-muted-foreground">
-                  {new Date(b.createdAt * 1000).toLocaleString()} ·{" "}
-                  {(b.sizeBytes / 1024).toFixed(1)} KB
-                </div>
-              </div>
-              <button
-                type="button"
-                onClick={() => handleDelete(b)}
-                className="shrink-0 rounded p-1 text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
-                title={t("common.delete")}
+        <Card>
+          <ul className="divide-y divide-border">
+            {backups.map((b: BackupRecord) => (
+              <li
+                key={b.id}
+                className="flex items-center justify-between gap-2 px-4 py-3 transition-colors hover:bg-muted/40"
               >
-                <Trash2 className="h-3.5 w-3.5" />
-              </button>
-            </li>
-          ))}
-        </ul>
+                <div className="min-w-0 flex-1">
+                  <div className="truncate text-sm font-medium">{b.name}</div>
+                  <div className="mt-0.5 text-xs text-muted-foreground">
+                    {new Date(b.createdAt * 1000).toLocaleString()} ·{" "}
+                    {(b.sizeBytes / 1024).toFixed(1)} KB
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => handleDelete(b)}
+                  className="shrink-0 rounded p-1.5 text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
+                  title={t("common.delete")}
+                >
+                  <Trash2 className="h-4 w-4" />
+                </button>
+              </li>
+            ))}
+          </ul>
+        </Card>
       )}
-    </section>
+    </div>
   );
 }
 
@@ -717,60 +769,59 @@ function ProvidersPanel({ pluginId }: { pluginId: string }) {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <h2 className="text-lg font-semibold">
-          {t("nav.providers")} · {pluginId}
-        </h2>
-        <div className="flex gap-1">
-          <button
-            type="button"
-            onClick={handleBackfill}
-            className="inline-flex items-center gap-1 rounded-md border border-border px-2 py-1 text-xs transition-colors hover:bg-accent"
-            title={t("shell.backfillHint")}
-          >
-            <RefreshCw className="h-3.5 w-3.5" />
-            {t("shell.backfill")}
-          </button>
-          <button
-            type="button"
-            onClick={handleSyncAll}
-            className="inline-flex items-center gap-1 rounded-md border border-border px-2 py-1 text-xs transition-colors hover:bg-accent"
-            title={t("shell.syncAllHint")}
-          >
-            <RefreshCw className="h-3.5 w-3.5" />
-            {t("shell.syncAll")}
-          </button>
-          <button
-            type="button"
-            onClick={openLiveEdit}
-            disabled={liveLoading}
-            className="inline-flex items-center gap-1 rounded-md border border-border px-2 py-1 text-xs transition-colors hover:bg-accent"
-            title={t("shell.editLiveHint")}
-          >
-            <FileJson className="h-3.5 w-3.5" />
-            {t("shell.editLive")}
-          </button>
-          <button
-            type="button"
-            onClick={handleImport}
-            className="inline-flex items-center gap-1 rounded-md border border-border px-2 py-1 text-xs transition-colors hover:bg-accent"
-          >
-            <Download className="h-3.5 w-3.5" />
-            {t("shell.importLive")}
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              setEditing(null);
-              setFormOpen(true);
-            }}
-            className="inline-flex items-center gap-1 rounded-md bg-primary px-2 py-1 text-xs text-primary-foreground transition-colors hover:bg-primary/90"
-          >
-            <Plus className="h-3.5 w-3.5" />
-            {t("shell.addProvider")}
-          </button>
-        </div>
-      </div>
+      <PanelHeader
+        icon={<Blocks className="h-5 w-5" />}
+        title={t("nav.providers")}
+        subtitle={pluginId}
+      >
+        <button
+          type="button"
+          onClick={handleBackfill}
+          className="inline-flex items-center gap-1 rounded-md border border-border px-2 py-1 text-xs transition-colors hover:bg-accent"
+          title={t("shell.backfillHint")}
+        >
+          <RefreshCw className="h-3.5 w-3.5" />
+          {t("shell.backfill")}
+        </button>
+        <button
+          type="button"
+          onClick={handleSyncAll}
+          className="inline-flex items-center gap-1 rounded-md border border-border px-2 py-1 text-xs transition-colors hover:bg-accent"
+          title={t("shell.syncAllHint")}
+        >
+          <RefreshCw className="h-3.5 w-3.5" />
+          {t("shell.syncAll")}
+        </button>
+        <button
+          type="button"
+          onClick={openLiveEdit}
+          disabled={liveLoading}
+          className="inline-flex items-center gap-1 rounded-md border border-border px-2 py-1 text-xs transition-colors hover:bg-accent"
+          title={t("shell.editLiveHint")}
+        >
+          <FileJson className="h-3.5 w-3.5" />
+          {t("shell.editLive")}
+        </button>
+        <button
+          type="button"
+          onClick={handleImport}
+          className="inline-flex items-center gap-1 rounded-md border border-border px-2 py-1 text-xs transition-colors hover:bg-accent"
+        >
+          <Download className="h-3.5 w-3.5" />
+          {t("shell.importLive")}
+        </button>
+        <button
+          type="button"
+          onClick={() => {
+            setEditing(null);
+            setFormOpen(true);
+          }}
+          className="inline-flex items-center gap-1 rounded-md bg-primary px-2 py-1 text-xs text-primary-foreground transition-colors hover:bg-primary/90"
+        >
+          <Plus className="h-3.5 w-3.5" />
+          {t("shell.addProvider")}
+        </button>
+      </PanelHeader>
 
       {formOpen && (
         <ProviderForm
@@ -785,15 +836,16 @@ function ProvidersPanel({ pluginId }: { pluginId: string }) {
       )}
 
       {providers.length === 0 ? (
-        <p className="text-sm text-muted-foreground">
-          {t("shell.noProviders")}
-        </p>
+        <EmptyState
+          icon={<Blocks className="h-8 w-8" />}
+          message={t("shell.noProviders")}
+        />
       ) : (
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {providers.map((p) => (
             <div
               key={p.id}
-              className="flex flex-col gap-2 rounded-lg border border-border p-4"
+              className="flex flex-col gap-2 rounded-xl border border-border bg-card p-4 shadow-sm transition-shadow hover:shadow-md"
             >
               <div className="truncate font-medium">{p.name}</div>
               <div className="text-xs text-muted-foreground">{p.category}</div>
@@ -877,9 +929,11 @@ function SessionsPanel({ pluginId }: { pluginId: string }) {
   const { t } = useTranslation();
   return (
     <div className="space-y-4">
-      <h2 className="text-lg font-semibold">
-        {t("nav.sessions")} · {pluginId}
-      </h2>
+      <PanelHeader
+        icon={<History className="h-5 w-5" />}
+        title={t("nav.sessions")}
+        subtitle={pluginId}
+      />
       <SessionList pluginId={pluginId} />
     </div>
   );
@@ -965,30 +1019,31 @@ function McpGlobalPanel() {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <h2 className="text-lg font-semibold">{t("nav.mcp")}</h2>
-        <div className="flex gap-1">
-          <button
-            type="button"
-            onClick={handleImport}
-            className="inline-flex items-center gap-1 rounded-md border border-border px-2 py-1 text-xs transition-colors hover:bg-accent"
-          >
-            <Download className="h-3.5 w-3.5" />
-            {t("features.mcpImport")}
-          </button>
-          <button
-            type="button"
-            onClick={() => setShowForm((v) => !v)}
-            className="inline-flex items-center gap-1 rounded-md bg-primary px-2 py-1 text-xs text-primary-foreground transition-colors hover:bg-primary/90"
-          >
-            <Plus className="h-3.5 w-3.5" />
-            {t("features.mcpAdd")}
-          </button>
-        </div>
-      </div>
+      <PanelHeader
+        icon={<Puzzle className="h-5 w-5" />}
+        title={t("nav.mcp")}
+        subtitle={t("features.mcpSubtitle")}
+      >
+        <button
+          type="button"
+          onClick={handleImport}
+          className="inline-flex items-center gap-1 rounded-md border border-border px-2 py-1 text-xs transition-colors hover:bg-accent"
+        >
+          <Download className="h-3 w-3" />
+          {t("features.mcpImport")}
+        </button>
+        <button
+          type="button"
+          onClick={() => setShowForm((v) => !v)}
+          className="inline-flex items-center gap-1 rounded-md bg-primary px-2 py-1 text-xs text-primary-foreground transition-colors hover:bg-primary/90"
+        >
+          <Plus className="h-3.5 w-3.5" />
+          {t("features.mcpAdd")}
+        </button>
+      </PanelHeader>
 
       {showForm && (
-        <div className="space-y-2 rounded-lg border border-border p-3">
+        <div className="space-y-2 rounded-xl border border-border bg-card p-3 shadow-sm">
           <div className="flex gap-2">
             <input
               value={newId}
@@ -1015,54 +1070,64 @@ function McpGlobalPanel() {
       )}
 
       {query.isLoading ? (
-        <p className="text-xs text-muted-foreground">{t("common.loading")}</p>
+        <Card>
+          <CardContent className="py-10 text-center text-xs text-muted-foreground">
+            {t("common.loading")}
+          </CardContent>
+        </Card>
       ) : servers.length === 0 ? (
-        <p className="text-xs text-muted-foreground">
-          {t("features.mcpEmpty")}
-        </p>
+        <EmptyState
+          icon={<Puzzle className="h-8 w-8" />}
+          message={t("features.mcpEmpty")}
+        />
       ) : (
-        <ul className="divide-y divide-border rounded-lg border border-border">
-          {servers.map((s: McpServer) => (
-            <li key={s.id} className="px-3 py-2">
-              <div className="flex items-center justify-between gap-2">
-                <div className="min-w-0 flex-1">
-                  <div className="truncate text-sm">{s.name}</div>
-                  <div className="truncate text-xs text-muted-foreground">
-                    {s.id}
+        <Card>
+          <ul className="divide-y divide-border">
+            {servers.map((s: McpServer) => (
+              <li
+                key={s.id}
+                className="px-4 py-3 transition-colors hover:bg-muted/40"
+              >
+                <div className="flex items-center justify-between gap-2">
+                  <div className="min-w-0 flex-1">
+                    <div className="truncate text-sm font-medium">{s.name}</div>
+                    <div className="truncate text-xs text-muted-foreground">
+                      {s.id}
+                    </div>
                   </div>
+                  <button
+                    type="button"
+                    onClick={() => handleDelete(s.id)}
+                    className="shrink-0 rounded p-1.5 text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
+                    title={t("common.delete")}
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </button>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => handleDelete(s.id)}
-                  className="shrink-0 rounded p-1 text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
-                  title={t("common.delete")}
-                >
-                  <Trash2 className="h-3.5 w-3.5" />
-                </button>
-              </div>
-              <div className="mt-2 flex flex-wrap gap-3">
-                {plugins.map((p) => {
-                  const enabled =
-                    s.apps.find(([pid]) => pid === p.id)?.[1] ?? false;
-                  return (
-                    <label
-                      key={p.id}
-                      className="flex items-center gap-1.5 text-xs text-muted-foreground"
-                    >
-                      <Checkbox
-                        checked={enabled}
-                        onCheckedChange={(v) =>
-                          handleToggleApp(s.id, p.id, v === true)
-                        }
-                      />
-                      {p.name}
-                    </label>
-                  );
-                })}
-              </div>
-            </li>
-          ))}
-        </ul>
+                <div className="mt-2 flex flex-wrap gap-3">
+                  {plugins.map((p) => {
+                    const enabled =
+                      s.apps.find(([pid]) => pid === p.id)?.[1] ?? false;
+                    return (
+                      <label
+                        key={p.id}
+                        className="flex items-center gap-1.5 text-xs text-muted-foreground"
+                      >
+                        <Checkbox
+                          checked={enabled}
+                          onCheckedChange={(v) =>
+                            handleToggleApp(s.id, p.id, v === true)
+                          }
+                        />
+                        {p.name}
+                      </label>
+                    );
+                  })}
+                </div>
+              </li>
+            ))}
+          </ul>
+        </Card>
       )}
     </div>
   );
@@ -1072,9 +1137,11 @@ function UsageGlobalPanel({ pluginId }: { pluginId: string }) {
   const { t } = useTranslation();
   return (
     <div className="space-y-4">
-      <h2 className="text-lg font-semibold">
-        {t("nav.usage")} · {pluginId}
-      </h2>
+      <PanelHeader
+        icon={<RefreshCw className="h-5 w-5" />}
+        title={t("nav.usage")}
+        subtitle={pluginId}
+      />
       <UsagePanel pluginId={pluginId} />
     </div>
   );
