@@ -63,12 +63,33 @@
 
 ## 5. Skills（skills）
 
+能力对齐 v1 `services/skill.rs`：仓库/ZIP 安装、skills.sh 搜索、SHA-256 更新检测、卸载自动备份 + 恢复、未管理导入、软链/复制分发、存储位置迁移。SSOT 目录由设置 `skills.storageLocation` 决定（`{data_dir}/skills` 或 `~/.agents/skills`）。
+
 | 命令 | 参数 | 返回 | 说明 |
 |------|------|------|------|
-| `skills_list` | — | `SkillRecord[]` | 列出全部技能（含启用插件） |
-| `skills_install` | `source: string` | `SkillRecord` | 从本地目录安装技能到 SSOT |
-| `skills_uninstall` | `id` | `()` | 卸载技能 |
-| `skills_toggle_plugin` | `id`, `plugin_id`, `enabled` | `()` | 启用/停用某技能在指定插件（复制/移除到 `plugin.skills_dir()`） |
+| `skills_list` | — | `SkillRecord[]` | 列出全部技能（含启用插件与仓库/哈希字段） |
+| `skills_install_local_dir` | `source: string` | `SkillRecord` | 从本地目录安装技能到 SSOT（兼容旧入口） |
+| `skills_install_skill` | `skill: DiscoverableSkill`, `current_plugin` | `SkillRecord` | 从仓库下载安装并启用当前插件 |
+| `skills_install_from_zip` | `file_path`, `current_plugin` | `SkillRecord[]` | 从本地 ZIP 安装（扫描含 `SKILL.md` 的目录，id=`local:*`） |
+| `skills_uninstall` | `id` | `string \| null` | 卸载并自动备份到 `{data_dir}/skill-backups/`，返回备份路径 |
+| `skills_toggle_plugin` | `id`, `plugin_id`, `enabled` | `()` | 启用/停用并同步/移除 `plugin.skills_dir()`（按同步方式软链或复制） |
+| `skills_discover` | — | `DiscoverableSkill[]` | 并发拉取全部启用仓库，扫描 `SKILL.md` 去重排序 |
+| `skills_list_repos` | — | `SkillRepo[]` | 列出技能仓库（启动时种子 4 个默认仓库） |
+| `skills_add_repo` | `owner`, `name`, `branch` | `SkillRepo` | 添加仓库（校验坐标，branch 空则默认 main） |
+| `skills_remove_repo` | `owner`, `name` | `()` | 删除仓库 |
+| `skills_search_skillsh` | `query`, `limit`, `offset` | `SkillsShSearchResult` | 搜索 skills.sh 公共注册表（GET `/api/search`） |
+| `skills_check_updates` | — | `SkillUpdateInfo[]` | 按仓库分组比对本地/远端 SHA-256 |
+| `skills_update_skill` | `id` | `SkillRecord` | 重新下载、备份旧版、替换 SSOT、重算哈希、重同步 |
+| `skills_list_backups` | — | `SkillBackupEntry[]` | 列出技能备份（读 `skill-backups/*/meta.json`） |
+| `skills_delete_backup` | `backup_id` | `()` | 删除备份 |
+| `skills_restore_backup` | `backup_id`, `current_plugin` | `SkillRecord` | 从备份恢复并启用当前插件 |
+| `skills_scan_unmanaged` | — | `UnmanagedSkill[]` | 扫描各插件 skills 目录 + SSOT 中未入库的技能 |
+| `skills_import` | `imports: ImportSkillSelection[]` | `SkillRecord[]` | 导入所选技能（honor 用户勾选插件） |
+| `skills_get_sync_settings` | — | `SyncSettings` | 读取同步方式 + 存储位置 |
+| `skills_set_sync_method` | `method` | `()` | 设置同步方式（auto/symlink/copy） |
+| `skills_migrate_storage` | `target` | `MigrationResult` | 迁移存储位置（先移文件后改设置） |
+
+> 安全：仓库下载走 `https://github.com/{owner}/{name}/archive/refs/heads/{branch}.zip`，带坐标白名单校验 + 出口 URL 断言 + 60s 超时 + 128MiB 下载上限 + 解压预算（10k 条目 / 512MiB / 4KiB symlink / 目录计费）+ zip-slip 双层防护。错误为结构化 JSON（`{code, context, suggestion}`），前端 `skillsError.*` 文案渲染。
 
 ## 6. Prompts（prompts）
 

@@ -44,6 +44,10 @@ export interface PluginManifest {
   icon?: string;
   capabilities?: PluginCapabilities;
   settingsSchema?: Record<string, unknown>;
+  /** 提示词文件路径（相对 home，如 ~/.claude/CLAUDE.md） */
+  promptFile?: string | null;
+  /** Skills 同步目录（相对 home，如 ~/.claude/skills） */
+  skillsDir?: string | null;
   /** 入口类型：native | shell | ts */
   entryType?: string;
   /** TS 插件主脚本（相对插件目录） */
@@ -130,9 +134,100 @@ export interface SkillRecord {
   name: string;
   description?: string | null;
   directory: string;
-  sourcePath: string;
+  sourcePath?: string | null;
+  repoOwner?: string | null;
+  repoName?: string | null;
+  repoBranch?: string | null;
+  readmeUrl?: string | null;
   enabledPlugins: string[];
   installedAt: number;
+  contentHash?: string | null;
+  updatedAt: number;
+}
+
+/** 技能分发（同步）方式。 */
+export type SyncMethod = "auto" | "symlink" | "copy";
+
+/** 技能存储位置。 */
+export type SkillStorageLocation = "cc_switch" | "unified";
+
+/** 仓库配置。 */
+export interface SkillRepo {
+  owner: string;
+  name: string;
+  branch: string;
+  enabled: boolean;
+}
+
+/** 从仓库中发现的、可安装的技能。 */
+export interface DiscoverableSkill {
+  /** 唯一标识：owner/name:directory */
+  key: string;
+  name: string;
+  description: string;
+  directory: string;
+  readmeUrl?: string | null;
+  repoOwner: string;
+  repoName: string;
+  repoBranch: string;
+}
+
+/** skills.sh 搜索结果。 */
+export interface SkillsShSearchResult {
+  skills: SkillsShDiscoverableSkill[];
+  totalCount: number;
+  query: string;
+}
+
+/** skills.sh 可安装技能。 */
+export interface SkillsShDiscoverableSkill extends DiscoverableSkill {
+  installs: number;
+}
+
+/** 技能更新检测结果。 */
+export interface SkillUpdateInfo {
+  id: string;
+  name: string;
+  currentHash?: string | null;
+  remoteHash: string;
+}
+
+/** 技能备份条目。 */
+export interface SkillBackupEntry {
+  backupId: string;
+  backupPath: string;
+  createdAt: number;
+  name: string;
+  directory: string;
+  description?: string | null;
+}
+
+/** 未管理的技能（在应用/SSOT 目录中发现但未入库）。 */
+export interface UnmanagedSkill {
+  directory: string;
+  name: string;
+  description?: string | null;
+  foundIn: string[];
+  path: string;
+}
+
+/** 导入已有技能时，前端显式提交的目录 + 启用插件选择。 */
+export interface ImportSkillSelection {
+  directory: string;
+  plugins: string[];
+}
+
+/** 同步设置（同步方式 + 存储位置）。 */
+export interface SyncSettings {
+  syncMethod: SyncMethod;
+  storageLocation: SkillStorageLocation;
+}
+
+/** 存储位置迁移结果。 */
+export interface MigrationResult {
+  migratedCount: number;
+  skippedCount: number;
+  errors: string[];
 }
 
 /** Prompt 记录。 */

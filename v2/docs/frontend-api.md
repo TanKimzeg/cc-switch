@@ -67,7 +67,9 @@ export async function readLiveConfig(pluginId) {
 `pluginSyncUsage(pluginId)` / `usageInsertRecords(pluginId, records)` / `usageListRequestLogs(pluginId?, limit?)` / `usageDailySummary(pluginId?)`
 
 ### Skills / Prompts
-`skillsList()` / `skillsInstall(source)` / `skillsUninstall(id)` / `skillsTogglePlugin(id, pluginId, enabled)`；`promptsList(pluginId?)` / `promptsUpsert(...)` / `promptsDelete(id)` / `promptsToggle(id, enabled)`
+`skillsList()` / `skillsInstallLocalDir(source)` / `skillsInstallFromRepo(skill, currentPlugin)` / `skillsInstallFromZip(filePath, currentPlugin)` / `skillsUninstall(id)` / `skillsTogglePlugin(id, pluginId, enabled)` / `skillsDiscover()` / `skillsListRepos/addRepo/removeRepo` / `skillsSearchSkillsh(query, limit, offset)` / `skillsCheckUpdates()` / `skillsUpdateSkill(id)` / `skillsListBackups/deleteBackup/restoreBackup` / `skillsScanUnmanaged()` / `skillsImport(imports)` / `skillsGetSyncSettings()/setSyncMethod()/migrateStorage(target)`；`promptsList(pluginId?)` / `promptsUpsert(...)` / `promptsDelete(id)` / `promptsToggle(id, enabled)`
+
+错误文案：后端结构化 JSON 错误经 `skillErrorText(t, err)`（`src/lib/skillsUtils.ts`）映射到 `skillsError.*` 文案。
 
 ### Profiles / Backup / 设置
 `profilesList/current/upsert/delete/apply/clearCurrent`；`backupCreate/List/Delete`、`exportConfigJson/exportConfigToFile/parseExportJson/importConfig/importConfigFromFile`；`getSetting/setSetting`
@@ -81,12 +83,13 @@ export async function readLiveConfig(pluginId) {
 | `McpGlobalPanel` | MCP（全局） | 全部服务器的统一管理 + 各插件启用开关（走 `mcp_list/upsert/toggle`） |
 | `SessionsPanel` + `SessionList` | 会话 | 会话列表、加载消息、删除（走 `listSessions/loadSessionMessages/deleteSession`） |
 | `UsagePanel` | 用量查询 | 同步用量 + 每日汇总表格（走 `pluginSyncUsage/usageDailySummary`） |
-| `SkillsPanel` | Skill | 技能安装/卸载/按插件启用 |
+| `SkillsPanel`（`components/skills/`） | Skill | 管理视图（已安装/更新/卸载/导入/备份/恢复/ZIP/发现入口）+ `SkillsDiscovery`（仓库/skills.sh）+ `RepoManagerPanel` + 恢复/导入对话框 |
 | `PromptsPanel` | Prompt 管理 | prompt 增删改、启用/停用（写插件 prompt 文件） |
 | `ProfilesPanel` / `BackupPanel` | 配置方案 / 备份 | 方案 CRUD + 应用；备份与导入导出 |
+| `SettingsPanel` | 设置 | Skills 存储位置（迁移）与同步方式 |
 
 ## 5. 应用入口（App.tsx）
 
-- 左侧导航：providers / sessions / mcp / skills / usage / prompts / profiles / backup。
+- 左侧导航：providers / sessions / mcp / skills / usage / prompts / profiles / backup / **settings**。
 - 选中插件后进入 `plugin-detail` 视图，**统一渲染 `PluginDetail`**（含 provider 管理、live 配置视图）。TS 插件的操作经 `api.ts` 的 TS 路由自动调用加载的脚本（见上文第 2 节），因此 **native / shell / ts 三形态共用同一套功能面板**。
-- 未进入详情时，`GlobalPanels` 按当前 `pluginId` 渲染各 Panel。
+- 未进入详情时，`GlobalPanels` 按当前 `pluginId` 渲染各 Panel；`settings` 视图由 App.tsx 直接渲染 `SettingsPanel`（与插件无关）。

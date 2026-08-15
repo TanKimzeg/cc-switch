@@ -142,6 +142,8 @@ impl ManifestFile {
             icon: self.icon.clone(),
             capabilities: Some(self.capabilities.clone()),
             settings_schema: self.settings_schema.clone(),
+            prompt_file: self.prompt_file.clone(),
+            skills_dir: self.skills_dir.clone(),
             entry_type: self.entry.type_str().to_string(),
             main: self.entry.ts_main().map(|s| s.to_string()),
         }

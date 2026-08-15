@@ -108,11 +108,13 @@ v2 使用 SQLite，单一数据库文件 `{app_data_dir}/cc-switch-v2.db`。Sche
 | `name` | TEXT | 名称 |
 | `description` | TEXT? | 描述 |
 | `directory` | TEXT | SSOT 内相对目录 |
-| `source_path` | TEXT | 来源路径 |
-| `repo_owner` / `repo_name` / `repo_branch` / `readme_url` | TEXT? | 仓库来源（预留） |
+| `source_path` | TEXT | 来源路径（仓库来源如 `owner/name`，或备份来源路径） |
+| `repo_owner` / `repo_name` / `repo_branch` / `readme_url` | TEXT? | 仓库来源（仓库安装时填充） |
 | `installed_at` | INTEGER | 安装时间（epoch 秒） |
-| `content_hash` | TEXT | 内容哈希（预留） |
+| `content_hash` | TEXT | 内容哈希（SHA-256，更新检测用） |
 | `updated_at` | INTEGER | 更新时间 |
+
+> SSOT 目录由设置 `skills.storageLocation` 决定：`cc_switch` → `{data_dir}/skills`；`unified` → `~/.agents/skills`。技能目录名必须是**单段合法名**（`require_valid_directory` 校验，含前导点拒绝），DB 脏值在删除/复制前会被拦截。
 
 ## 9. skill_apps
 
@@ -123,7 +125,7 @@ v2 使用 SQLite，单一数据库文件 `{app_data_dir}/cc-switch-v2.db`。Sche
 | `enabled` | INTEGER default 0 | 是否启用 |
 | PK | (skill_id, plugin_id) | — |
 
-启用时把 SSOT 技能目录复制到 `plugin.skills_dir()`。
+启用时把 SSOT 技能目录按设置 `skills.syncMethod`（auto 优先软链回退复制 / symlink / copy）同步到 `plugin.skills_dir()`。
 
 ## 10. skill_repos
 
@@ -135,7 +137,9 @@ v2 使用 SQLite，单一数据库文件 `{app_data_dir}/cc-switch-v2.db`。Sche
 | `enabled` | INTEGER default 1 | 是否启用 |
 | PK | (owner, name) | — |
 
-> 预留：v1 支持从 GitHub 仓库安装技能；v2 当前 `skills_install` 仅从本地目录。
+启动时一次性种子 4 个默认仓库（anthropics/skills、ComposioHQ/awesome-claude-skills、cexll/myclaude、JimLiu/baoyu-skills），由设置键 `skills.defaultReposInitialized` 守护（幂等）。
+
+> 卸载/更新自动备份到 `{data_dir}/skill-backups/{ts}_{slug}`（`skill/` 目录 + `meta.json`），保留最近 20 份。
 
 ## 11. request_logs
 

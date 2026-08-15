@@ -59,7 +59,7 @@ fn resolve_resource_path(root: &Path, rel: &str) -> Result<PathBuf, String> {
         let canonical = target
             .canonicalize()
             .map_err(|e| format!("无法解析目标路径: {e}"))?;
-        if !canonical.starts_with(&canonical_base(&base)) {
+        if !canonical.starts_with(canonical_base(&base)) {
             return Err("路径越出资源白名单范围".to_string());
         }
         return Ok(canonical);

@@ -30,6 +30,13 @@ fn init_db(app: &tauri::App<Wry>) -> Result<(), Box<dyn std::error::Error>> {
     registry.sync_installs(&plugins)?;
     log::info!("discovered {} plugin(s)", plugins.len());
 
+    // Skills：一次性种子默认技能仓库，并回填存量技能的内容哈希。
+    db.init_default_skill_repos()?;
+    match services::skills::SkillService::backfill_content_hashes(&db, &dir) {
+        Ok(n) if n > 0 => log::info!("已为 {n} 个 Skill 补算内容哈希"),
+        _ => {}
+    }
+
     app.manage(AppPaths {
         data_dir: dir.clone(),
     });
@@ -80,9 +87,26 @@ pub fn run() {
             commands::usage::usage_list_request_logs,
             commands::usage::usage_daily_summary,
             commands::skills::skills_list,
-            commands::skills::skills_install,
+            commands::skills::skills_install_local_dir,
+            commands::skills::skills_install_skill,
+            commands::skills::skills_install_from_zip,
             commands::skills::skills_uninstall,
             commands::skills::skills_toggle_plugin,
+            commands::skills::skills_discover,
+            commands::skills::skills_list_repos,
+            commands::skills::skills_add_repo,
+            commands::skills::skills_remove_repo,
+            commands::skills::skills_search_skillsh,
+            commands::skills::skills_check_updates,
+            commands::skills::skills_update_skill,
+            commands::skills::skills_list_backups,
+            commands::skills::skills_delete_backup,
+            commands::skills::skills_restore_backup,
+            commands::skills::skills_scan_unmanaged,
+            commands::skills::skills_import,
+            commands::skills::skills_get_sync_settings,
+            commands::skills::skills_set_sync_method,
+            commands::skills::skills_migrate_storage,
             commands::prompts::prompts_list,
             commands::prompts::prompts_upsert,
             commands::prompts::prompts_delete,

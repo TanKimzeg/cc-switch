@@ -13,7 +13,6 @@ import {
   Puzzle,
   RefreshCw,
   ScrollText,
-  Sparkles,
   Trash2,
   Upload,
 } from "lucide-react";
@@ -35,10 +34,6 @@ import {
   promptsList,
   promptsToggle,
   promptsUpsert,
-  skillsInstall,
-  skillsList,
-  skillsTogglePlugin,
-  skillsUninstall,
   getPlugins,
   applyProvider,
   addProvider,
@@ -60,10 +55,10 @@ import type {
   BackupRecord,
   Profile,
   PromptRecord,
-  SkillRecord,
   Provider,
   McpServer,
 } from "@/types";
+import SkillsPanel from "@/components/skills/SkillsPanel";
 import ProviderForm from "@/components/ProviderForm";
 import SessionList from "@/components/SessionList";
 import UsagePanel from "@/components/UsagePanel";
@@ -79,117 +74,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-
-function SkillsPanel({ pluginId }: { pluginId: string }) {
-  const { t } = useTranslation();
-  const queryClient = useQueryClient();
-  const query = useQuery({ queryKey: ["skills"], queryFn: skillsList });
-  const skills = query.data ?? [];
-
-  const handleInstall = async () => {
-    const dir = await open({ directory: true, multiple: false });
-    if (typeof dir !== "string") return;
-    try {
-      await skillsInstall(dir);
-      await queryClient.invalidateQueries({ queryKey: ["skills"] });
-      toast.success(t("common.save"));
-    } catch (e) {
-      toast.error(String(e));
-    }
-  };
-
-  const handleUninstall = async (id: string) => {
-    try {
-      await skillsUninstall(id);
-      await queryClient.invalidateQueries({ queryKey: ["skills"] });
-    } catch (e) {
-      toast.error(String(e));
-    }
-  };
-
-  const handleToggle = async (s: SkillRecord, pluginId: string) => {
-    const enabled = s.enabledPlugins.includes(pluginId);
-    try {
-      await skillsTogglePlugin(s.id, pluginId, !enabled);
-      await queryClient.invalidateQueries({ queryKey: ["skills"] });
-    } catch (e) {
-      toast.error(String(e));
-    }
-  };
-
-  return (
-    <div className="space-y-4">
-      <PanelHeader
-        icon={<Sparkles className="h-5 w-5" />}
-        title={t("features.skillsTitle")}
-        subtitle={t("features.skillsSubtitle")}
-      >
-        <button
-          type="button"
-          onClick={handleInstall}
-          className="inline-flex items-center gap-1 rounded-md border border-border px-2 py-1 text-xs transition-colors hover:bg-accent"
-        >
-          <Plus className="h-3 w-3" />
-          {t("features.skillsInstall")}
-        </button>
-      </PanelHeader>
-      {query.isLoading ? (
-        <Card>
-          <CardContent className="py-10 text-center text-xs text-muted-foreground">
-            {t("common.loading")}
-          </CardContent>
-        </Card>
-      ) : skills.length === 0 ? (
-        <EmptyState
-          icon={<Sparkles className="h-8 w-8" />}
-          message={t("features.skillsEmpty")}
-        />
-      ) : (
-        <Card>
-          <ul className="divide-y divide-border">
-            {skills.map((s: SkillRecord) => (
-              <li
-                key={s.id}
-                className="flex items-center justify-between gap-2 px-4 py-3 transition-colors hover:bg-muted/40"
-              >
-                <div className="min-w-0 flex-1">
-                  <div className="truncate text-sm font-medium">{s.name}</div>
-                  {s.description && (
-                    <div className="truncate text-xs text-muted-foreground">
-                      {s.description}
-                    </div>
-                  )}
-                  <button
-                    type="button"
-                    onClick={() => handleToggle(s, pluginId)}
-                    className={`mt-1.5 rounded-full px-2 py-0.5 text-xs transition-colors ${
-                      s.enabledPlugins.includes(pluginId)
-                        ? "bg-primary/10 text-primary hover:bg-primary/20"
-                        : "border border-border text-muted-foreground hover:bg-muted"
-                    }`}
-                  >
-                    {pluginId} ·{" "}
-                    {s.enabledPlugins.includes(pluginId)
-                      ? t("features.skillsEnable")
-                      : t("features.skillsDisable")}
-                  </button>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => handleUninstall(s.id)}
-                  className="shrink-0 rounded p-1.5 text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
-                  title={t("common.delete")}
-                >
-                  <Trash2 className="h-4 w-4" />
-                </button>
-              </li>
-            ))}
-          </ul>
-        </Card>
-      )}
-    </div>
-  );
-}
 
 function PromptsPanel({ pluginId }: { pluginId: string }) {
   const { t } = useTranslation();

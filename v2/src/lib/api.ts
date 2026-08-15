@@ -11,6 +11,15 @@ import type {
   McpServerSpec,
   McpServer,
   SkillRecord,
+  DiscoverableSkill,
+  SkillRepo,
+  SkillsShSearchResult,
+  SkillUpdateInfo,
+  SkillBackupEntry,
+  UnmanagedSkill,
+  ImportSkillSelection,
+  SyncSettings,
+  MigrationResult,
   PromptRecord,
   Profile,
   RequestLogRow,
@@ -408,12 +417,29 @@ export function skillsList(): Promise<SkillRecord[]> {
   return invoke<SkillRecord[]>("skills_list");
 }
 
-export function skillsInstall(source: string): Promise<SkillRecord> {
-  return invoke<SkillRecord>("skills_install", { source });
+export function skillsInstallLocalDir(source: string): Promise<SkillRecord> {
+  return invoke<SkillRecord>("skills_install_local_dir", { source });
 }
 
-export function skillsUninstall(id: string): Promise<void> {
-  return invoke<void>("skills_uninstall", { id });
+export function skillsInstallFromRepo(
+  skill: DiscoverableSkill,
+  currentPlugin: string,
+): Promise<SkillRecord> {
+  return invoke<SkillRecord>("skills_install_skill", { skill, currentPlugin });
+}
+
+export function skillsInstallFromZip(
+  filePath: string,
+  currentPlugin: string,
+): Promise<SkillRecord[]> {
+  return invoke<SkillRecord[]>("skills_install_from_zip", {
+    filePath,
+    currentPlugin,
+  });
+}
+
+export function skillsUninstall(id: string): Promise<string | null> {
+  return invoke<string | null>("skills_uninstall", { id });
 }
 
 export function skillsTogglePlugin(
@@ -422,6 +448,86 @@ export function skillsTogglePlugin(
   enabled: boolean,
 ): Promise<void> {
   return invoke<void>("skills_toggle_plugin", { id, pluginId, enabled });
+}
+
+export function skillsDiscover(): Promise<DiscoverableSkill[]> {
+  return invoke<DiscoverableSkill[]>("skills_discover");
+}
+
+export function skillsListRepos(): Promise<SkillRepo[]> {
+  return invoke<SkillRepo[]>("skills_list_repos");
+}
+
+export function skillsAddRepo(
+  owner: string,
+  name: string,
+  branch: string,
+): Promise<SkillRepo> {
+  return invoke<SkillRepo>("skills_add_repo", { owner, name, branch });
+}
+
+export function skillsRemoveRepo(owner: string, name: string): Promise<void> {
+  return invoke<void>("skills_remove_repo", { owner, name });
+}
+
+export function skillsSearchSkillsh(
+  query: string,
+  limit: number,
+  offset: number,
+): Promise<SkillsShSearchResult> {
+  return invoke<SkillsShSearchResult>("skills_search_skillsh", {
+    query,
+    limit,
+    offset,
+  });
+}
+
+export function skillsCheckUpdates(): Promise<SkillUpdateInfo[]> {
+  return invoke<SkillUpdateInfo[]>("skills_check_updates");
+}
+
+export function skillsUpdateSkill(id: string): Promise<SkillRecord> {
+  return invoke<SkillRecord>("skills_update_skill", { id });
+}
+
+export function skillsListBackups(): Promise<SkillBackupEntry[]> {
+  return invoke<SkillBackupEntry[]>("skills_list_backups");
+}
+
+export function skillsDeleteBackup(backupId: string): Promise<void> {
+  return invoke<void>("skills_delete_backup", { backupId });
+}
+
+export function skillsRestoreBackup(
+  backupId: string,
+  currentPlugin: string,
+): Promise<SkillRecord> {
+  return invoke<SkillRecord>("skills_restore_backup", {
+    backupId,
+    currentPlugin,
+  });
+}
+
+export function skillsScanUnmanaged(): Promise<UnmanagedSkill[]> {
+  return invoke<UnmanagedSkill[]>("skills_scan_unmanaged");
+}
+
+export function skillsImport(
+  imports: ImportSkillSelection[],
+): Promise<SkillRecord[]> {
+  return invoke<SkillRecord[]>("skills_import", { imports });
+}
+
+export function skillsGetSyncSettings(): Promise<SyncSettings> {
+  return invoke<SyncSettings>("skills_get_sync_settings");
+}
+
+export function skillsSetSyncMethod(method: string): Promise<void> {
+  return invoke<void>("skills_set_sync_method", { method });
+}
+
+export function skillsMigrateStorage(target: string): Promise<MigrationResult> {
+  return invoke<MigrationResult>("skills_migrate_storage", { target });
 }
 
 export function promptsList(pluginId?: string): Promise<PromptRecord[]> {

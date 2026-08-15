@@ -65,6 +65,12 @@ pub struct PluginManifest {
     pub capabilities: Option<crate::plugin::PluginCapabilities>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub settings_schema: Option<serde_json::Value>,
+    /// 提示词文件路径（相对 home，如 `~/.claude/CLAUDE.md`；可选）。
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub prompt_file: Option<String>,
+    /// Skills 同步目录（相对 home，如 `~/.claude/skills`；可选）。
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub skills_dir: Option<String>,
     /// 入口类型：native | shell | ts。
     #[serde(default)]
     pub entry_type: String,

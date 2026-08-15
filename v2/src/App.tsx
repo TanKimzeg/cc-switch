@@ -13,6 +13,7 @@ import {
   RefreshCw,
   ScrollText,
   Send,
+  Settings,
   Sparkles,
   Trash2,
   X,
@@ -33,6 +34,7 @@ import {
 } from "@/lib/api";
 import type { InstalledPlugin, Provider } from "@/types";
 import GlobalPanels from "@/components/GlobalPanels";
+import SettingsPanel from "@/components/SettingsPanel";
 import ProviderForm from "@/components/ProviderForm";
 
 type View =
@@ -44,6 +46,7 @@ type View =
   | "prompts"
   | "profiles"
   | "backup"
+  | "settings"
   | "plugin-detail";
 
 const NAV_ITEMS: { id: View; label: string; icon: typeof Blocks }[] = [
@@ -55,6 +58,7 @@ const NAV_ITEMS: { id: View; label: string; icon: typeof Blocks }[] = [
   { id: "prompts", label: "nav.prompts", icon: ScrollText },
   { id: "profiles", label: "nav.profiles", icon: Layers },
   { id: "backup", label: "nav.backup", icon: Archive },
+  { id: "settings", label: "nav.settings", icon: Settings },
 ];
 
 export default function App() {
@@ -107,6 +111,9 @@ export default function App() {
   };
 
   const renderContent = () => {
+    if (view === "settings") {
+      return <SettingsPanel />;
+    }
     if (view === "plugin-detail" && selectedPlugin) {
       return (
         <PluginDetail
@@ -127,9 +134,6 @@ export default function App() {
       <header className="flex h-12 shrink-0 items-center gap-3 border-b border-border px-4">
         <Puzzle className="h-5 w-5 text-blue-500" />
         <span className="font-semibold">{t("app.name")}</span>
-        <span className="text-xs text-muted-foreground">
-          {t("app.tagline")}
-        </span>
         <nav className="ml-4 flex items-center gap-1">
           {NAV_ITEMS.map((item) => {
             const Icon = item.icon;

@@ -10,7 +10,7 @@
 |--------|----|---------|------|
 | Provider 配置与切换 | ✅ 8 工具、50+ 预设、一键切换、托盘 | ✅ 插件化 read_live/apply/import；native 两插件 | 预设/托盘/通用供应商缺失 |
 | MCP | ✅ 统一面板、双向同步、Deep Link 导入 | ✅ mcp_servers + 插件同步 | 缺 Deep Link 导入、部分 Agent 原生适配 |
-| Skill | ✅ GitHub 仓库 / ZIP 安装、skills.sh 公共注册表、SHA-256 更新检测、备份恢复、软链/复制 | ⚠️ 仅本地目录安装 + 按插件复制 | **缺仓库/ZIP 安装、skills.sh 搜索、更新检测、备份恢复、软链** |
+| Skill | ✅ GitHub 仓库 / ZIP 安装、skills.sh 公共注册表、SHA-256 更新检测、备份恢复、软链/复制 | ✅ 已对齐（仓库/ZIP 安装、skills.sh 搜索、更新检测、卸载备份+恢复、未管理导入、软链/复制、存储迁移；SSOT 路径含 `~/.agents`） | 已补齐（见 §3.9） |
 | Prompt | ✅ Markdown 编辑、跨应用同步、回填保护 | ✅ prompts 表 + 写插件文件 | 缺跨应用一键同步、回填保护 |
 | 用量 | ✅ 用量仪表盘、趋势、请求日志、自定义定价 | ✅ request_logs + 日汇总 + sync_usage | 缺仪表盘图表、model_pricing 接线 |
 | 会话 | ✅ 浏览/搜索/恢复，SQLite 会话 | ✅ sessions/load/delete（claude/opencode） | 缺搜索、更多 Agent 会话源 |
@@ -29,7 +29,7 @@
 
 - **Provider 配置与切换**：`read_live/apply/remove_provider/import` 全链路（`opencode` additive、`claudecode` 非 additive），支持 `sync_all_providers_to_live`（全量投影）与 `import_providers_from_live`（回填）。
 - **MCP 统一管理**：`mcp_servers` + `mcp_server_apps` 统一面板，写操作经 `McpPlugin` 同步到启用插件；支持从插件导入。
-- **Skill 基础**：SSOT 本地目录安装 + 按插件复制/移除（`skills_dir()` 由插件声明）。
+- **Skill**：SSOT（`{data_dir}/skills` 或 `~/.agents/skills`）+ 仓库/ZIP 安装 + skills.sh 搜索 + SHA-256 更新检测 + 卸载备份/恢复 + 未管理导入 + 软链/复制分发 + 存储位置迁移（`skills_dir()` 由插件声明）。
 - **Prompt 基础**：prompts 表 CRUD + 启用时写入 `prompt_file_path()`。
 - **用量基础**：`request_logs`（`INSERT OR IGNORE` 去重）+ 按日汇总；native 插件实现 `sync_usage`。
 - **会话基础**：claudecode（`~/.claude/projects/*.jsonl`）、opencode（SQLite + 旧 JSON）的扫描/加载/删除。
@@ -86,7 +86,7 @@
 
 **实现思路**：
 1. 注册 `ccswitch://` 协议（Tauri `deep-link` 插件或 OS 注册表）。
-2. 新增 `commands/deeplink.rs`：解析 URL 参数（`action`/`config`/`apiKey` 等），调用现有 `add_provider`/`mcp_upsert`/`prompts_upsert`/`skills_install` 落库。
+2. 新增 `commands/deeplink.rs`：解析 URL 参数（`action`/`config`/`apiKey` 等），调用现有 `add_provider`/`mcp_upsert`/`prompts_upsert`/`skills_install_local_dir` 落库。
 3. 复用 v1 的 Base64 编码/解析逻辑。
 
 ### 3.6 系统托盘快捷切换 —— P1
@@ -114,27 +114,32 @@
 1. `providers` 表新增「通用」概念（或 meta 标记 `universal: true`）。
 2. `sync_all_providers_to_live` 遍历时，把该 provider 投影到多个插件的 live 配置（复用各插件的 `apply`）。
 
-### 3.9 Skill：仓库安装 / skills.sh / 更新检测 / 备份恢复 / 软链 —— **P1（用户点名）**
+### 3.9 Skill：仓库安装 / skills.sh / 更新检测 / 备份恢复 / 软链 —— ✅ **已实现（2026-08-15）**
 
 **v1（完整能力，见 `docs/user-manual/zh/3-extensions/3.3-skills.md`）**：
 - **SSOT 存储**：技能源存在 `~/.cc-switch/skills/`，分发到各应用 `~/.claude/skills/`、`~/.codex/skills/`、`~/.gemini/skills/`、`~/.config/opencode/skills/`、`~/.hermes/skills/`。
 - **预配置仓库**：Anthropic 官方、ComposioHQ、社区精选等 GitHub 仓库。
 - **仓库管理**：添加/删除自定义 GitHub 仓库（owner/name/branch/subdirectory）。
-- **skills.sh 公共注册表搜索**：仓库管理对话框内输入关键词实时筛选社区 skill，点击即加入仓库列表。
+- **skills.sh 公共注册表搜索**：输入关键词搜索社区 skill，点击安装。
 - **SHA-256 更新检测**：比对本地与远端内容哈希，自动标记「有新版本」，支持单项/全部更新。
 - **卸载自动备份 + 从备份恢复**：卸载前备份到 `~/.cc-switch/skill-backups/`，可恢复。
 - **软链 / 复制两种分发方式**（个性化设置）。
 
-**v2 现状**：仅「本地目录安装到 SSOT + 按插件复制/移除」；`skill_repos`/`content_hash` 表已预留但未用。
+**v2 现状**：✅ 已对齐（`src-tauri/src/services/skills.rs` + `src/components/skills/`）。插件化差异：v1 的「应用」→ v2 的「插件」（`skill_apps` 表按插件 id），分发目标 = `AgentPlugin::skills_dir()`。
 
-**实现思路**：
-1. `skills_install_from_zip(source)`：解压 → 扫描 `SKILL.md` → 复制到 SSOT，写入 `skills` 表。
-2. `skills_install_from_repo(owner, name, branch, subdir)`：下载 GitHub tarball（`https://codeload.github.com/{owner}/{name}/tar.gz/refs/heads/{branch}`）→ 同上；记录 `skill_repos`。
-3. `skills_list_repos` / `skills_add_repo` / `skills_remove_repo`：仓库 CRUD；`skills_scan_repos` 拉取全部仓库技能并 diff。
-4. `skills_search_skillsh(query)`：请求 skills.sh 注册表 API，返回候选（对齐 v1 的搜索框）。
-5. 更新检测：`content_hash` 存安装时目录 SHA-256，扫描时比对远端，标记可更新；提供单项/全部更新命令。
-6. 卸载时备份目录到 `~/.cc-switch/skill-backups/{id}-{ts}`，提供 `skills_list_backups` / `skills_restore_backup`。
-7. 分发模式：`skills_toggle_plugin` 支持软链（unix symlink / windows junction）或复制（设置项）。
+**实现要点（已落地）**：
+1. `skills_install_from_zip(file_path, current_plugin)`：解压 → 扫描 `SKILL.md` → 复制到 SSOT，id=`local:*`。
+2. `skills_install_skill(skill, current_plugin)`：下载 GitHub zip（`archive/refs/heads/{branch}.zip`，分支回退）→ 解压预算 + zip-slip 防护 → 解析源目录 → 复制 SSOT。
+3. `skills_list_repos` / `skills_add_repo` / `skills_remove_repo`：仓库 CRUD；启动种子 4 个默认仓库。
+4. `skills_search_skillsh(query, limit, offset)`：skills.sh `/api/search`。
+5. 更新检测：`skills_check_updates`（按仓库分组一次下载比对）+ `skills_update_skill`（备份→替换→重算→重同步）。
+6. 卸载自动备份到 `{data_dir}/skill-backups/` + `skills_list_backups` / `skills_restore_backup` / `skills_delete_backup`（保留 20 份）。
+7. 分发：`skills_set_sync_method`（auto 优先软链回退复制 / symlink / copy）。
+8. 存储位置：`skills_migrate_storage`（`{data_dir}/skills` ↔ `~/.agents/skills`，先移文件后改设置）。
+9. 未管理导入：`skills_scan_unmanaged` + `skills_import`（honor 用户勾选插件）。
+10. 安全：`validate_repo_ref` + 出口 URL 断言 + 60s 超时 + 128MiB 下载上限 + 解压预算（10k 条目/512MiB/4KiB symlink/目录计费）+ `require_valid_directory` 脏值拦截 + 结构化错误。
+
+> 说明：SSOT 默认路径为 `{data_dir}/skills`（v1 的 `~/.cc-switch/skills/` 对应 app_data_dir 下的 skills），UI 文案沿用「CC Switch」；`~/.agents/skills` 为可切换存储位置。
 
 ### 3.10 Profile（配置方案）：对齐 v1「项目快照」语义 —— **P1（用户点名）**
 
@@ -202,6 +207,6 @@
 
 1. **P0**：本地代理（3.1）—— 先跑通 1 个 Agent 闭环。
 2. **P1 快速项**：模型定价接线（3.3）、供应商预设（3.7）、用量图表（3.12）、托盘切换（3.6）。
-3. **P1 中型项**：余额/订阅（3.2）、Deep Link（3.5）、通用供应商（3.8）、云端同步（3.4）、**Skill 仓库/skills.sh（3.9）**、**Profile 项目快照（3.10）**。
+3. **P1 中型项**：余额/订阅（3.2）、Deep Link（3.5）、通用供应商（3.8）、云端同步（3.4）、**Profile 项目快照（3.10）**。（**Skill 仓库/skills.sh（3.9）已完成**）
 4. **P2**：Prompt 跨应用（3.11）、会话搜索（3.13）、备份轮换（3.14）、工作区（3.15）、速度测试（3.16）。
 5. **TS 沙箱**：方案 A → B，作为贯穿性的架构演进。

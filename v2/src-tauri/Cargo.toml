@@ -26,6 +26,12 @@ dirs = "5.0"
 uuid = { version = "1", features = ["v4"] }
 sha2 = "0.10"
 rusqlite = { version = "0.31", features = ["bundled", "backup"] }
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "json", "gzip", "stream"] }
+zip = { version = "2", default-features = false, features = ["deflate"] }
+url = "2.5"
+futures = "0.3"
+tokio = { version = "1", features = ["time"] }
+tempfile = "3"
 tauri = { version = "2", features = ["tray-icon", "image-png"] }
 tauri-plugin-log = "2"
 tauri-plugin-process = "2"

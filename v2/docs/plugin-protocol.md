@@ -150,6 +150,8 @@ pub struct PluginCapabilities {
   - `promptFile` / `skillsDir` → `TsPluginStub` / registry 暴露 `prompt_file_path()` / `skills_dir()`。
   - `resources` → `registry.resource_roots()` 暴露资源白名单，供 TS 宿主命令 `host_read/write/list_resource` 校验路径（见 [ts-plugin.md](ts-plugin.md)）。
 
+> **前端可见性**：`to_manifest()` 将 `promptFile` / `skillsDir` 一并暴露到前端 `PluginManifest`（`get_plugins` 返回）。Skills 面板据此筛选「支持 skills 同步」的插件做启用开关；未声明 `skillsDir` 的插件在 `skills_toggle_plugin` 等命令中会被拒绝。
+
 ## 7. 插件生命周期（registry）
 
 - **发现**：`discover()` 扫描 `plugins/` 目录，解析并校验所有 manifest。
