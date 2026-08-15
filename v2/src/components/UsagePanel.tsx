@@ -110,7 +110,7 @@ export default function UsagePanel({ pluginId }: { pluginId: string }) {
   const queryClient = useQueryClient();
   const lang = i18n.resolvedLanguage || i18n.language || "en";
   const locale = getLocaleFromLanguage(lang);
-  const [range, setRange] = useState<UsageRangeSelection>({ preset: "30d" });
+  const [range, setRange] = useState<UsageRangeSelection>({ preset: "7d" });
 
   const logsQuery = useQuery({
     queryKey: ["usage-logs", pluginId],
