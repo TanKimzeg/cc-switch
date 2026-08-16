@@ -148,3 +148,4 @@
 |------|------|------|------|
 | `get_setting` | `key` | `string \| null` | 读取应用级设置 |
 | `set_setting` | `key`, `value` | `()` | 写入应用级设置 |
+| `update_tray_menu` | — | `()` | 重建系统托盘菜单（provider 变更后调用） |

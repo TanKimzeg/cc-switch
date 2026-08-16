@@ -234,13 +234,14 @@ pub fn get_provider(db: State<'_, Database>, id: String) -> Result<Option<Provid
 }
 
 /// 切换 provider：把 provider 写入插件 live 配置（current=true），并记录为当前。
-#[tauri::command]
-pub fn switch_provider(
-    registry: State<'_, PluginRegistry>,
-    db: State<'_, Database>,
-    provider_id: String,
+///
+/// 供命令层与托盘菜单共用。
+pub fn switch_provider_core(
+    registry: &PluginRegistry,
+    db: &Database,
+    provider_id: &str,
 ) -> Result<(), String> {
-    let provider = get_provider_by_id(&db, &provider_id)?;
+    let provider = get_provider_by_id(db, provider_id)?;
     let plugin = registry
         .resolve_plugin(&provider.plugin_id)
         .map_err(|e| e.to_string())?;
@@ -254,6 +255,16 @@ pub fn switch_provider(
         )
         .map_err(|e| e.to_string())?;
     Ok(())
+}
+
+/// 切换 provider（Tauri 命令）。
+#[tauri::command]
+pub fn switch_provider(
+    registry: State<'_, PluginRegistry>,
+    db: State<'_, Database>,
+    provider_id: String,
+) -> Result<(), String> {
+    switch_provider_core(&registry, &db, &provider_id)
 }
 
 /// 从 live 配置移除某个 provider（不删除数据库记录）。

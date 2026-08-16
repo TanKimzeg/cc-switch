@@ -18,7 +18,7 @@
 | 余额/订阅 | ✅ balance、subscription、grok 订阅 | ❌ 无 | P1 |
 | 云端同步 | ✅ Dropbox/OneDrive/iCloud/WebDAV/S3 | ❌ 无 | P1 |
 | Deep Link | ✅ `ccswitch://` 导入 | ❌ 无 | P1 |
-| 托盘快捷切换 | ✅ | ❌（仅托盘创建窗口） | P1 |
+| 托盘快捷切换 | ✅ | ✅ 插件→provider 两级菜单 + 勾选当前 + 切换即重建 | 已补齐（见 §3.6） |
 | 配置方案 Profile | ✅ 项目级配置快照（供应商/MCP/Skills/记忆文件），一键应用 | ⚠️ 仅 profiles 表 CRUD 存 JSON，apply 未真正恢复现场 | **缺快照语义 + 应用到 live** |
 | 备份/导入导出 | ✅ 自动备份、导入导出 | ✅ db_backups + export/import | 基本对齐（缺自动备份轮换） |
 | 工作区编辑器（OpenClaw） | ✅ AGENTS.md/SOUL.md 编辑 | ❌ 无 | P2 |
@@ -91,13 +91,17 @@
 2. 新增 `commands/deeplink.rs`：解析 URL 参数（`action`/`config`/`apiKey` 等），调用现有 `add_provider`/`mcp_upsert`/`prompts_upsert`/`skills_install_local_dir` 落库。
 3. 复用 v1 的 Base64 编码/解析逻辑。
 
-### 3.6 系统托盘快捷切换 —— P1
+### 3.6 系统托盘快捷切换 —— ✅ **已实现（2026-08-16）**
 
 **v1**：`tray.rs` 托盘菜单可直接切换当前 provider。
 
-**v2 现状**：`tray.rs` 只创建窗口/单实例，无切换菜单。
-
-**实现思路**：在 `tray.rs` 构建插件 → provider 两级菜单，点击调用 `switch_provider`；切换后重建菜单。
+**v2 现状**：✅ `v2/src-tauri/src/tray.rs` 插件 → provider 两级菜单（对齐 v1）：
+- 每个「可后端切换」的插件（`capabilities.apply` 且入口非 TS）一个子菜单，标题 = `插件名 · 当前provider`。
+- 子菜单内每个 provider 一个 `CheckMenuItem`（勾选 = 当前）；无 provider 的插件显示禁用项 `插件名 (无供应商)`。
+- 点击 `switch_{provider_id}` → 复用 `switch_provider_core`（apply current=true + 记录 app_state）→ 就地重建菜单 → 广播 `provider-switched`。
+- `update_tray_menu` 命令：前端在 add/update/delete/switch/sync/import provider 后调用（`api.ts` `refreshTray`）。
+- 菜单数据由纯函数 `build_menu_spec` 生成（可单测）；`show`/`quit`/左键显示窗口/静态 tooltip 保留。
+- TS 插件（如 claudecode 示例）因后端无法执行脚本，托盘切换不含（`build_menu_spec` 排除）。
 
 ### 3.7 供应商预设（50+）—— P1
 
@@ -218,7 +222,7 @@
 ## 5. 建议实施顺序
 
 1. ~~**P0**：本地代理（3.1）~~ —— **暂不考虑实现**（用户决定）。
-2. **P1 快速项**：模型定价接线（3.3）、供应商预设（3.7）、托盘切换（3.6）。（**用量图表（3.12）已完成**）
+2. **P1 快速项**：模型定价接线（3.3）、供应商预设（3.7）。（**用量图表（3.12）已完成**；**托盘切换（3.6）已完成**）
 3. **P1 中型项**：余额/订阅（3.2）、Deep Link（3.5）、通用供应商（3.8）、云端同步（3.4）、**Profile 项目快照（3.10）**。（**Skill 仓库/skills.sh（3.9）已完成**；**Prompt 互斥+回填（3.11）已完成**）
 4. **P2**：会话搜索（3.13）、备份轮换（3.14）、工作区（3.15）、速度测试（3.16）。
 5. **TS 沙箱**：方案 A → B，作为贯穿性的架构演进。

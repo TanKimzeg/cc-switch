@@ -72,7 +72,7 @@ export async function readLiveConfig(pluginId) {
 错误文案：后端结构化 JSON 错误经 `skillErrorText(t, err)`（`src/lib/skillsUtils.ts`）映射到 `skillsError.*` 文案。
 
 ### Profiles / Backup / 设置
-`profilesList/current/upsert/delete/apply/clearCurrent`；`backupCreate/List/Delete`、`exportConfigJson/exportConfigToFile/parseExportJson/importConfig/importConfigFromFile`；`getSetting/setSetting`
+`profilesList/current/upsert/delete/apply/clearCurrent`；`backupCreate/List/Delete`、`exportConfigJson/exportConfigToFile/parseExportJson/importConfig/importConfigFromFile`；`getSetting/setSetting`；`updateTrayMenu()`（provider 变更后 `api.ts` 自动刷新托盘菜单）
 
 ## 4. Panel 组件职责
 

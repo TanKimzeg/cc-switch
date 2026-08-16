@@ -37,6 +37,15 @@ export function getProvidersByPlugin(pluginId: string): Promise<Provider[]> {
   return invoke<Provider[]>("get_providers", { pluginId });
 }
 
+/** 重建托盘菜单（provider 变更后调用，失败静默）。 */
+export function updateTrayMenu(): Promise<void> {
+  return invoke<void>("update_tray_menu");
+}
+
+function refreshTray() {
+  void updateTrayMenu().catch(() => {});
+}
+
 export function getProvider(id: string): Promise<Provider | null> {
   return invoke<Provider | null>("get_provider", { id });
 }
@@ -62,9 +71,12 @@ export async function addProvider(
         false,
       );
     }
+    refreshTray();
     return provider;
   }
-  return invoke<Provider>("add_provider", { input, addToLive });
+  const provider = await invoke<Provider>("add_provider", { input, addToLive });
+  refreshTray();
+  return provider;
 }
 
 export async function updateProvider(
@@ -86,13 +98,17 @@ export async function updateProvider(
       },
       false,
     );
+    refreshTray();
     return provider;
   }
-  return invoke<Provider>("update_provider", { id, input });
+  const provider = await invoke<Provider>("update_provider", { id, input });
+  refreshTray();
+  return provider;
 }
 
-export function deleteProvider(id: string): Promise<void> {
-  return invoke<void>("delete_provider", { id });
+export async function deleteProvider(id: string): Promise<void> {
+  await invoke<void>("delete_provider", { id });
+  refreshTray();
 }
 
 export function getCurrentProvider(pluginId: string): Promise<Provider | null> {
@@ -106,29 +122,40 @@ export function setCurrentProvider(
   return invoke<void>("set_current_provider", { pluginId, providerId });
 }
 
-export function switchProvider(providerId: string): Promise<void> {
-  return invoke<void>("switch_provider", { providerId });
+export async function switchProvider(providerId: string): Promise<void> {
+  await invoke<void>("switch_provider", { providerId });
+  refreshTray();
 }
 
-export function removeProviderFromLiveConfig(
+export async function removeProviderFromLiveConfig(
   providerId: string,
 ): Promise<void> {
-  return invoke<void>("remove_provider_from_live_config", { providerId });
+  await invoke<void>("remove_provider_from_live_config", { providerId });
+  refreshTray();
 }
 
-export function updateProvidersSortOrder(
+export async function updateProvidersSortOrder(
   pluginId: string,
   ids: string[],
 ): Promise<void> {
-  return invoke<void>("update_providers_sort_order", { pluginId, ids });
+  await invoke<void>("update_providers_sort_order", { pluginId, ids });
+  refreshTray();
 }
 
-export function syncAllProvidersToLive(pluginId?: string): Promise<number> {
-  return invoke<number>("sync_all_providers_to_live", { pluginId });
+export async function syncAllProvidersToLive(
+  pluginId?: string,
+): Promise<number> {
+  const n = await invoke<number>("sync_all_providers_to_live", { pluginId });
+  refreshTray();
+  return n;
 }
 
-export function importProvidersFromLive(pluginId: string): Promise<number> {
-  return invoke<number>("import_providers_from_live", { pluginId });
+export async function importProvidersFromLive(
+  pluginId: string,
+): Promise<number> {
+  const n = await invoke<number>("import_providers_from_live", { pluginId });
+  refreshTray();
+  return n;
 }
 
 export function getPlugins(): Promise<InstalledPlugin[]> {

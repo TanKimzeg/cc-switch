@@ -157,6 +157,7 @@ pub fn run() {
             commands::providers::import_providers_from_live,
             commands::settings::get_setting,
             commands::settings::set_setting,
+            tray::update_tray_menu,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
