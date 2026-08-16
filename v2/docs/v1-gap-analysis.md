@@ -10,9 +10,9 @@
 |--------|----|---------|------|
 | Provider 配置与切换 | ✅ 8 工具、50+ 预设、一键切换、托盘 | ✅ 插件化 read_live/apply/import；native 两插件 | 预设/托盘/通用供应商缺失 |
 | MCP | ✅ 统一面板、双向同步、Deep Link 导入 | ✅ mcp_servers + 插件同步 | 缺 Deep Link 导入、部分 Agent 原生适配 |
-| Skill | ✅ GitHub 仓库 / ZIP 安装、skills.sh 公共注册表、SHA-256 更新检测、备份恢复、软链/复制 | ✅ 已对齐（仓库/ZIP 安装、skills.sh 搜索、更新检测、卸载备份+恢复、未管理导入、软链/复制、存储迁移；SSOT 路径含 `~/.agents`） | 已补齐（见 §3.9） |
-| Prompt | ✅ Markdown 编辑、跨应用同步、回填保护 | ✅ prompts 表 + 写插件文件 | 缺跨应用一键同步、回填保护 |
-| 用量 | ✅ 用量仪表盘、趋势、请求日志、自定义定价 | ✅ request_logs + 日汇总 + sync_usage | 缺仪表盘图表、model_pricing 接线 |
+| Skill | ✅ GitHub 仓库 / ZIP 安装、skills.sh 公共注册表、SHA-256 更新检测、备份恢复、软链/复制 | ✅ 已对齐（仓库/ZIP 安装、skills.sh 搜索、更新检测、卸载备份+恢复、未管理导入、软链/复制、存储迁移；SSOT 默认 `~/.cc-switch/skills`） | 已补齐（见 §3.9） |
+| Prompt | ✅ Markdown 编辑、单应用互斥启用、回填保护 | ✅ 已对齐（互斥启用 + 回填保护 + 清空/删除保护 + 首启自动导入） | 已补齐（见 §3.11） |
+| 用量 | ✅ 用量仪表盘、趋势、请求日志、自定义定价 | ✅ 趋势图 + 请求日志 + 日汇总（`UsageTrendChart`） | 仅剩 model_pricing 接线（§3.3） |
 | 会话 | ✅ 浏览/搜索/恢复，SQLite 会话 | ✅ sessions/load/delete（claude/opencode） | 缺搜索、更多 Agent 会话源 |
 | **代理（proxy）** | ✅ 本地代理热切换、故障转移、熔断器 | ❌ **无** | **P0 大项** |
 | 余额/订阅 | ✅ balance、subscription、grok 订阅 | ❌ 无 | P1 |
@@ -37,7 +37,9 @@
 
 ## 3. 待补齐的能力（每项附实现思路）
 
-### 3.1 本地代理（proxy）—— P0（最大差距）
+### 3.1 本地代理（proxy）—— ~~P0~~ **暂不考虑实现（用户决定，2026-08-16）**
+
+> v2 通过「直连 provider + 插件协议」覆盖切换需求；代理的格式转换/故障转移/熔断后续按需评估。本节保留 v1 描述作参考，不再排期。
 
 **v1**：`services/proxy.rs`（28 万字节！）+ `proxy/providers/*`。核心是本地代理服务器：把 Agent 的 API 请求转发到真实 provider，过程中做**格式转换、故障转移、熔断、供应商健康监控**。Claude / Codex / Gemini / Grok Build 各有一个 `ProviderAdapter`。
 
@@ -139,7 +141,7 @@
 9. 未管理导入：`skills_scan_unmanaged` + `skills_import`（honor 用户勾选插件）。
 10. 安全：`validate_repo_ref` + 出口 URL 断言 + 60s 超时 + 128MiB 下载上限 + 解压预算（10k 条目/512MiB/4KiB symlink/目录计费）+ `require_valid_directory` 脏值拦截 + 结构化错误。
 
-> 说明：SSOT 默认路径为 `{data_dir}/skills`（v1 的 `~/.cc-switch/skills/` 对应 app_data_dir 下的 skills），UI 文案沿用「CC Switch」；`~/.agents/skills` 为可切换存储位置。
+> 说明：SSOT 默认路径为 `~/.cc-switch/skills/`（与 v1 完全一致），UI 文案沿用「CC Switch」；`~/.agents/skills` 为可切换存储位置。`~` 解析走 `CC_SWITCH_TEST_HOME`（测试可隔离）。
 
 ### 3.10 Profile（配置方案）：对齐 v1「项目快照」语义 —— **P1（用户点名）**
 
@@ -153,23 +155,33 @@
 3. 前端：header 加 ProfileSwitcher（对齐 v1：当前分组显示当前 profile、从当前创建、下拉切换、管理对话框）；`GlobalPanels` 的 ProfilesPanel 改为承载该交互。
 4. 快照按插件分组（Claude 组 vs Codex 组各自独立 current），对齐 v1 `APP_PROFILE_SCOPE`。
 
-### 3.11 Prompt：跨应用一键同步、回填保护 —— P2
+### 3.11 Prompt：互斥启用 + 回填保护 —— ✅ **已实现（2026-08-16）**
 
-**v1**：同一个 prompt 内容跨多应用同步（CLAUDE.md / AGENTS.md / GEMINI.md），回填保护防止覆盖用户手改内容。
+> **语义澄清**：v1 并没有真正的「跨应用同步」——prompts 按应用隔离，同一个提示词要跨应用需分别创建（见 v1 `docs/user-manual/zh/3-extensions/3.2-prompts.md`）。v1 的机制是**单应用单激活（互斥）** + **回填保护**。
 
-**v2 现状**：prompt 单插件存储。
+**v1 能力**：
+- Markdown 编辑（CodeMirror）+ 全屏表单（名称/描述/内容）。
+- 启用 prompt = 回填当前 live 记忆文件 → 互斥禁用同应用其他 prompt → 写目标内容到文件（原子写）。
+- 回填保护：live 文件非空时，回填到已启用项，或创建禁用备份「原始提示词 …」。
+- 停用最后一个启用项时清空文件；已启用项不可删除。
+- 首次启动全表为空时自动导入各应用记忆文件为启用项。
 
-**实现思路**：
-1. `prompts` 表加 `apps` 字段（或按 `name` 绑定多插件），`prompts_toggle` 写多个 `prompt_file_path()`。
-2. 启用前比对文件当前内容与上次写入内容，若被用户修改则提示（回填保护）。
+**v2 现状**：✅ 已对齐（`src-tauri/src/services/prompts.rs` `PromptService` + `src/components/prompts/`）。插件化差异：v1 的「应用」→ v2 的「插件」；记忆文件路径 = `AgentPlugin::prompt_file_path()`。
 
-### 3.12 用量仪表盘（趋势图表、请求日志页）—— P1
+**实现要点（已落地）**：
+1. `PromptService::enable`：回填（已启用项 or 备份 `backup-*`）→ 互斥禁用 → 启用 → 原子写文件（temp+rename）。
+2. `PromptService::disable`：唯一启用时清空文件（写 `""`）。
+3. `PromptService::save`：启用项保存后立即重写记忆文件。
+4. `PromptService::delete`：已启用项拒绝删除（`无法删除已启用的提示词`）。
+5. 首启自动导入：`init_db` 时 `prompts` 表全空 → 遍历各插件 `prompt_file_path()` → 导入为启用项（`auto-imported-*`）。
+6. 新 prompt 默认禁用（`upsert_prompt` INSERT 置 `enabled=0`，对齐 v1）。
+7. 前端：switch 开关列表 + 计数/已启用 header + 搜索 + 全屏编辑对话框（MarkdownEditor）+ 删除确认 + toasts（`prompts.*` 文案）。
+
+### 3.12 用量仪表盘（趋势图表、请求日志页）—— ✅ **已实现（趋势图部分）**
 
 **v1**：趋势图表、详细请求日志、自定义模型定价。
 
-**v2 现状**：`usage_daily_summary` 返回表格行；`usage_list_request_logs` 返回明细；无图表。
-
-**实现思路**：前端用图表库（如 recharts）基于 `usage_daily_summary` 画趋势；已有数据接口，纯前端工作量。
+**v2 现状**：✅ `UsagePanel`（日汇总 + 请求日志）内置 `UsageTrendChart`（多系列 token 面积图 + 成本虚线 + 悬停 tooltip + 刻度）；**自定义模型定价（model_pricing 接线）仍缺**，见 §3.3。
 
 ### 3.13 会话搜索与更多会话源 —— P2
 
@@ -205,8 +217,8 @@
 
 ## 5. 建议实施顺序
 
-1. **P0**：本地代理（3.1）—— 先跑通 1 个 Agent 闭环。
-2. **P1 快速项**：模型定价接线（3.3）、供应商预设（3.7）、用量图表（3.12）、托盘切换（3.6）。
-3. **P1 中型项**：余额/订阅（3.2）、Deep Link（3.5）、通用供应商（3.8）、云端同步（3.4）、**Profile 项目快照（3.10）**。（**Skill 仓库/skills.sh（3.9）已完成**）
-4. **P2**：Prompt 跨应用（3.11）、会话搜索（3.13）、备份轮换（3.14）、工作区（3.15）、速度测试（3.16）。
+1. ~~**P0**：本地代理（3.1）~~ —— **暂不考虑实现**（用户决定）。
+2. **P1 快速项**：模型定价接线（3.3）、供应商预设（3.7）、托盘切换（3.6）。（**用量图表（3.12）已完成**）
+3. **P1 中型项**：余额/订阅（3.2）、Deep Link（3.5）、通用供应商（3.8）、云端同步（3.4）、**Profile 项目快照（3.10）**。（**Skill 仓库/skills.sh（3.9）已完成**；**Prompt 互斥+回填（3.11）已完成**）
+4. **P2**：会话搜索（3.13）、备份轮换（3.14）、工作区（3.15）、速度测试（3.16）。
 5. **TS 沙箱**：方案 A → B，作为贯穿性的架构演进。

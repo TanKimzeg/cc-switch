@@ -37,6 +37,17 @@ fn init_db(app: &tauri::App<Wry>) -> Result<(), Box<dyn std::error::Error>> {
         _ => {}
     }
 
+    // Prompts：首次启动（表全空）把各插件记忆文件导入为启用项。
+    let mut prompt_sources = Vec::new();
+    for plugin in registry.list_installed().map_err(|e| e.to_string())? {
+        if let Ok(plugin_impl) = registry.resolve_plugin(&plugin.manifest.id) {
+            if let Some(file) = plugin_impl.prompt_file_path() {
+                prompt_sources.push((plugin.manifest.id.clone(), file));
+            }
+        }
+    }
+    services::prompts::PromptService::auto_import_first_launch(&db, &prompt_sources)?;
+
     app.manage(AppPaths {
         data_dir: dir.clone(),
     });

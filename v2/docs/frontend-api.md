@@ -84,7 +84,7 @@ export async function readLiveConfig(pluginId) {
 | `SessionsPanel` + `SessionList` | 会话 | 会话列表、加载消息、删除（走 `listSessions/loadSessionMessages/deleteSession`） |
 | `UsagePanel` | 用量查询 | 同步用量 + 每日汇总表格（走 `pluginSyncUsage/usageDailySummary`） |
 | `SkillsPanel`（`components/skills/`） | Skill | 管理视图（已安装/更新/卸载/导入/备份/恢复/ZIP/发现入口）+ `SkillsDiscovery`（仓库/skills.sh）+ `RepoManagerPanel` + 恢复/导入对话框 |
-| `PromptsPanel` | Prompt 管理 | prompt 增删改、启用/停用（写插件 prompt 文件） |
+| `PromptPanel`（`components/prompts/`） | Prompt 管理 | 列表（switch 开关/搜索/计数-已启用 header）+ 全屏编辑对话框（名称/描述/内容 Markdown）；启用走互斥+回填 |
 | `ProfilesPanel` / `BackupPanel` | 配置方案 / 备份 | 方案 CRUD + 应用；备份与导入导出 |
 | `SettingsPanel` | 设置 | Skills 存储位置（迁移）与同步方式 |
 

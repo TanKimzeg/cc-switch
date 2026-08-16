@@ -63,7 +63,7 @@
 
 ## 5. Skills（skills）
 
-能力对齐 v1 `services/skill.rs`：仓库/ZIP 安装、skills.sh 搜索、SHA-256 更新检测、卸载自动备份 + 恢复、未管理导入、软链/复制分发、存储位置迁移。SSOT 目录由设置 `skills.storageLocation` 决定（`{data_dir}/skills` 或 `~/.agents/skills`）。
+能力对齐 v1 `services/skill.rs`：仓库/ZIP 安装、skills.sh 搜索、SHA-256 更新检测、卸载自动备份 + 恢复、未管理导入、软链/复制分发、存储位置迁移。SSOT 目录由设置 `skills.storageLocation` 决定：`cc_switch` → **`~/.cc-switch/skills/`**（对齐 v1），`unified` → `~/.agents/skills/`。
 
 | 命令 | 参数 | 返回 | 说明 |
 |------|------|------|------|
@@ -71,7 +71,7 @@
 | `skills_install_local_dir` | `source: string` | `SkillRecord` | 从本地目录安装技能到 SSOT（兼容旧入口） |
 | `skills_install_skill` | `skill: DiscoverableSkill`, `current_plugin` | `SkillRecord` | 从仓库下载安装并启用当前插件 |
 | `skills_install_from_zip` | `file_path`, `current_plugin` | `SkillRecord[]` | 从本地 ZIP 安装（扫描含 `SKILL.md` 的目录，id=`local:*`） |
-| `skills_uninstall` | `id` | `string \| null` | 卸载并自动备份到 `{data_dir}/skill-backups/`，返回备份路径 |
+| `skills_uninstall` | `id` | `string \| null` | 卸载并自动备份到 `~/.cc-switch/skill-backups/`（对齐 v1），返回备份路径 |
 | `skills_toggle_plugin` | `id`, `plugin_id`, `enabled` | `()` | 启用/停用并同步/移除 `plugin.skills_dir()`（按同步方式软链或复制） |
 | `skills_discover` | — | `DiscoverableSkill[]` | 并发拉取全部启用仓库，扫描 `SKILL.md` 去重排序 |
 | `skills_list_repos` | — | `SkillRepo[]` | 列出技能仓库（启动时种子 4 个默认仓库） |
@@ -93,12 +93,16 @@
 
 ## 6. Prompts（prompts）
 
+行为对齐 v1 `services/prompt.rs`：单插件单激活（互斥）+ 回填保护。记忆文件 = `plugin.prompt_file_path()`，原子写入。
+
 | 命令 | 参数 | 返回 | 说明 |
 |------|------|------|------|
-| `prompts_list` | `plugin_id?` | `PromptRecord[]` | 列出 prompts |
-| `prompts_upsert` | `id`, `plugin_id`, `name`, `content`, `description?` | `()` | 新增/更新 prompt |
-| `prompts_delete` | `id` | `()` | 删除 prompt |
-| `prompts_toggle` | `id`, `enabled` | `()` | 启用/停用，写入或移除 `plugin.prompt_file_path()` 文件 |
+| `prompts_list` | `plugin_id?` | `PromptRecord[]` | 列出 prompts（可按插件过滤） |
+| `prompts_upsert` | `id`, `plugin_id`, `name`, `content`, `description?` | `()` | 新增/更新（新行默认禁用；启用项保存后立即重写记忆文件） |
+| `prompts_delete` | `id` | `()` | 删除；已启用项拒绝（`无法删除已启用的提示词`） |
+| `prompts_toggle` | `id`, `enabled` | `()` | 启用 = 回填 live 文件 + 互斥禁用同插件其他项 + 写文件；停用 = 仅当无其他启用项时清空文件（写 `""`） |
+
+> 首启自动导入：`prompts` 表全空时，`init_db` 把各插件记忆文件导入为启用项（`auto-imported-*`）。
 
 ## 7. Profiles（profiles）
 

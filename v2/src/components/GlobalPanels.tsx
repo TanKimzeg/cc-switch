@@ -12,7 +12,6 @@ import {
   Plus,
   Puzzle,
   RefreshCw,
-  ScrollText,
   Trash2,
   Upload,
 } from "lucide-react";
@@ -30,10 +29,6 @@ import {
   profilesDelete,
   profilesList,
   profilesUpsert,
-  promptsDelete,
-  promptsList,
-  promptsToggle,
-  promptsUpsert,
   getPlugins,
   applyProvider,
   addProvider,
@@ -51,19 +46,13 @@ import {
   syncAllProvidersToLive,
   writeRawConfig,
 } from "@/lib/api";
-import type {
-  BackupRecord,
-  Profile,
-  PromptRecord,
-  Provider,
-  McpServer,
-} from "@/types";
+import type { BackupRecord, Profile, Provider, McpServer } from "@/types";
 import SkillsPanel from "@/components/skills/SkillsPanel";
+import PromptPanel from "@/components/prompts/PromptPanel";
 import ProviderForm from "@/components/ProviderForm";
 import SessionList from "@/components/SessionList";
 import UsagePanel from "@/components/UsagePanel";
 import JsonEditor from "@/components/JsonEditor";
-import MarkdownEditor from "@/components/MarkdownEditor";
 import { PanelHeader, EmptyState } from "@/components/PanelHeader";
 import { Card, CardContent } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -74,155 +63,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-
-function PromptsPanel({ pluginId }: { pluginId: string }) {
-  const { t } = useTranslation();
-  const queryClient = useQueryClient();
-  const [showForm, setShowForm] = useState(false);
-  const [name, setName] = useState("");
-  const [content, setContent] = useState("");
-  const query = useQuery({
-    queryKey: ["prompts"],
-    queryFn: () => promptsList(),
-  });
-  const prompts = query.data ?? [];
-
-  const handleAdd = async () => {
-    const id = name.trim() || `prompt_${Date.now()}`;
-    if (!content.trim()) {
-      toast.error(t("common.error"));
-      return;
-    }
-    try {
-      await promptsUpsert(id, pluginId, name.trim() || id, content, undefined);
-      await queryClient.invalidateQueries({ queryKey: ["prompts"] });
-      setShowForm(false);
-      setName("");
-      setContent("");
-      toast.success(t("common.save"));
-    } catch (e) {
-      toast.error(String(e));
-    }
-  };
-
-  const handleToggle = async (p: PromptRecord) => {
-    try {
-      await promptsToggle(p.id, !p.enabled);
-      await queryClient.invalidateQueries({ queryKey: ["prompts"] });
-    } catch (e) {
-      toast.error(String(e));
-    }
-  };
-
-  const handleDelete = async (id: string) => {
-    try {
-      await promptsDelete(id);
-      await queryClient.invalidateQueries({ queryKey: ["prompts"] });
-    } catch (e) {
-      toast.error(String(e));
-    }
-  };
-
-  return (
-    <div className="space-y-4">
-      <PanelHeader
-        icon={<ScrollText className="h-5 w-5" />}
-        title={t("features.promptsTitle")}
-        subtitle={t("features.promptsSubtitle")}
-      >
-        <button
-          type="button"
-          onClick={() => setShowForm((v) => !v)}
-          className="inline-flex items-center gap-1 rounded-md border border-border px-2 py-1 text-xs transition-colors hover:bg-accent"
-        >
-          <Plus className="h-3 w-3" />
-          {t("features.promptsAdd")}
-        </button>
-      </PanelHeader>
-      {showForm && (
-        <div className="space-y-2 rounded-xl border border-border bg-card p-3 shadow-sm">
-          <input
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            placeholder={t("features.promptsTitle")}
-            className="w-full rounded-md border border-border bg-background px-2 py-1 text-xs"
-          />
-          <MarkdownEditor
-            value={content}
-            onChange={setContent}
-            placeholder="Content…"
-            minHeight="120px"
-          />
-          <button
-            type="button"
-            onClick={handleAdd}
-            className="w-full rounded-md bg-primary px-2 py-1.5 text-xs text-primary-foreground transition-colors hover:bg-primary/90"
-          >
-            {t("common.save")}
-          </button>
-        </div>
-      )}
-      {query.isLoading ? (
-        <Card>
-          <CardContent className="py-10 text-center text-xs text-muted-foreground">
-            {t("common.loading")}
-          </CardContent>
-        </Card>
-      ) : prompts.length === 0 ? (
-        <EmptyState
-          icon={<ScrollText className="h-8 w-8" />}
-          message={t("features.promptsEmpty")}
-        />
-      ) : (
-        <Card>
-          <ul className="divide-y divide-border">
-            {prompts.map((p: PromptRecord) => (
-              <li
-                key={p.id}
-                className="px-4 py-3 transition-colors hover:bg-muted/40"
-              >
-                <div className="flex items-center justify-between gap-2">
-                  <div className="min-w-0 flex-1">
-                    <div className="truncate text-sm font-medium">{p.name}</div>
-                    <div className="truncate text-xs text-muted-foreground">
-                      {p.pluginId}
-                    </div>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => handleToggle(p)}
-                    className={`shrink-0 rounded-full px-2 py-0.5 text-xs transition-colors ${
-                      p.enabled
-                        ? "bg-primary/10 text-primary hover:bg-primary/20"
-                        : "border border-border text-muted-foreground hover:bg-muted"
-                    }`}
-                  >
-                    {p.enabled
-                      ? t("features.promptsEnable")
-                      : t("features.promptsDisable")}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleDelete(p.id)}
-                    className="shrink-0 rounded p-1.5 text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
-                    title={t("common.delete")}
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </button>
-                </div>
-                {p.enabled && (
-                  <pre className="mt-2 whitespace-pre-wrap break-words rounded bg-muted/50 p-2 text-xs">
-                    {p.content}
-                  </pre>
-                )}
-              </li>
-            ))}
-          </ul>
-        </Card>
-      )}
-    </div>
-  );
-}
 
 function ProfilesPanel() {
   const { t } = useTranslation();
@@ -1242,7 +1082,7 @@ export default function GlobalPanels({
     case "skills":
       return <SkillsPanel pluginId={pluginId} />;
     case "prompts":
-      return <PromptsPanel pluginId={pluginId} />;
+      return <PromptPanel pluginId={pluginId} />;
     case "profiles":
       return <ProfilesPanel />;
     case "backup":

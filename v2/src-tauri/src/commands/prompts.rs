@@ -1,10 +1,12 @@
 //! Prompts 管理命令。
 
+use std::path::PathBuf;
+
 use tauri::State;
 
 use crate::db::Database;
 use crate::registry::PluginRegistry;
-use crate::services::prompts::PromptRecord;
+use crate::services::prompts::{PromptRecord, PromptService};
 
 /// 列出 prompts（可按插件过滤）。
 #[tauri::command]
@@ -16,28 +18,46 @@ pub fn prompts_list(
         .map_err(|e| e.to_string())
 }
 
-/// 新增或更新 prompt。
+/// 解析插件 prompt 文件路径。
+fn resolve_prompt_file(registry: &PluginRegistry, plugin_id: &str) -> Result<PathBuf, String> {
+    let plugin = registry
+        .resolve_plugin(plugin_id)
+        .map_err(|e| e.to_string())?;
+    plugin
+        .prompt_file_path()
+        .ok_or_else(|| format!("插件 '{plugin_id}' 不支持 prompt 文件"))
+}
+
+/// 新增或更新 prompt（启用项保存后立即重写记忆文件）。
 #[tauri::command]
 pub fn prompts_upsert(
     db: State<'_, Database>,
+    registry: State<'_, PluginRegistry>,
     id: String,
     plugin_id: String,
     name: String,
     content: String,
     description: Option<String>,
 ) -> Result<(), String> {
-    db.upsert_prompt(&id, &plugin_id, &name, &content, description.as_deref())
-        .map_err(|e| e.to_string())
+    let file = resolve_prompt_file(&registry, &plugin_id)?;
+    PromptService::save(
+        &db,
+        &file,
+        &id,
+        &plugin_id,
+        &name,
+        &content,
+        description.as_deref(),
+    )
 }
 
-/// 删除 prompt。
+/// 删除 prompt（已启用项拒绝删除）。
 #[tauri::command]
 pub fn prompts_delete(db: State<'_, Database>, id: String) -> Result<(), String> {
-    db.delete_prompt(&id).map_err(|e| e.to_string())?;
-    Ok(())
+    PromptService::delete(&db, &id)
 }
 
-/// 启用/停用 prompt，并写入（或移除）插件的 prompt 文件。
+/// 启用/停用 prompt：启用走回填+互斥+写文件；停用清空（仅当无其他启用项）。
 #[tauri::command]
 pub fn prompts_toggle(
     db: State<'_, Database>,
@@ -49,21 +69,10 @@ pub fn prompts_toggle(
         .get_prompt(&id)
         .map_err(|e| e.to_string())?
         .ok_or_else(|| format!("prompt 不存在: {id}"))?;
-    let plugin = registry
-        .resolve_plugin(&prompt.plugin_id)
-        .map_err(|e| e.to_string())?;
-    let file = plugin
-        .prompt_file_path()
-        .ok_or_else(|| format!("插件 '{}' 不支持 prompt 文件", prompt.plugin_id))?;
-
+    let file = resolve_prompt_file(&registry, &prompt.plugin_id)?;
     if enabled {
-        if let Some(parent) = file.parent() {
-            std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
-        }
-        std::fs::write(&file, &prompt.content).map_err(|e| e.to_string())?;
-    } else if file.exists() {
-        std::fs::remove_file(&file).map_err(|e| e.to_string())?;
+        PromptService::enable(&db, &file, &prompt.plugin_id, &id)
+    } else {
+        PromptService::disable(&db, &file, &prompt.plugin_id, &id)
     }
-    db.set_prompt_enabled(&id, enabled)
-        .map_err(|e| e.to_string())
 }
