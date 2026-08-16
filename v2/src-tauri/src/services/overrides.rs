@@ -179,6 +179,7 @@ mod tests {
 
     #[test]
     fn set_get_clear_roundtrip() {
+        let _lock = crate::test_support::env_lock().lock().unwrap();
         let dir = tempfile::tempdir().unwrap();
         let db = fresh_db(&dir);
         init(&db).unwrap();
@@ -196,6 +197,7 @@ mod tests {
 
     #[test]
     fn list_returns_configured_overrides() {
+        let _lock = crate::test_support::env_lock().lock().unwrap();
         let dir = tempfile::tempdir().unwrap();
         let db = fresh_db(&dir);
         set(&db, "opencode", Some("~/oc")).unwrap();
@@ -209,6 +211,7 @@ mod tests {
 
     #[test]
     fn app_data_dir_override_requires_existing_dir() {
+        let _lock = crate::test_support::env_lock().lock().unwrap();
         let dir = tempfile::tempdir().unwrap();
         let config_dir = dir.path().join("config");
 

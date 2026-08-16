@@ -29,7 +29,7 @@
 
 - **Provider 配置与切换**：`read_live/apply/remove_provider/import` 全链路（`opencode` additive、`claudecode` 非 additive），支持 `sync_all_providers_to_live`（全量投影）与 `import_providers_from_live`（回填）。
 - **MCP 统一管理**：`mcp_servers` + `mcp_server_apps` 统一面板，写操作经 `McpPlugin` 同步到启用插件；支持从插件导入。
-- **Skill**：SSOT（`{data_dir}/skills` 或 `~/.agents/skills`）+ 仓库/ZIP 安装 + skills.sh 搜索 + SHA-256 更新检测 + 卸载备份/恢复 + 未管理导入 + 软链/复制分发 + 存储位置迁移（`skills_dir()` 由插件声明）。
+- **Skill**：SSOT（`~/.cc-switch/skills` 或 `~/.agents/skills`）+ 仓库/ZIP 安装 + skills.sh 搜索 + SHA-256 更新检测 + 卸载备份/恢复 + 未管理导入 + 软链/复制分发 + 存储位置迁移（`skills_dir()` 由插件声明）。
 - **Prompt 基础**：prompts 表 CRUD + 启用时写入 `prompt_file_path()`。
 - **用量基础**：`request_logs`（`INSERT OR IGNORE` 去重）+ 按日汇总；native 插件实现 `sync_usage`。
 - **会话基础**：claudecode（`~/.claude/projects/*.jsonl`）、opencode（SQLite + 旧 JSON）的扫描/加载/删除。
@@ -139,9 +139,9 @@
 3. `skills_list_repos` / `skills_add_repo` / `skills_remove_repo`：仓库 CRUD；启动种子 4 个默认仓库。
 4. `skills_search_skillsh(query, limit, offset)`：skills.sh `/api/search`。
 5. 更新检测：`skills_check_updates`（按仓库分组一次下载比对）+ `skills_update_skill`（备份→替换→重算→重同步）。
-6. 卸载自动备份到 `{data_dir}/skill-backups/` + `skills_list_backups` / `skills_restore_backup` / `skills_delete_backup`（保留 20 份）。
+6. 卸载自动备份到 `~/.cc-switch/skill-backups/` + `skills_list_backups` / `skills_restore_backup` / `skills_delete_backup`（保留 20 份）。
 7. 分发：`skills_set_sync_method`（auto 优先软链回退复制 / symlink / copy）。
-8. 存储位置：`skills_migrate_storage`（`{data_dir}/skills` ↔ `~/.agents/skills`，先移文件后改设置）。
+8. 存储位置：`skills_migrate_storage`（`~/.cc-switch/skills` ↔ `~/.agents/skills`，先移文件后改设置）。
 9. 未管理导入：`skills_scan_unmanaged` + `skills_import`（honor 用户勾选插件）。
 10. 安全：`validate_repo_ref` + 出口 URL 断言 + 60s 超时 + 128MiB 下载上限 + 解压预算（10k 条目/512MiB/4KiB symlink/目录计费）+ `require_valid_directory` 脏值拦截 + 结构化错误。
 
@@ -228,7 +228,7 @@
 **CC Switch 数据目录覆盖**：
 1. 指针文件 `{app_config_dir}/app_paths.json` 存 `appDataDirOverride`（`app_config_dir` 独立于数据目录，避免鸡生蛋）；`init_db` 在打开数据库前读取，目录不存在时回退默认。
 2. 命令 `get/set_app_data_dir_override`（set 返回需重启）；前端显示重启对话框（`@tauri-apps/plugin-process` `relaunch`）。
-3. DB/skills/备份路径统一走 `AppPaths.data_dir`，自动跟随。
+3. DB 与数据库备份走 `AppPaths.data_dir`（自动跟随数据目录覆盖）；**skills SSOT 固定 `~/.cc-switch/skills`、备份固定 `~/.cc-switch/skill-backups`，不随数据目录覆盖移动**（对齐 v1）。
 
 ## 4. TS 插件沙箱演进（架构差距，非 v1 对齐）
 

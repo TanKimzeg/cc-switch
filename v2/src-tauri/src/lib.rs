@@ -14,7 +14,7 @@ use db::Database;
 use registry::PluginRegistry;
 use tauri::{Manager, Wry};
 
-/// 全局状态：应用数据目录（skills 等落盘根目录）。
+/// 全局状态：应用数据目录（数据库、备份、技能卸载备份等落盘根目录；可经设置覆盖）。
 pub struct AppPaths {
     pub data_dir: PathBuf,
 }
