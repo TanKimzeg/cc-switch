@@ -148,4 +148,8 @@
 |------|------|------|------|
 | `get_setting` | `key` | `string \| null` | 读取应用级设置 |
 | `set_setting` | `key`, `value` | `()` | 写入应用级设置 |
+| `settings_get_overrides` | — | `OverrideDir[]` | 列出已配置的工具配置目录覆盖 |
+| `settings_set_override` | `plugin_id`, `path?` | `()` | 设置/清除工具配置目录覆盖（native 插件 `config_dir` 消费） |
+| `get_app_data_dir_override` | — | `string \| null` | 读取 CC Switch 数据目录覆盖（指针文件 `app_paths.json`） |
+| `set_app_data_dir_override` | `path?` | `bool` | 设置/清除数据目录覆盖（返回 true = 需重启生效） |
 | `update_tray_menu` | — | `()` | 重建系统托盘菜单（provider 变更后调用） |

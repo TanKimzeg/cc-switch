@@ -35,9 +35,11 @@ fn override_dir(name: &str) -> Option<PathBuf> {
         .map(PathBuf::from)
 }
 
-/// Claude Code 配置目录（`~/.claude`）。
+/// Claude Code 配置目录（`~/.claude`；可经设置 overrideDir.claudecode 覆盖）。
 fn config_dir() -> PathBuf {
-    override_dir("CC_SWITCH_CLAUDE_CONFIG_DIR").unwrap_or_else(|| home_dir().join(".claude"))
+    crate::services::overrides::get(PLUGIN_ID)
+        .or_else(|| override_dir("CC_SWITCH_CLAUDE_CONFIG_DIR"))
+        .unwrap_or_else(|| home_dir().join(".claude"))
 }
 
 /// Claude Code 主配置文件（`~/.claude/settings.json`，兼容旧 `claude.json`）。
@@ -54,8 +56,17 @@ fn settings_path() -> PathBuf {
     settings
 }
 
-/// Claude MCP 配置文件（`~/.claude.json`）。
+/// Claude MCP 配置文件。
+///
+/// 对齐 v1：自定义配置目录时 `.claude.json` 放在目录内（`<dir>/.claude.json`），
+/// 默认 `~/.claude` 目录仍使用 Claude 默认的 `~/.claude.json`。
 fn mcp_path() -> PathBuf {
+    if let Some(dir) = crate::services::overrides::get(PLUGIN_ID) {
+        let default_dir = home_dir().join(".claude");
+        if dir != default_dir {
+            return dir.join(".claude.json");
+        }
+    }
     override_dir("CC_SWITCH_CLAUDE_MCP_PATH").unwrap_or_else(|| home_dir().join(".claude.json"))
 }
 

@@ -20,6 +20,7 @@ import type {
   ImportSkillSelection,
   SyncSettings,
   MigrationResult,
+  OverrideDir,
   PromptRecord,
   Profile,
   RequestLogRow,
@@ -176,6 +177,25 @@ export function getSetting(key: string): Promise<string | null> {
 
 export function setSetting(key: string, value: string): Promise<void> {
   return invoke<void>("set_setting", { key, value });
+}
+
+export function settingsGetOverrides(): Promise<OverrideDir[]> {
+  return invoke<OverrideDir[]>("settings_get_overrides");
+}
+
+export function settingsSetOverride(
+  pluginId: string,
+  path: string | null,
+): Promise<void> {
+  return invoke<void>("settings_set_override", { pluginId, path });
+}
+
+export function getAppDataDirOverride(): Promise<string | null> {
+  return invoke<string | null>("get_app_data_dir_override");
+}
+
+export function setAppDataDirOverride(path: string | null): Promise<boolean> {
+  return invoke<boolean>("set_app_data_dir_override", { path });
 }
 
 export async function readLiveConfig(pluginId: string): Promise<LiveConfig> {

@@ -230,6 +230,12 @@ export interface MigrationResult {
   errors: string[];
 }
 
+/** 已配置的工具配置目录覆盖。 */
+export interface OverrideDir {
+  pluginId: string;
+  path: string;
+}
+
 /** Prompt 记录。 */
 export interface PromptRecord {
   id: string;

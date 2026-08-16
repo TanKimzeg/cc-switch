@@ -20,8 +20,13 @@ pub struct AppPaths {
 }
 
 fn init_db(app: &tauri::App<Wry>) -> Result<(), Box<dyn std::error::Error>> {
-    let dir = app.path().app_data_dir()?;
+    // CC Switch 数据目录覆盖（指针文件在 app_config_dir，独立于数据目录）。
+    let config_dir = app.path().app_config_dir()?;
+    let dir = services::overrides::get_app_data_dir_override(&config_dir)
+        .unwrap_or(app.path().app_data_dir()?);
     let db = Database::new(&dir.join("cc-switch-v2.db"))?;
+    // 载入工具目录覆盖注册表（native 插件 config_dir 消费）。
+    services::overrides::init(&db)?;
 
     // M1：插件注册表 —— 首次运行写入内置插件，扫描并同步安装记录。
     let registry = PluginRegistry::new(dir.join("plugins"), db.clone());
@@ -157,6 +162,10 @@ pub fn run() {
             commands::providers::import_providers_from_live,
             commands::settings::get_setting,
             commands::settings::set_setting,
+            commands::settings::settings_get_overrides,
+            commands::settings::settings_set_override,
+            commands::settings::get_app_data_dir_override,
+            commands::settings::set_app_data_dir_override,
             tray::update_tray_menu,
         ])
         .run(tauri::generate_context!())

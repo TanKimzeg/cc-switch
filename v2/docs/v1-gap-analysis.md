@@ -23,7 +23,7 @@
 | 备份/导入导出 | ✅ 自动备份、导入导出 | ✅ db_backups + export/import | 基本对齐（缺自动备份轮换） |
 | 工作区编辑器（OpenClaw） | ✅ AGENTS.md/SOUL.md 编辑 | ❌ 无 | P2 |
 | 速度测试 / 健康监控 | ✅ SpeedtestService、供应商健康 | ❌ 无 | P2 |
-| 系统设置 | 自定义配置目录、override 目录 | ✅ settings 键值 | 缺 override 目录支持 |
+| 系统设置 | 自定义配置目录、override 目录 | ✅ 工具配置目录覆盖 + CC Switch 数据目录覆盖（指针文件 + 重启） | 已补齐（见 §3.17） |
 
 ## 2. 已对齐的能力（v2 已具备）
 
@@ -212,6 +212,23 @@
 **v1**：SpeedtestService 测 API 端点延迟；proxy 的供应商健康监控。
 
 **实现思路**：新增 `speedtest` 命令对 provider 的 baseURL 发 ping 请求测延迟；健康监控可挂在 proxy（3.1）之上。
+
+### 3.17 系统设置：配置目录覆盖 —— ✅ **已实现（2026-08-16）**
+
+**v1**：`settings.rs` 的 `*_config_dir` 字段（claude/codex/gemini/grok/opencode/openclaw/hermes）+ `app_store.rs` 的 CC Switch 数据目录覆盖（`app_paths.json`）。
+
+**v2 现状**：✅ 已对齐（`src-tauri/src/services/overrides.rs` + `SettingsPanel`）：
+
+**工具配置目录覆盖**：
+1. settings 表键 `overrideDir.<plugin_id>` 存原始路径（`~` 读取时展开），静态注册表 `overrides::get(id)` 供 native 插件 `config_dir()` 读取（优先于 env，回退默认）。
+2. opencode/claudecode 的 `config_dir()` 已接入；`config_path/skills_dir/prompt_file_path` 自动跟随；claudecode `mcp_path` 特殊处理（自定义目录 → `<dir>/.claude.json`，对齐 v1）。
+3. 命令 `settings_get_overrides` / `settings_set_override`；设置后前端调用 `syncAllProvidersToLive` 重写当前 provider 到新 live。
+4. TS 插件（manifest 声明路径）暂不支持 override，文档注明。
+
+**CC Switch 数据目录覆盖**：
+1. 指针文件 `{app_config_dir}/app_paths.json` 存 `appDataDirOverride`（`app_config_dir` 独立于数据目录，避免鸡生蛋）；`init_db` 在打开数据库前读取，目录不存在时回退默认。
+2. 命令 `get/set_app_data_dir_override`（set 返回需重启）；前端显示重启对话框（`@tauri-apps/plugin-process` `relaunch`）。
+3. DB/skills/备份路径统一走 `AppPaths.data_dir`，自动跟随。
 
 ## 4. TS 插件沙箱演进（架构差距，非 v1 对齐）
 

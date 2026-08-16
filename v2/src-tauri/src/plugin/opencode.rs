@@ -37,9 +37,10 @@ fn override_dir(name: &str) -> Option<PathBuf> {
         .map(PathBuf::from)
 }
 
-/// OpenCode 配置目录（`~/.config/opencode`）。
+/// OpenCode 配置目录（`~/.config/opencode`；可经设置 overrideDir.opencode 覆盖）。
 fn config_dir() -> PathBuf {
-    override_dir("CC_SWITCH_OPENCODE_CONFIG_DIR")
+    crate::services::overrides::get(PLUGIN_ID)
+        .or_else(|| override_dir("CC_SWITCH_OPENCODE_CONFIG_DIR"))
         .unwrap_or_else(|| home_dir().join(".config").join("opencode"))
 }
 

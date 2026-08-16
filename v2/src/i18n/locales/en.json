@@ -342,6 +342,17 @@
     "skillSyncDescription": "Choose the file sync strategy for Skills",
     "skillSyncSymlink": "Symlink",
     "skillSyncCopy": "Copy",
-    "skillSyncSymlinkHint": "Symlinks save disk space and sync in real time. Note: Windows may require admin privileges or developer mode"
+    "skillSyncSymlinkHint": "Symlinks save disk space and sync in real time. Note: Windows may require admin privileges or developer mode",
+    "appDataDir": "CC Switch Configuration Directory",
+    "appDataDirDescription": "Customize the storage location for CC Switch configuration (point to a cloud sync folder to enable config sync)",
+    "configDirOverride": "Configuration Directory Override (Advanced)",
+    "configDirOverrideDescription": "Specify different config directories per tool (e.g. point to the directory inside WSL when using Claude Code or Codex in WSL), keeping provider data consistent with the main environment.",
+    "browseDirectory": "Browse",
+    "resetDefault": "Reset to default directory",
+    "restartRequired": "Restart Required",
+    "restartRequiredMessage": "The CC Switch config directory change requires a restart to take effect. Restart now?",
+    "restartNow": "Restart Now",
+    "restartLater": "Later",
+    "restartFailed": "Failed to restart the app. Please close and reopen it manually."
   }
 }
