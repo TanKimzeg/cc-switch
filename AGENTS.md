@@ -90,7 +90,7 @@ pub trait AgentPlugin: Send + Sync {
 - **Skills**：✅ 已对齐 v1（2026-08-15）——仓库/ZIP 安装、skills.sh 搜索、SHA-256 更新检测、卸载备份+恢复、未管理导入、软链/复制分发、存储位置迁移（`v2/src-tauri/src/services/skills.rs` + `v2/src/components/skills/`）。
 - **Profile（配置方案）**：v2 现在只是 `profiles` 表 CRUD 存 JSON payload，`apply` 只记录 current 但不真正应用到 live——**这不是 v1 的项目快照语义**。要对齐：快照=当前 provider/MCP/Skills/prompt 实际状态，应用=恢复现场。
 - **代理（proxy）**：v1 的本地代理热切换、故障转移、熔断、格式转换（`services/proxy.rs`，体量最大）**v2 完全没有**。
-- 托盘快捷切换、Deep Link、云端同步、余额/订阅、速度测试、模型定价接线：见 `v2/docs/v1-gap-analysis.md`。
+- Deep Link、云端同步、余额/订阅、速度测试、模型定价接线：见 `v2/docs/v1-gap-analysis.md`。（**托盘快捷切换已实现**；**proxy 暂不考虑实现**，用户决定）
 
 ### 3.3 不要做的
 - 不要发明 v1 没有的"新概念"（如之前的 PluginManager/OMO 就是反面教材——v1 没有，用户不需要）。
