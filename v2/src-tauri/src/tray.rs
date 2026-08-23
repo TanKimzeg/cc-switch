@@ -143,8 +143,11 @@ fn create_menu<R: Runtime>(
     Menu::with_items(app, &items)
 }
 
-/// 创建托盘图标并绑定事件。
+/// 创建托盘图标并绑定事件（已存在时为幂等操作）。
 pub fn create<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<()> {
+    if app.tray_by_id(TRAY_ID).is_some() {
+        return Ok(());
+    }
     let db = app.state::<Database>();
     let registry = app.state::<PluginRegistry>();
     let menu = create_menu(app, &db, &registry)?;

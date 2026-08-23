@@ -20,6 +20,14 @@ pub struct BackupRecord {
 impl Database {
     /// 创建一个数据库备份：把当前 db 文件复制到备份目录并记录。
     pub fn create_db_backup(&self, backups_dir: &Path) -> Result<BackupRecord, String> {
+        self.create_db_backup_with_prefix(backups_dir, "bak_")
+    }
+
+    fn create_db_backup_with_prefix(
+        &self,
+        backups_dir: &Path,
+        prefix: &str,
+    ) -> Result<BackupRecord, String> {
         // 获取当前 db 文件路径（从 pragma database_list）。
         let db_path: String = self
             .lock()
@@ -35,15 +43,27 @@ impl Database {
         }
 
         std::fs::create_dir_all(backups_dir).map_err(|e| e.to_string())?;
+        let seq = BACKUP_SEQ.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         let id = format!(
-            "bak_{}",
+            "{prefix}{}_{}",
             std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
                 .map(|d| d.as_millis())
-                .unwrap_or(0)
+                .unwrap_or(0),
+            seq
         );
         let dest = backups_dir.join(format!("{id}.db"));
-        std::fs::copy(&db_path, &dest).map_err(|e| e.to_string())?;
+
+        // 用 SQLite backup API 把活动连接的内容完整写入副本文件
+        // （db 为 WAL 模式，直接复制主文件会丢失未 checkpoint 的页）。
+        {
+            let src = self.lock();
+            let mut dst = rusqlite::Connection::open(&dest).map_err(|e| e.to_string())?;
+            let backup = rusqlite::backup::Backup::new(&src, &mut dst)
+                .map_err(|e| format!("无法初始化备份: {e}"))?;
+            backup.step(-1).map_err(|e| format!("写备份失败: {e}"))?;
+        }
+
         let size = std::fs::metadata(&dest)
             .map(|m| m.len() as i64)
             .unwrap_or(0);
@@ -111,6 +131,242 @@ impl Database {
         let _ = std::fs::remove_file(&file);
         let _ = backups_dir;
         Ok(true)
+    }
+
+    /// 重命名备份记录。
+    pub fn rename_db_backup(&self, id: &str, name: &str) -> Result<(), String> {
+        let name = name.trim();
+        if name.is_empty() {
+            return Err("备份名称不能为空".to_string());
+        }
+        let n = self
+            .lock()
+            .execute(
+                "UPDATE db_backups SET name = ?1 WHERE id = ?2",
+                params![name, id],
+            )
+            .map_err(|e| e.to_string())?;
+        if n == 0 {
+            return Err(format!("备份不存在: {id}"));
+        }
+        Ok(())
+    }
+
+    /// 恢复备份：先创建安全备份，再把备份文件内容回灌到当前数据库。
+    ///
+    /// 返回安全备份 id。使用 SQLite backup API 在连接保持打开的情况下逐页覆盖，
+    /// 避免文件级替换与活动连接的竞态。
+    pub fn restore_db_backup(&self, backups_dir: &Path, id: &str) -> Result<String, String> {
+        let record = self
+            .get_db_backup(id)
+            .map_err(|e| e.to_string())?
+            .ok_or_else(|| format!("备份不存在: {id}"))?;
+        let src_path = PathBuf::from(&record.file_path);
+        if !src_path.exists() {
+            return Err(format!("备份文件缺失: {}", record.file_path));
+        }
+
+        // 恢复前先建当前状态的安全备份。
+        let safety = self.create_db_backup(backups_dir)?;
+
+        let src = rusqlite::Connection::open(&src_path).map_err(|e| e.to_string())?;
+        {
+            let mut dst = self.lock();
+            let backup = rusqlite::backup::Backup::new(&src, &mut dst)
+                .map_err(|e| format!("无法初始化恢复: {e}"))?;
+            backup
+                .step(-1)
+                .map_err(|e| format!("恢复数据库失败: {e}"))?;
+        }
+
+        // 整库回灌会把 db_backups 表一并还原为快照时刻的状态，
+        // 安全备份记录需补写回恢复后的库，否则前端拿不到安全备份 id。
+        self.lock()
+            .execute(
+                "INSERT OR REPLACE INTO db_backups (id, name, file_path, size_bytes, created_at)
+                 VALUES (?1, ?2, ?3, ?4, ?5)",
+                params![
+                    safety.id,
+                    safety.name,
+                    safety.file_path,
+                    safety.size_bytes,
+                    safety.created_at
+                ],
+            )
+            .map_err(|e| e.to_string())?;
+
+        Ok(safety.id)
+    }
+}
+
+/// 自动备份的设置键与轮换逻辑。
+pub mod auto {
+    use super::*;
+
+    pub const KEY_INTERVAL_HOURS: &str = "backup.intervalHours";
+    pub const KEY_RETAIN_COUNT: &str = "backup.retainCount";
+    pub const KEY_LAST_AUTO_AT: &str = "backup.lastAutoAt";
+    /// 自动备份的名称/id 前缀（手动备份为 `bak_`）。
+    pub const AUTO_PREFIX: &str = "auto_";
+
+    impl Database {
+        /// 自动备份间隔（小时）。0 = 禁用；缺省 24（对齐 v1）。
+        pub fn get_backup_interval_hours(&self) -> u32 {
+            self.get_setting(KEY_INTERVAL_HOURS)
+                .ok()
+                .flatten()
+                .and_then(|s| s.parse().ok())
+                .unwrap_or(24)
+        }
+
+        /// 自动备份保留数量。0 视为 1；缺省 10（对齐 v1）。
+        pub fn get_backup_retain_count(&self) -> u32 {
+            self.get_setting(KEY_RETAIN_COUNT)
+                .ok()
+                .flatten()
+                .and_then(|s| s.parse().ok())
+                .unwrap_or(10)
+                .max(1)
+        }
+
+        /// 创建一份自动备份（`auto_` 前缀）并按保留数量轮换旧自动备份。
+        pub fn create_auto_backup(&self, backups_dir: &Path) -> Result<BackupRecord, String> {
+            let record = self.create_db_backup_with_prefix(backups_dir, AUTO_PREFIX)?;
+
+            let retain = self.get_backup_retain_count() as usize;
+            let stale_ids: Vec<String> = {
+                let conn = self.lock();
+                let mut stmt = conn
+                    .prepare(
+                        "SELECT id FROM db_backups WHERE id LIKE 'auto\\_%' ESCAPE '\\' ORDER BY created_at DESC, rowid DESC",
+                    )
+                    .map_err(|e| e.to_string())?;
+                let rows = stmt
+                    .query_map([], |row| row.get::<_, String>(0))
+                    .map_err(|e| e.to_string())?;
+                rows.filter_map(|r| r.ok()).collect()
+            };
+            for id in stale_ids.iter().skip(retain) {
+                if let Err(e) = self.delete_db_backup(backups_dir, id) {
+                    log::warn!("清理过期自动备份 {id} 失败: {e}");
+                }
+            }
+
+            let now = now_secs();
+            self.set_setting(KEY_LAST_AUTO_AT, &now.to_string())
+                .map_err(|e| e.to_string())?;
+
+            Ok(record)
+        }
+
+        /// 若到达自动备份时间则执行一次；返回是否创建了备份。
+        pub fn auto_backup_tick(&self, backups_dir: &Path) -> Result<bool, String> {
+            let interval = self.get_backup_interval_hours();
+            if interval == 0 {
+                return Ok(false);
+            }
+            let now = now_secs();
+            let last: i64 = self
+                .get_setting(KEY_LAST_AUTO_AT)
+                .ok()
+                .flatten()
+                .and_then(|s| s.parse().ok())
+                .unwrap_or(0);
+            if last != 0 && now - last < i64::from(interval) * 3600 {
+                return Ok(false);
+            }
+            self.create_auto_backup(backups_dir)?;
+            Ok(true)
+        }
+    }
+
+    #[cfg(test)]
+    mod tests {
+        use super::*;
+
+        #[test]
+        fn defaults_and_parsing_for_backup_settings() {
+            let dir = tempfile::tempdir().unwrap();
+            let db = Database::new(&dir.path().join("cc.db")).unwrap();
+
+            assert_eq!(db.get_backup_interval_hours(), 24);
+            assert_eq!(db.get_backup_retain_count(), 10);
+
+            db.set_setting(KEY_INTERVAL_HOURS, "6").unwrap();
+            db.set_setting(KEY_RETAIN_COUNT, "3").unwrap();
+            assert_eq!(db.get_backup_interval_hours(), 6);
+            assert_eq!(db.get_backup_retain_count(), 3);
+
+            // 非法值回退默认
+            db.set_setting(KEY_INTERVAL_HOURS, "abc").unwrap();
+            db.set_setting(KEY_RETAIN_COUNT, "-4").unwrap();
+            assert_eq!(db.get_backup_interval_hours(), 24);
+            assert_eq!(db.get_backup_retain_count(), 10);
+        }
+
+        #[test]
+        fn auto_backup_tick_respects_interval() {
+            let dir = tempfile::tempdir().unwrap();
+            let db = Database::new(&dir.path().join("cc.db")).unwrap();
+            let backups_dir = dir.path().join("backups");
+
+            // 首次 tick：立即创建
+            assert!(db.auto_backup_tick(&backups_dir).unwrap());
+            let list = db.list_db_backups().unwrap();
+            assert_eq!(list.len(), 1);
+            assert!(list[0].id.starts_with(AUTO_PREFIX));
+
+            // 未到期：跳过
+            assert!(!db.auto_backup_tick(&backups_dir).unwrap());
+
+            // 到期：再创建
+            db.set_setting(KEY_LAST_AUTO_AT, "0").unwrap();
+            assert!(db.auto_backup_tick(&backups_dir).unwrap());
+            assert_eq!(db.list_db_backups().unwrap().len(), 2);
+
+            // 禁用：不创建
+            db.set_setting(KEY_INTERVAL_HOURS, "0").unwrap();
+            db.set_setting(KEY_LAST_AUTO_AT, "0").unwrap();
+            assert!(!db.auto_backup_tick(&backups_dir).unwrap());
+        }
+
+        #[test]
+        fn auto_backup_rotation_keeps_retain_count() {
+            let dir = tempfile::tempdir().unwrap();
+            let db = Database::new(&dir.path().join("cc.db")).unwrap();
+            let backups_dir = dir.path().join("backups");
+            db.set_setting(KEY_RETAIN_COUNT, "2").unwrap();
+
+            for _ in 0..4 {
+                db.set_setting(KEY_LAST_AUTO_AT, "0").unwrap();
+                db.auto_backup_tick(&backups_dir).unwrap();
+            }
+            let autos: Vec<_> = db
+                .list_db_backups()
+                .unwrap()
+                .into_iter()
+                .filter(|b| b.id.starts_with(AUTO_PREFIX))
+                .collect();
+            assert_eq!(autos.len(), 2);
+            for b in &autos {
+                assert!(PathBuf::from(&b.file_path).exists());
+            }
+        }
+
+        #[test]
+        fn manual_backups_are_not_rotated_by_auto() {
+            let dir = tempfile::tempdir().unwrap();
+            let db = Database::new(&dir.path().join("cc.db")).unwrap();
+            let backups_dir = dir.path().join("backups");
+            db.set_setting(KEY_RETAIN_COUNT, "1").unwrap();
+
+            db.create_db_backup(&backups_dir).unwrap(); // 手动
+            db.set_setting(KEY_LAST_AUTO_AT, "0").unwrap();
+            db.auto_backup_tick(&backups_dir).unwrap();
+
+            let list = db.list_db_backups().unwrap();
+            assert_eq!(list.len(), 2);
+        }
     }
 }
 
@@ -327,6 +583,9 @@ fn now_secs() -> i64 {
         .unwrap_or(0)
 }
 
+/// 备份 id 去重序号：同毫秒内连续创建备份时保证 id 唯一。
+static BACKUP_SEQ: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -348,6 +607,69 @@ mod tests {
         db.delete_db_backup(&backups_dir, &backup.id).unwrap();
         assert!(!PathBuf::from(&backup.file_path).exists());
         assert!(db.list_db_backups().unwrap().is_empty());
+    }
+
+    #[test]
+    fn rename_db_backup_updates_name() {
+        let dir = tempfile::tempdir().unwrap();
+        let db = Database::new(&dir.path().join("cc.db")).unwrap();
+        let backups_dir = dir.path().join("backups");
+
+        let backup = db.create_db_backup(&backups_dir).unwrap();
+        db.rename_db_backup(&backup.id, "我的快照").unwrap();
+        let renamed = db.get_db_backup(&backup.id).unwrap().unwrap();
+        assert_eq!(renamed.name, "我的快照");
+
+        assert!(db.rename_db_backup(&backup.id, "  ").is_err());
+        assert!(db.rename_db_backup("nope", "x").is_err());
+    }
+
+    #[test]
+    fn restore_creates_safety_and_replaces_data() {
+        let dir = tempfile::tempdir().unwrap();
+        let db_path = dir.path().join("cc.db");
+        let db = Database::new(&db_path).unwrap();
+        let backups_dir = dir.path().join("backups");
+
+        {
+            let conn = db.lock();
+            conn.execute(
+                "INSERT INTO providers (id, plugin_id, name) VALUES ('a', 'opencode', 'A')",
+                [],
+            )
+            .unwrap();
+        }
+        let snapshot = db.create_db_backup(&backups_dir).unwrap();
+
+        {
+            let conn = db.lock();
+            conn.execute("DELETE FROM providers WHERE id='a'", []).unwrap();
+            conn.execute(
+                "INSERT INTO providers (id, plugin_id, name) VALUES ('b', 'opencode', 'B')",
+                [],
+            )
+            .unwrap();
+        }
+
+        let safety_id = db.restore_db_backup(&backups_dir, &snapshot.id).unwrap();
+        assert_ne!(safety_id, snapshot.id);
+
+        let names: Vec<String> = {
+            let conn = db.lock();
+            let mut stmt = conn
+                .prepare("SELECT name FROM providers ORDER BY name")
+                .unwrap();
+            let rows = stmt.query_map([], |r| r.get::<_, String>(0)).unwrap();
+            rows.filter_map(|r| r.ok()).collect()
+        };
+        assert_eq!(names, vec!["A".to_string()]);
+
+        // 安全备份记录存在且文件在
+        let safety = db.get_db_backup(&safety_id).unwrap().unwrap();
+        assert!(PathBuf::from(&safety.file_path).exists());
+
+        // 恢复不存在的备份应报错
+        assert!(db.restore_db_backup(&backups_dir, "missing").is_err());
     }
 
     #[test]

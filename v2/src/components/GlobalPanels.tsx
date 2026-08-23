@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
@@ -9,6 +9,7 @@ import {
   FileJson,
   History,
   Layers,
+  Pencil,
   Plus,
   Puzzle,
   RefreshCw,
@@ -21,7 +22,10 @@ import {
   backupCreate,
   backupDelete,
   backupList,
+  backupRename,
+  backupRestore,
   exportConfigToFile,
+  getSetting,
   importConfigFromFile,
   profilesApply,
   profilesClearCurrent,
@@ -43,6 +47,7 @@ import {
   mcpUpsert,
   readRawConfig,
   removeProviderFromLive,
+  setSetting,
   syncAllProvidersToLive,
   writeRawConfig,
 } from "@/lib/api";
@@ -63,6 +68,9 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
+import { ConfirmDialog } from "@/components/ConfirmDialog";
 
 function ProfilesPanel() {
   const { t } = useTranslation();
@@ -234,13 +242,91 @@ function BackupPanel() {
   const query = useQuery({ queryKey: ["backups"], queryFn: backupList });
   const backups = query.data ?? [];
 
+  // 自动备份设置（settings 表：backup.intervalHours / backup.retainCount）
+  const [intervalHours, setIntervalHours] = useState<string>("24");
+  const [retainCount, setRetainCount] = useState<string>("10");
+  useEffect(() => {
+    void (async () => {
+      try {
+        const [i, r] = await Promise.all([
+          getSetting("backup.intervalHours"),
+          getSetting("backup.retainCount"),
+        ]);
+        if (i !== null) setIntervalHours(i);
+        if (r !== null) setRetainCount(r);
+      } catch {
+        // 缺省值即可
+      }
+    })();
+  }, []);
+
+  const handleIntervalChange = async (value: string) => {
+    setIntervalHours(value);
+    try {
+      await setSetting("backup.intervalHours", value);
+    } catch (e) {
+      toast.error(String(e));
+    }
+  };
+
+  const handleRetainChange = async (value: string) => {
+    setRetainCount(value);
+    try {
+      await setSetting("backup.retainCount", value);
+    } catch (e) {
+      toast.error(String(e));
+    }
+  };
+
+  const [renaming, setRenaming] = useState<BackupRecord | null>(null);
+  const [renameText, setRenameText] = useState("");
+  const [restoring, setRestoring] = useState<BackupRecord | null>(null);
+  const [deleting, setDeleting] = useState<BackupRecord | null>(null);
+
   const handleCreate = async () => {
     try {
       await backupCreate();
       await queryClient.invalidateQueries({ queryKey: ["backups"] });
-      toast.success(t("common.save"));
+      toast.success(t("settings.backupManager.createSuccess"));
     } catch (e) {
       toast.error(String(e));
+    }
+  };
+
+  const handleRestore = async (b: BackupRecord) => {
+    try {
+      await backupRestore(b.id);
+      await queryClient.invalidateQueries({ queryKey: ["backups"] });
+      toast.success(t("settings.backupManager.restoreSuccess"));
+    } catch (e) {
+      toast.error(String(e));
+    } finally {
+      setRestoring(null);
+    }
+  };
+
+  const handleRename = async () => {
+    if (!renaming) return;
+    try {
+      await backupRename(renaming.id, renameText);
+      await queryClient.invalidateQueries({ queryKey: ["backups"] });
+      toast.success(t("settings.backupManager.renameSuccess"));
+    } catch (e) {
+      toast.error(String(e));
+    } finally {
+      setRenaming(null);
+    }
+  };
+
+  const handleDelete = async (b: BackupRecord) => {
+    try {
+      await backupDelete(b.id);
+      await queryClient.invalidateQueries({ queryKey: ["backups"] });
+      toast.success(t("settings.backupManager.deleteSuccess"));
+    } catch (e) {
+      toast.error(String(e));
+    } finally {
+      setDeleting(null);
     }
   };
 
@@ -273,21 +359,15 @@ function BackupPanel() {
     }
   };
 
-  const handleDelete = async (b: BackupRecord) => {
-    try {
-      await backupDelete(b.id);
-      await queryClient.invalidateQueries({ queryKey: ["backups"] });
-    } catch (e) {
-      toast.error(String(e));
-    }
-  };
+  const intervalOptions = ["0", "1", "6", "12", "24", "48", "72"];
+  const retainOptions = ["1", "3", "5", "10", "20", "50"];
 
   return (
     <div className="space-y-4">
       <PanelHeader
         icon={<Archive className="h-5 w-5" />}
-        title={t("features.backupTitle")}
-        subtitle={t("features.backupSubtitle")}
+        title={t("settings.backupManager.title")}
+        subtitle={t("settings.backupManager.description")}
       >
         <button
           type="button"
@@ -295,7 +375,7 @@ function BackupPanel() {
           className="inline-flex items-center gap-1 rounded-md border border-border px-2 py-1 text-xs transition-colors hover:bg-accent"
         >
           <Archive className="h-3 w-3" />
-          {t("features.backupCreate")}
+          {t("settings.backupManager.createBackup")}
         </button>
         <button
           type="button"
@@ -314,6 +394,52 @@ function BackupPanel() {
           {t("features.backupImport")}
         </button>
       </PanelHeader>
+
+      <Card>
+        <CardContent className="flex flex-wrap items-center gap-x-6 gap-y-3 p-4">
+          <label className="flex items-center gap-2 text-sm">
+            <span className="text-muted-foreground">
+              {t("settings.backupManager.intervalLabel")}
+            </span>
+            <select
+              value={intervalHours}
+              onChange={(e) => void handleIntervalChange(e.target.value)}
+              className="h-8 rounded-md border border-border-default bg-background px-2 text-sm"
+            >
+              {intervalOptions.map((v) => (
+                <option key={v} value={v}>
+                  {v === "0"
+                    ? t("settings.backupManager.intervalDisabled")
+                    : Number(v) % 24 === 0
+                      ? t("settings.backupManager.intervalDays", {
+                          days: Number(v) / 24,
+                        })
+                      : t("settings.backupManager.intervalHours", {
+                          hours: v,
+                        })}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="flex items-center gap-2 text-sm">
+            <span className="text-muted-foreground">
+              {t("settings.backupManager.retainLabel")}
+            </span>
+            <select
+              value={retainCount}
+              onChange={(e) => void handleRetainChange(e.target.value)}
+              className="h-8 rounded-md border border-border-default bg-background px-2 text-sm"
+            >
+              {retainOptions.map((v) => (
+                <option key={v} value={v}>
+                  {v}
+                </option>
+              ))}
+            </select>
+          </label>
+        </CardContent>
+      </Card>
+
       {query.isLoading ? (
         <Card>
           <CardContent className="py-10 text-center text-xs text-muted-foreground">
@@ -323,7 +449,7 @@ function BackupPanel() {
       ) : backups.length === 0 ? (
         <EmptyState
           icon={<Archive className="h-8 w-8" />}
-          message={t("features.backupEmpty")}
+          message={t("settings.backupManager.empty")}
         />
       ) : (
         <Card>
@@ -340,19 +466,89 @@ function BackupPanel() {
                     {(b.sizeBytes / 1024).toFixed(1)} KB
                   </div>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => handleDelete(b)}
-                  className="shrink-0 rounded p-1.5 text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
-                  title={t("common.delete")}
-                >
-                  <Trash2 className="h-4 w-4" />
-                </button>
+                <div className="flex shrink-0 items-center gap-0.5">
+                  <button
+                    type="button"
+                    onClick={() => setRestoring(b)}
+                    className="rounded p-1.5 text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
+                    title={t("settings.backupManager.restore")}
+                  >
+                    <History className="h-4 w-4" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setRenaming(b);
+                      setRenameText(b.name);
+                    }}
+                    className="rounded p-1.5 text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
+                    title={t("settings.backupManager.rename")}
+                  >
+                    <Pencil className="h-4 w-4" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setDeleting(b)}
+                    className="rounded p-1.5 text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
+                    title={t("common.delete")}
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </button>
+                </div>
               </li>
             ))}
           </ul>
         </Card>
       )}
+
+      <ConfirmDialog
+        isOpen={restoring !== null}
+        title={t("settings.backupManager.confirmTitle")}
+        message={t("settings.backupManager.confirmMessage")}
+        confirmText={t("settings.backupManager.restore")}
+        cancelText={t("common.cancel")}
+        variant="info"
+        onConfirm={() => {
+          if (restoring) void handleRestore(restoring);
+        }}
+        onCancel={() => setRestoring(null)}
+      />
+      <ConfirmDialog
+        isOpen={deleting !== null}
+        title={t("settings.backupManager.deleteConfirmTitle")}
+        message={t("settings.backupManager.deleteConfirmMessage")}
+        confirmText={t("common.delete")}
+        cancelText={t("common.cancel")}
+        variant="destructive"
+        onConfirm={() => {
+          if (deleting) void handleDelete(deleting);
+        }}
+        onCancel={() => setDeleting(null)}
+      />
+
+      <Dialog
+        open={renaming !== null}
+        onOpenChange={(o) => !o && setRenaming(null)}
+      >
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>{t("settings.backupManager.rename")}</DialogTitle>
+          </DialogHeader>
+          <Input
+            value={renameText}
+            onChange={(e) => setRenameText(e.target.value)}
+            placeholder={t("settings.backupManager.namePlaceholder")}
+          />
+          <div className="flex justify-end gap-2">
+            <Button variant="ghost" onClick={() => setRenaming(null)}>
+              {t("common.cancel")}
+            </Button>
+            <Button onClick={() => void handleRename()}>
+              {t("common.save")}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

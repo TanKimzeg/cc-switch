@@ -318,6 +318,14 @@ export interface BackupRecord {
   createdAt: number;
 }
 
+/** 应用行为设置（托盘/关闭行为/自启/静默启动）。 */
+export interface AppBehavior {
+  showInTray: boolean;
+  minimizeToTrayOnClose: boolean;
+  silentStartup: boolean;
+  launchOnStartup: boolean;
+}
+
 /** 完整配置导出负载。 */
 export interface ExportPayload {
   version: number;

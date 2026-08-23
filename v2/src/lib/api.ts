@@ -28,6 +28,7 @@ import type {
   UsageRecord,
   BackupRecord,
   ExportPayload,
+  AppBehavior,
 } from "@/types";
 
 export function getProviders(): Promise<Provider[]> {
@@ -196,6 +197,28 @@ export function getAppDataDirOverride(): Promise<string | null> {
 
 export function setAppDataDirOverride(path: string | null): Promise<boolean> {
   return invoke<boolean>("set_app_data_dir_override", { path });
+}
+
+export function settingsGetAppBehavior(): Promise<AppBehavior> {
+  return invoke<AppBehavior>("settings_get_app_behavior");
+}
+
+export function settingsSetMinimizeToTrayOnClose(
+  enabled: boolean,
+): Promise<void> {
+  return invoke<void>("settings_set_minimize_to_tray_on_close", { enabled });
+}
+
+export function settingsSetSilentStartup(enabled: boolean): Promise<void> {
+  return invoke<void>("settings_set_silent_startup", { enabled });
+}
+
+export function settingsSetLaunchOnStartup(enabled: boolean): Promise<void> {
+  return invoke<void>("settings_set_launch_on_startup", { enabled });
+}
+
+export function settingsSetShowInTray(enabled: boolean): Promise<void> {
+  return invoke<void>("settings_set_show_in_tray", { enabled });
 }
 
 export async function readLiveConfig(pluginId: string): Promise<LiveConfig> {
@@ -639,6 +662,14 @@ export function backupList(): Promise<BackupRecord[]> {
 
 export function backupDelete(id: string): Promise<void> {
   return invoke<void>("backup_delete", { id });
+}
+
+export function backupRename(id: string, name: string): Promise<void> {
+  return invoke<void>("backup_rename", { id, name });
+}
+
+export function backupRestore(id: string): Promise<string> {
+  return invoke<string>("backup_restore", { id });
 }
 
 export function exportConfigJson(): Promise<ExportPayload> {

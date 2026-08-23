@@ -4,8 +4,12 @@ import { toast } from "sonner";
 import { open } from "@tauri-apps/plugin-dialog";
 import { relaunch } from "@tauri-apps/plugin-process";
 import {
+  AppWindow,
+  EyeOff,
   FolderSearch,
   Loader2,
+  MonitorUp,
+  Power,
   Settings as SettingsIcon,
   Undo2,
 } from "lucide-react";
@@ -20,6 +24,7 @@ import {
   AccordionTrigger,
 } from "@/components/ui/accordion";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { ToggleRow } from "@/components/ui/toggle-row";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { ThemeSettings } from "@/components/settings/ThemeSettings";
 import {
@@ -32,19 +37,25 @@ import {
   getAppDataDirOverride,
   getPlugins,
   setAppDataDirOverride,
+  settingsGetAppBehavior,
   settingsGetOverrides,
+  settingsSetLaunchOnStartup,
+  settingsSetMinimizeToTrayOnClose,
   settingsSetOverride,
+  settingsSetShowInTray,
+  settingsSetSilentStartup,
   skillsGetSyncSettings,
   skillsList,
   skillsMigrateStorage,
   skillsSetSyncMethod,
   syncAllProvidersToLive,
 } from "@/lib/api";
-import type { SkillStorageLocation, SyncSettings } from "@/types";
+import type { AppBehavior, SkillStorageLocation, SyncSettings } from "@/types";
 
 export default function SettingsPanel() {
   const { t, i18n } = useTranslation();
   const [settings, setSettings] = useState<SyncSettings | null>(null);
+  const [behavior, setBehavior] = useState<AppBehavior | null>(null);
   const [installedCount, setInstalledCount] = useState(0);
   const [loading, setLoading] = useState(false);
   const [pending, setPending] = useState(false);
@@ -62,14 +73,17 @@ export default function SettingsPanel() {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const [s, skills, pluginList, overridesList, appDir] = await Promise.all([
-        skillsGetSyncSettings(),
-        skillsList(),
-        getPlugins(),
-        settingsGetOverrides(),
-        getAppDataDirOverride(),
-      ]);
+      const [s, skills, pluginList, overridesList, appDir, b] =
+        await Promise.all([
+          skillsGetSyncSettings(),
+          skillsList(),
+          getPlugins(),
+          settingsGetOverrides(),
+          getAppDataDirOverride(),
+          settingsGetAppBehavior(),
+        ]);
       setSettings(s);
+      setBehavior(b);
       setInstalledCount(skills.length);
       setPlugins(
         pluginList
@@ -94,6 +108,34 @@ export default function SettingsPanel() {
   const currentLanguage = i18n.language?.startsWith("en")
     ? "en"
     : ("zh" as LanguageOption);
+
+  const handleBehavior =
+    (key: keyof AppBehavior, apply: (enabled: boolean) => Promise<void>) =>
+    async (enabled: boolean) => {
+      const prev = behavior;
+      setBehavior((b) => (b ? { ...b, [key]: enabled } : b));
+      try {
+        await apply(enabled);
+        toast.success(t("common.save"));
+      } catch (e) {
+        toast.error(skillErrorText(t, e));
+        setBehavior(prev);
+      }
+    };
+
+  const onLaunchOnStartup = handleBehavior(
+    "launchOnStartup",
+    settingsSetLaunchOnStartup,
+  );
+  const onSilentStartup = handleBehavior(
+    "silentStartup",
+    settingsSetSilentStartup,
+  );
+  const onMinimizeToTray = handleBehavior(
+    "minimizeToTrayOnClose",
+    settingsSetMinimizeToTrayOnClose,
+  );
+  const onShowInTray = handleBehavior("showInTray", settingsSetShowInTray);
 
   const handleLanguageChange = (lang: LanguageOption) => {
     if (lang === currentLanguage) return;
@@ -253,6 +295,48 @@ export default function SettingsPanel() {
               onChange={handleLanguageChange}
             />
             <ThemeSettings />
+            {behavior && (
+              <section className="space-y-4">
+                <div className="flex items-center gap-2 pb-2 border-b border-border/40">
+                  <AppWindow className="h-4 w-4 text-primary" />
+                  <h3 className="text-sm font-medium">
+                    {t("settings.windowBehavior")}
+                  </h3>
+                </div>
+                <div className="space-y-3">
+                  <ToggleRow
+                    icon={<Power className="h-4 w-4 text-orange-500" />}
+                    title={t("settings.launchOnStartup")}
+                    description={t("settings.launchOnStartupDescription")}
+                    checked={behavior.launchOnStartup}
+                    onCheckedChange={(v) => void onLaunchOnStartup(v)}
+                  />
+                  {behavior.launchOnStartup && (
+                    <ToggleRow
+                      icon={<EyeOff className="h-4 w-4 text-green-500" />}
+                      title={t("settings.silentStartup")}
+                      description={t("settings.silentStartupDescription")}
+                      checked={behavior.silentStartup}
+                      onCheckedChange={(v) => void onSilentStartup(v)}
+                    />
+                  )}
+                  <ToggleRow
+                    icon={<MonitorUp className="h-4 w-4 text-blue-500" />}
+                    title={t("settings.minimizeToTray")}
+                    description={t("settings.minimizeToTrayDescription")}
+                    checked={behavior.minimizeToTrayOnClose}
+                    onCheckedChange={(v) => void onMinimizeToTray(v)}
+                  />
+                  <ToggleRow
+                    icon={<EyeOff className="h-4 w-4 text-cyan-500" />}
+                    title={t("settings.showInTray")}
+                    description={t("settings.showInTrayDescription")}
+                    checked={behavior.showInTray}
+                    onCheckedChange={(v) => void onShowInTray(v)}
+                  />
+                </div>
+              </section>
+            )}
             <section className="space-y-2">
               <header className="space-y-1">
                 <h3 className="text-sm font-medium">

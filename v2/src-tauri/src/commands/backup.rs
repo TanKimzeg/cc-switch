@@ -36,6 +36,22 @@ pub fn backup_delete(
     Ok(())
 }
 
+/// 重命名备份。
+#[tauri::command]
+pub fn backup_rename(db: State<'_, Database>, id: String, name: String) -> Result<(), String> {
+    db.rename_db_backup(&id, &name)
+}
+
+/// 恢复备份（恢复前自动创建安全备份），返回安全备份 id。
+#[tauri::command]
+pub fn backup_restore(
+    db: State<'_, Database>,
+    paths: State<'_, AppPaths>,
+    id: String,
+) -> Result<String, String> {
+    db.restore_db_backup(&backups_dir(&paths), &id)
+}
+
 /// 导出全部配置为 JSON。
 #[tauri::command]
 pub fn export_config_json(db: State<'_, Database>) -> Result<ExportPayload, String> {

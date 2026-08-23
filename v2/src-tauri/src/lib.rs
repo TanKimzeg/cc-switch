@@ -66,14 +66,18 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_process::init())
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_autostart::init(
+            tauri_plugin_autostart::MacosLauncher::LaunchAgent,
+            None,
+        ))
         .plugin(tauri_plugin_log::Builder::new().build())
         .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
             show_main(app);
         }))
         .setup(|app| {
             init_db(app)?;
-            tray::create(app.handle())?;
-            show_main(app.handle());
+            setup_app_behavior(app);
+            start_backup_scheduler(app.handle().clone());
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -135,6 +139,8 @@ pub fn run() {
             commands::profiles::profiles_clear_current,
             commands::backup::backup_create,
             commands::backup::backup_list,
+            commands::backup::backup_rename,
+            commands::backup::backup_restore,
             commands::backup::backup_delete,
             commands::backup::export_config_json,
             commands::backup::export_config_to_file,
@@ -162,6 +168,11 @@ pub fn run() {
             commands::providers::import_providers_from_live,
             commands::settings::get_setting,
             commands::settings::set_setting,
+            commands::settings::settings_get_app_behavior,
+            commands::settings::settings_set_minimize_to_tray_on_close,
+            commands::settings::settings_set_silent_startup,
+            commands::settings::settings_set_launch_on_startup,
+            commands::settings::settings_set_show_in_tray,
             commands::settings::settings_get_overrides,
             commands::settings::settings_set_override,
             commands::settings::get_app_data_dir_override,
@@ -177,4 +188,53 @@ fn show_main(app: &tauri::AppHandle<Wry>) {
         let _ = window.show();
         let _ = window.set_focus();
     }
+}
+
+/// 启动期行为装配：托盘显隐、关闭最小化拦截、静默启动。
+fn setup_app_behavior(app: &tauri::App<Wry>) {
+    let behavior = {
+        let db = app.state::<Database>();
+        db.get_app_behavior()
+    };
+
+    if behavior.show_in_tray {
+        if let Err(e) = tray::create(app.handle()) {
+            log::error!("创建托盘失败: {e}");
+        }
+    }
+
+    // 拦截关闭请求：开启「关闭时最小化到托盘」时隐藏窗口而非退出（每次关闭读最新设置）。
+    if let Some(window) = app.get_webview_window("main") {
+        let db = app.state::<Database>().inner().clone();
+        let win_for_close = window.clone();
+        window.on_window_event(move |event| {
+            if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+                if db.get_bool_setting(services::settings::KEY_MINIMIZE_TO_TRAY_ON_CLOSE, true) {
+                    api.prevent_close();
+                    let _ = win_for_close.hide();
+                }
+            }
+        });
+    }
+
+    // 静默启动：不显示主窗口，仅托盘运行（单实例唤起仍会显示）。
+    if !behavior.silent_startup {
+        show_main(app.handle());
+    }
+}
+
+/// 自动备份调度：启动即检查到期，此后每 30 分钟 tick 一次。
+fn start_backup_scheduler(app: tauri::AppHandle<Wry>) {
+    let db = app.state::<Database>().inner().clone();
+    let backups_dir = app.state::<AppPaths>().data_dir.join("backups");
+    tauri::async_runtime::spawn(async move {
+        loop {
+            match db.auto_backup_tick(&backups_dir) {
+                Ok(true) => log::info!("自动备份已创建"),
+                Ok(false) => {}
+                Err(e) => log::error!("自动备份失败: {e}"),
+            }
+            tokio::time::sleep(std::time::Duration::from_secs(30 * 60)).await;
+        }
+    });
 }

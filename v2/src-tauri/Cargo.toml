@@ -36,6 +36,7 @@ tauri = { version = "2", features = ["tray-icon", "image-png"] }
 tauri-plugin-log = "2"
 tauri-plugin-process = "2"
 tauri-plugin-dialog = "2"
+tauri-plugin-autostart = "2"
 
 [target.'cfg(any(target_os = "macos", target_os = "windows", target_os = "linux"))'.dependencies]
 tauri-plugin-single-instance = "2"
