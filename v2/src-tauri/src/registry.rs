@@ -349,8 +349,26 @@ impl PluginRegistry {
     }
 
     /// 返回全部已安装插件（manifest + 安装来源）。
+    ///
+    /// native 插件的路径能力（skills_dir/prompt_file）以二进制内 trait 实现为准
+    /// 回填到暴露的 manifest —— 避免「trait 已支持但 manifest 忘了声明」导致
+    /// 前端按声明过滤时隐藏该插件（Skills/Prompts 面板的应用列表来源），
+    /// 同时让暴露的路径跟随目录覆盖等动态解析。
     pub fn list_installed(&self) -> Result<Vec<InstalledPlugin>, ManifestError> {
-        let manifests = self.discover()?;
+        let mut manifests = self.discover()?;
+        for manifest in &mut manifests {
+            if manifest.entry_type != "native" {
+                continue;
+            }
+            if let Ok(plugin) = self.resolve_plugin(&manifest.id) {
+                if let Some(dir) = plugin.skills_dir() {
+                    manifest.skills_dir = Some(dir.to_string_lossy().to_string());
+                }
+                if let Some(file) = plugin.prompt_file_path() {
+                    manifest.prompt_file = Some(file.to_string_lossy().to_string());
+                }
+            }
+        }
         let installs = self.db.list_plugin_installs()?;
         Ok(manifests
             .into_iter()
@@ -824,6 +842,60 @@ mod tests {
         assert_eq!(plugin.id(), "opencode");
         assert!(plugin.capabilities().read_live);
         assert!(plugin.capabilities().sessions);
+    }
+
+    #[test]
+    fn list_installed_backfills_native_path_capabilities() {
+        // 回归：native 插件 manifest 未声明 skillsDir/promptFile 时，
+        // list_installed 应以 trait 实现回填，否则前端会隐藏该插件的应用列。
+        let dir = tempfile::tempdir().unwrap();
+        let (registry, _db) = registry_in(dir.path());
+        let plugin_dir = dir.path().join("plugins/opencode");
+        std::fs::create_dir_all(&plugin_dir).unwrap();
+        std::fs::write(
+            plugin_dir.join("manifest.json"),
+            r#"{
+                "id": "opencode",
+                "name": "OpenCode",
+                "version": "0.1.0",
+                "apiVersion": "1",
+                "capabilities": { "readLive": true },
+                "entry": { "type": "native", "module": "opencode" }
+            }"#,
+        )
+        .unwrap();
+
+        let list = registry.list_installed().unwrap();
+        let opencode = list.iter().find(|p| p.manifest.id == "opencode").unwrap();
+        let skills_dir = opencode.manifest.skills_dir.as_deref().unwrap_or_default();
+        assert!(
+            skills_dir.ends_with("skills"),
+            "skills_dir 应由 trait 回填，实际: {skills_dir}"
+        );
+        let prompt_file = opencode
+            .manifest
+            .prompt_file
+            .as_deref()
+            .unwrap_or_default();
+        assert!(
+            prompt_file.ends_with("AGENTS.md"),
+            "prompt_file 应由 trait 回填，实际: {prompt_file}"
+        );
+    }
+
+    #[test]
+    fn builtin_opencode_manifest_declares_skills_and_prompt_paths() {
+        // 内置 manifest 必须声明路径能力（TS 生态与文档依赖声明本身）。
+        let dir = tempfile::tempdir().unwrap();
+        let (registry, _db) = registry_in(dir.path());
+        registry.seed_builtin().unwrap();
+        let list = registry.list_installed().unwrap();
+        let opencode = list.iter().find(|p| p.manifest.id == "opencode").unwrap();
+        assert!(opencode.manifest.skills_dir.is_some());
+        assert!(opencode.manifest.prompt_file.is_some());
+        // shell 插件（openclaw）不参与 Skills 分发（对齐 v1 应用清单）。
+        let openclaw = list.iter().find(|p| p.manifest.id == "openclaw").unwrap();
+        assert!(openclaw.manifest.skills_dir.is_none());
     }
 
     #[test]
