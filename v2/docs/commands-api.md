@@ -121,14 +121,19 @@
 
 | 命令 | 参数 | 返回 | 说明 |
 |------|------|------|------|
-| `backup_create` | — | `BackupRecord` | 创建数据库备份（复制 db 文件到 `data_dir/backups/`） |
+| `backup_create` | — | `BackupRecord` | 创建数据库备份（SQLite backup API 写入 `data_dir/backups/`，id 前缀 `bak_`） |
 | `backup_list` | — | `BackupRecord[]` | 列出备份 |
+| `backup_rename` | `id`, `name` | `()` | 重命名备份 |
+| `backup_restore` | `id` | `string` | 恢复备份：先自动创建安全备份，再整库回灌；返回安全备份 id |
 | `backup_delete` | `id` | `()` | 删除备份 |
 | `export_config_json` | — | `ExportPayload` | 导出全部配置为 JSON |
 | `export_config_to_file` | `path` | `()` | 导出配置 JSON 到文件 |
 | `parse_export_json` | `content` | `ExportPayload` | 解析导出 JSON 文本 |
 | `import_config` | `payload` | `usize` | 导入配置负载（逐表 upsert） |
 | `import_config_from_file` | `path` | `usize` | 从 JSON 文件导入 |
+
+> 自动备份：settings 键 `backup.intervalHours`（0=禁用，默认 24）、`backup.retainCount`（默认 10）、
+> `backup.lastAutoAt`。启动即检查到期，此后每 30 分钟 tick 一次；按保留数轮换仅 `auto_` 前缀备份。
 
 ## 9. 宿主（host，仅 TS 插件）
 
@@ -148,8 +153,16 @@
 |------|------|------|------|
 | `get_setting` | `key` | `string \| null` | 读取应用级设置 |
 | `set_setting` | `key`, `value` | `()` | 写入应用级设置 |
+| `settings_get_app_behavior` | — | `AppBehavior` | 读取行为设置（showInTray/minimizeToTrayOnClose/silentStartup/launchOnStartup） |
+| `settings_set_minimize_to_tray_on_close` | `enabled` | `()` | 关闭时最小化到托盘（主窗 CloseRequested 拦截实时读取） |
+| `settings_set_silent_startup` | `enabled` | `()` | 静默启动（启动不显示主窗，仅托盘运行） |
+| `settings_set_launch_on_startup` | `enabled` | `()` | 开机自启（tauri-plugin-autostart 同步注册/注销） |
+| `settings_set_show_in_tray` | `enabled` | `()` | 托盘图标显隐（动态创建/移除，无需重启） |
 | `settings_get_overrides` | — | `OverrideDir[]` | 列出已配置的工具配置目录覆盖 |
 | `settings_set_override` | `plugin_id`, `path?` | `()` | 设置/清除工具配置目录覆盖（native 插件 `config_dir` 消费） |
 | `get_app_data_dir_override` | — | `string \| null` | 读取 CC Switch 数据目录覆盖（指针文件 `app_paths.json`） |
 | `set_app_data_dir_override` | `path?` | `bool` | 设置/清除数据目录覆盖（返回 true = 需重启生效） |
 | `update_tray_menu` | — | `()` | 重建系统托盘菜单（provider 变更后调用） |
+
+> 行为设置键：`app.showInTray` / `app.minimizeToTrayOnClose` / `app.silentStartup` / `app.launchOnStartup`
+> （"1"/"0"，缺省对齐 v1：托盘显示、关闭最小化默认开；自启/静默默认关）。

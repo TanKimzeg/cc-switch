@@ -8,22 +8,23 @@
 
 | 能力域 | v1 | v2 现状 | 差距 |
 |--------|----|---------|------|
-| Provider 配置与切换 | ✅ 8 工具、50+ 预设、一键切换、托盘 | ✅ 插件化 read_live/apply/import；native 两插件 | 预设/托盘/通用供应商缺失 |
-| MCP | ✅ 统一面板、双向同步、Deep Link 导入 | ✅ mcp_servers + 插件同步 | 缺 Deep Link 导入、部分 Agent 原生适配 |
+| Provider 配置与切换 | ✅ 8 工具、50+ 预设、一键切换、托盘 | ✅ 插件化 read_live/apply/import；native 两插件 | 预设/通用供应商缺失（预设搬运范围已定为内置插件高频子集） |
+| MCP | ✅ 统一面板、双向同步、Deep Link 导入 | ✅ mcp_servers + 插件同步 + 编辑/校验/预设/wizard(http)/智能粘贴/批量开关/搜索/删除确认；导入合并语义 + 取消勾选清理 + 安装守卫 + 切换后重投影 | 缺 Deep Link 导入（随 §3.5 一并做）|
 | Skill | ✅ GitHub 仓库 / ZIP 安装、skills.sh 公共注册表、SHA-256 更新检测、备份恢复、软链/复制 | ✅ 已对齐（仓库/ZIP 安装、skills.sh 搜索、更新检测、卸载备份+恢复、未管理导入、软链/复制、存储迁移；SSOT 默认 `~/.cc-switch/skills`） | 已补齐（见 §3.9） |
 | Prompt | ✅ Markdown 编辑、单应用互斥启用、回填保护 | ✅ 已对齐（互斥启用 + 回填保护 + 清空/删除保护 + 首启自动导入） | 已补齐（见 §3.11） |
 | 用量 | ✅ 用量仪表盘、趋势、请求日志、自定义定价 | ✅ 趋势图 + 请求日志 + 日汇总（`UsageTrendChart`） | 仅剩 model_pricing 接线（§3.3） |
 | 会话 | ✅ 浏览/搜索/恢复，SQLite 会话 | ✅ sessions/load/delete（claude/opencode） | 缺搜索、更多 Agent 会话源 |
-| **代理（proxy）** | ✅ 本地代理热切换、故障转移、熔断器 | ❌ **无** | **P0 大项** |
+| **代理（proxy）** | ✅ 本地代理热切换、故障转移、熔断器 | ❌ **无** | **暂不考虑实现** |
 | 余额/订阅 | ✅ balance、subscription、grok 订阅 | ❌ 无 | P1 |
 | 云端同步 | ✅ Dropbox/OneDrive/iCloud/WebDAV/S3 | ❌ 无 | P1 |
 | Deep Link | ✅ `ccswitch://` 导入 | ❌ 无 | P1 |
-| 托盘快捷切换 | ✅ | ✅ 插件→provider 两级菜单 + 勾选当前 + 切换即重建 | 已补齐（见 §3.6） |
+| 托盘快捷切换 | ✅ | ✅ 插件→provider 两级菜单 + 勾选当前 + 切换即重建；托盘显隐可设置 | 已补齐（见 §3.6） |
 | 配置方案 Profile | ✅ 项目级配置快照（供应商/MCP/Skills/记忆文件），一键应用 | ⚠️ 仅 profiles 表 CRUD 存 JSON，apply 未真正恢复现场 | **缺快照语义 + 应用到 live** |
-| 备份/导入导出 | ✅ 自动备份、导入导出 | ✅ db_backups + export/import | 基本对齐（缺自动备份轮换） |
+| 备份/导入导出 | ✅ 自动备份、导入导出 | ✅ db_backups + export/import + 恢复（安全备份）/重命名/自动备份 interval+retain 轮换 | 已补齐（见 §3.14） |
 | 工作区编辑器（OpenClaw） | ✅ AGENTS.md/SOUL.md 编辑 | ❌ 无 | P2 |
 | 速度测试 / 健康监控 | ✅ SpeedtestService、供应商健康 | ❌ 无 | P2 |
-| 系统设置 | 自定义配置目录、override 目录 | ✅ 工具配置目录覆盖 + CC Switch 数据目录覆盖（指针文件 + 重启） | 已补齐（见 §3.17） |
+| 系统设置 | 自定义配置目录、override 目录、主题/语言/窗口行为等 | ✅ Tab 化（通用/高级）：主题三态、语言切换(zh/en)、Skills 存储/同步方式、目录覆盖；窗口行为（自启/静默启动/关闭最小化托盘/托盘显隐） | 已补齐（见 §3.17、§3.18） |
+| UI 外壳/设计风格 | 64px header、全屏面板、动画、快捷键 | 设计 token/ui 组件同源；外壳范式差异保留（v2 顶栏 nav + 左侧插件栏） | 外壳重构另轮处理（方向：v1 header + 保留侧栏） |
 
 ## 2. 已对齐的能力（v2 已具备）
 
@@ -195,11 +196,27 @@
 
 **实现思路**：后续新增 Agent 时实现 `sessions()`；前端加搜索框过滤 `title`/`project_dir`。
 
-### 3.14 自动备份轮换 —— P2
+### 3.14 自动备份轮换 —— ✅ **已实现（2026-08-23）**
 
 **v1**：自动备份 + 轮换（保留 N 份）。
 
-**实现思路**：`backup_create` 触发时机（定时/启动）+ 按数量/时间清理旧备份（`db_backups` 已有）。
+**v2 现状**：✅ 已对齐（`services/backup.rs` `auto` 模块）：
+- settings 键 `backup.intervalHours`（0=禁用，默认 24）/ `backup.retainCount`（默认 10）/ `backup.lastAutoAt`。
+- 启动即检查到期，此后每 30 分钟 tick；`auto_` 前缀备份按保留数轮换（手动备份不受影响）。
+- 备份创建改用 SQLite backup API（原文件复制在 WAL 模式下会丢未 checkpoint 页，正确性修复）。
+- 新命令 `backup_restore`（恢复前自动建安全备份，回灌后补回安全备份记录）、`backup_rename`。
+- 前端 BackupPanel：间隔/保留数量 Select、恢复/重命名/删除确认。
+
+### 3.18 系统设置：Tab 化 + 行为设置 —— ✅ **已实现（2026-08-23）**
+
+**v1**：SettingsPage 六 Tab（general/proxy/auth/advanced/usage/about）；通用 Tab 含语言/主题/Skills/窗口行为等分区。
+
+**v2 现状**：✅ 已对齐（本轮范围，proxy/auth/usage/about 随对应能力落地再补 Tab）：
+- **Tab 骨架**：通用（语言/主题/Skills 存储/Skills 同步方式/窗口行为）+ 高级（配置目录 Accordion，对齐 v1 advanced.configDir 分组）。
+- **主题切换**：ThemeSettings 三态按钮（theme-provider 与 v1 同源，原生标题栏同步）。
+- **语言切换**：LanguageSettings（zh/en），i18n 初始化对齐 v1（localStorage → navigator 探测 → 回退 zh）；zh-TW/ja 待 locale 补齐后放开。
+- **窗口行为**：开机自启（tauri-plugin-autostart）+ 条件显示静默启动、关闭时最小化到托盘（CloseRequested 拦截实时读设置）、托盘图标显隐（动态创建/移除）。键见 commands-api.md §10。
+- **MCP 面板功能对齐**：编辑已有服务器、预设 chips（mcpPresets 移植含 Windows cmd /c npx 包装）、http 类型向导、智能粘贴（mcpServers 包装识别）、后端结构校验 validate_server_spec、搜索白名单（排除 env/headers 凭据）、按 app 批量开关、元数据字段+行内展示、删除确认+写锁。
 
 ### 3.15 工作区编辑器（OpenClaw）—— P2
 
@@ -239,7 +256,7 @@
 ## 5. 建议实施顺序
 
 1. ~~**P0**：本地代理（3.1）~~ —— **暂不考虑实现**（用户决定）。
-2. **P1 快速项**：模型定价接线（3.3）、供应商预设（3.7）。（**用量图表（3.12）已完成**；**托盘切换（3.6）已完成**）
-3. **P1 中型项**：余额/订阅（3.2）、Deep Link（3.5）、通用供应商（3.8）、云端同步（3.4）、**Profile 项目快照（3.10）**。（**Skill 仓库/skills.sh（3.9）已完成**；**Prompt 互斥+回填（3.11）已完成**）
-4. **P2**：会话搜索（3.13）、备份轮换（3.14）、工作区（3.15）、速度测试（3.16）。
+2. ~~**P1 快速项**：模型定价接线（3.3）、供应商预设（3.7）~~ —— 预设范围已定（内置插件高频子集）；**用量图表（3.12）、托盘切换（3.6）已完成**；**设置 Tab 化/主题语言/窗口行为/MCP 对齐/备份增强（§3.14、§3.18）已完成（2026-08-23）**。
+3. **P1 中型项**：余额/订阅（3.2）、Deep Link（3.5，含 MCP Deep Link 导入）、通用供应商（3.8）、云端同步（3.4）、**Profile 项目快照（3.10）**、**外壳重构（v1 header + 保留侧栏）与供应商预设机制**。（**Skill 仓库/skills.sh（3.9）、Prompt 互斥+回填（3.11）已完成**）
+4. **P2**：会话搜索（3.13）、工作区（3.15）、速度测试（3.16）。
 5. **TS 沙箱**：方案 A → B，作为贯穿性的架构演进。
