@@ -42,6 +42,41 @@ fn row_to_server(row: &Row<'_>) -> rusqlite::Result<McpServer> {
     })
 }
 
+/// 结构校验（对齐 v1 mcp/validation.rs）：type 必须 stdio/http/sse（缺省视为
+/// stdio）；stdio 必填 command；http/sse 必填 url。
+pub fn validate_server_spec(spec: &serde_json::Value) -> Result<(), String> {
+    if !spec.is_object() {
+        return Err("MCP 配置必须是 JSON 对象".to_string());
+    }
+    let spec_type = spec
+        .get("type")
+        .and_then(|v| v.as_str())
+        .unwrap_or("stdio");
+    match spec_type {
+        "stdio" => {
+            let cmd = spec
+                .get("command")
+                .and_then(|v| v.as_str())
+                .unwrap_or_default();
+            if cmd.trim().is_empty() {
+                return Err("stdio 类型的 MCP 服务器必须填写 command".to_string());
+            }
+        }
+        "http" | "sse" => {
+            let url = spec.get("url").and_then(|v| v.as_str()).unwrap_or_default();
+            if url.trim().is_empty() {
+                return Err(format!("{spec_type} 类型的 MCP 服务器必须填写 url"));
+            }
+        }
+        other => {
+            return Err(format!(
+                "不支持的 MCP 类型 '{other}'（仅支持 stdio/http/sse）"
+            ))
+        }
+    }
+    Ok(())
+}
+
 impl Database {
     /// 列出全部 MCP 服务器（含各插件启用状态）。
     pub fn list_mcp_servers(&self) -> rusqlite::Result<Vec<McpServer>> {
@@ -250,6 +285,7 @@ impl McpService {
         registry: &PluginRegistry,
         server: &McpServer,
     ) -> Result<(), String> {
+        validate_server_spec(&server.spec)?;
         let previous = db.get_mcp_server(&server.id).map_err(|e| e.to_string())?;
         db.upsert_mcp_server(server).map_err(|e| e.to_string())?;
         Self::sync_server_to_enabled(db, registry, server)?;
@@ -277,6 +313,7 @@ impl McpService {
         plugin_id: &str,
         spec: &McpServerSpec,
     ) -> Result<(), String> {
+        validate_server_spec(&spec.spec)?;
         let server = match db.get_mcp_server(&spec.id).map_err(|e| e.to_string())? {
             Some(mut existing) => {
                 match existing.apps.iter_mut().find(|(pid, _)| pid == plugin_id) {
@@ -395,6 +432,41 @@ mod tests {
         assert!(db.delete_mcp_server("filesystem").unwrap());
         assert!(db.get_mcp_server("filesystem").unwrap().is_none());
         assert!(!db.delete_mcp_server("filesystem").unwrap());
+    }
+
+    #[test]
+    fn validate_spec_rules_match_v1() {
+        // 缺省 type 视为 stdio，需要 command
+        assert!(validate_server_spec(&serde_json::json!({ "command": "npx" })).is_ok());
+        assert!(validate_server_spec(
+            &serde_json::json!({ "type": "stdio", "command": "npx", "args": ["-y"] })
+        )
+        .is_ok());
+        assert!(validate_server_spec(&serde_json::json!({})).is_err());
+
+        // http/sse 需要 url
+        assert!(validate_server_spec(
+            &serde_json::json!({ "type": "http", "url": "https://x/mcp" })
+        )
+        .is_ok());
+        assert!(validate_server_spec(&serde_json::json!({ "type": "sse" })).is_err());
+
+        // 未知类型拒绝；非对象拒绝
+        assert!(validate_server_spec(&serde_json::json!({ "type": "ws" })).is_err());
+        assert!(validate_server_spec(&serde_json::json!("string")).is_err());
+    }
+
+    #[test]
+    fn upsert_full_rejects_invalid_spec() {
+        let dir = tempfile::tempdir().unwrap();
+        let db = Database::new(&dir.path().join("test.db")).unwrap();
+        let registry =
+            crate::registry::PluginRegistry::new(dir.path().join("plugins"), db.clone());
+
+        let mut server = sample_server();
+        server.spec = serde_json::json!({ "type": "stdio" });
+        assert!(McpService::upsert_server_full(&db, &registry, &server).is_err());
+        assert!(db.get_mcp_server("filesystem").unwrap().is_none());
     }
 
     #[test]

@@ -326,6 +326,58 @@
     "checkRepoUrl": "Please check that the repo URL is correct",
     "uninstallFirst": "Please uninstall the existing skill with the same name first"
   },
+  "mcp": {
+    "addServer": "Add MCP",
+    "editServer": "Edit MCP",
+    "typeStdio": "Local (stdio)",
+    "typeHttp": "Remote (HTTP)",
+    "typeSse": "Remote (SSE)",
+    "command": "Command",
+    "searchPlaceholder": "Search MCP by name, ID, description or tags...",
+    "noResults": "No matching MCP servers",
+    "smartPasteDetected": "Detected mcpServers wrapper, server extracted",
+    "metadataOptional": "Metadata (optional)",
+    "description": "Description",
+    "tags": "Tags (comma separated)",
+    "homepage": "Homepage URL",
+    "docs": "Docs URL",
+    "batchToggle": "Batch toggle per app",
+    "enableAll": "Enable All",
+    "disableAll": "Disable All",
+    "bulkToggleFailed": "{{count}} items failed to update",
+    "deleteConfirmTitle": "Confirm Delete",
+    "deleteConfirmMessage": "Delete \"{{name}}\"? It will also be removed from each app's live config.",
+    "error": {
+      "idRequired": "Please enter identifier",
+      "idExists": "Identifier already exists. Please choose another.",
+      "jsonInvalid": "Invalid JSON format",
+      "commandRequired": "Please enter command or URL",
+      "saveFailed": "Save failed",
+      "deleteFailed": "Delete failed"
+    },
+    "presets": {
+      "fetch": {
+        "name": "mcp-server-fetch",
+        "description": "Universal HTTP request tool, supports GET/POST and other HTTP methods, suitable for quick API requests and web data scraping"
+      },
+      "time": {
+        "name": "@modelcontextprotocol/server-time",
+        "description": "Time query tool providing current time, timezone conversion, and date calculation features"
+      },
+      "memory": {
+        "name": "@modelcontextprotocol/server-memory",
+        "description": "Knowledge graph memory system supporting entities, relations, and observations to help AI remember important information from conversations"
+      },
+      "sequential-thinking": {
+        "name": "@modelcontextprotocol/server-sequential-thinking",
+        "description": "Sequential thinking tool helping AI break down complex problems into multiple steps for deeper thinking"
+      },
+      "context7": {
+        "name": "@upstash/context7-mcp",
+        "description": "Context7 documentation search tool providing latest library docs and code examples, with higher limits when configured with a key"
+      }
+    }
+  },
   "settings": {
     "title": "Settings",
     "tabGeneral": "General",
