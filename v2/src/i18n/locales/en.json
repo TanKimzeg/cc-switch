@@ -328,6 +328,23 @@
   },
   "settings": {
     "title": "Settings",
+    "tabGeneral": "General",
+    "tabAdvanced": "Advanced",
+    "theme": "Theme",
+    "themeHint": "Choose the appearance theme for the app, takes effect immediately.",
+    "themeLight": "Light",
+    "themeDark": "Dark",
+    "themeSystem": "System",
+    "language": "Language",
+    "languageHint": "Takes effect immediately and persists after restart.",
+    "languageOptionChinese": "简体中文",
+    "languageOptionEnglish": "English",
+    "advanced": {
+      "configDir": {
+        "title": "Configuration Directory",
+        "description": "Manage CC Switch data directory and config storage paths for each tool"
+      }
+    },
     "skillStorageTitle": "Skills storage location",
     "skillStorageDescription": "Choose the directory where CC Switch stores the master copy of Skills",
     "skillStorageCcSwitch": "CC Switch",

@@ -328,6 +328,23 @@
   },
   "settings": {
     "title": "设置",
+    "tabGeneral": "通用",
+    "tabAdvanced": "高级",
+    "theme": "外观主题",
+    "themeHint": "选择应用的外观主题，立即生效。",
+    "themeLight": "浅色",
+    "themeDark": "深色",
+    "themeSystem": "跟随系统",
+    "language": "界面语言",
+    "languageHint": "切换后立即生效，重启后保持。",
+    "languageOptionChinese": "简体中文",
+    "languageOptionEnglish": "English",
+    "advanced": {
+      "configDir": {
+        "title": "配置文件目录",
+        "description": "管理 CC Switch 数据目录与各工具的配置存储路径"
+      }
+    },
     "skillStorageTitle": "Skills 存储位置",
     "skillStorageDescription": "选择 CC Switch 存放 Skills 主副本的目录",
     "skillStorageCcSwitch": "CC Switch",

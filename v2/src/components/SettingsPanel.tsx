@@ -13,7 +13,20 @@ import { PanelHeader } from "@/components/PanelHeader";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from "@/components/ui/accordion";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
+import { ThemeSettings } from "@/components/settings/ThemeSettings";
+import {
+  LanguageSettings,
+  type LanguageOption,
+} from "@/components/settings/LanguageSettings";
+import { cn } from "@/lib/utils";
 import { skillErrorText } from "@/lib/skillsUtils";
 import {
   getAppDataDirOverride,
@@ -30,7 +43,7 @@ import {
 import type { SkillStorageLocation, SyncSettings } from "@/types";
 
 export default function SettingsPanel() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const [settings, setSettings] = useState<SyncSettings | null>(null);
   const [installedCount, setInstalledCount] = useState(0);
   const [loading, setLoading] = useState(false);
@@ -78,6 +91,20 @@ export default function SettingsPanel() {
     void load();
   }, [load]);
 
+  const currentLanguage = i18n.language?.startsWith("en")
+    ? "en"
+    : ("zh" as LanguageOption);
+
+  const handleLanguageChange = (lang: LanguageOption) => {
+    if (lang === currentLanguage) return;
+    void i18n.changeLanguage(lang);
+    try {
+      window.localStorage.setItem("language", lang);
+    } catch {
+      // localStorage 不可用时仅本次会话生效
+    }
+  };
+
   const handleSyncMethod = async (method: string) => {
     setPending(true);
     try {
@@ -96,6 +123,7 @@ export default function SettingsPanel() {
   };
 
   const requestMigrate = (target: SkillStorageLocation) => {
+    if (target === settings?.storageLocation) return;
     if (installedCount > 0) {
       setMigrateTarget(target);
     } else {
@@ -194,23 +222,6 @@ export default function SettingsPanel() {
     await handleOverrideChange(pluginId, picked);
   };
 
-  const locationOptions: {
-    value: SkillStorageLocation;
-    label: string;
-    hint: string;
-  }[] = [
-    {
-      value: "cc_switch",
-      label: t("settings.skillStorageCcSwitch"),
-      hint: t("settings.skillStorageCcSwitchHint"),
-    },
-    {
-      value: "unified",
-      label: t("settings.skillStorageUnified"),
-      hint: t("settings.skillStorageUnifiedHint"),
-    },
-  ];
-
   return (
     <div className="space-y-4">
       <PanelHeader
@@ -226,202 +237,232 @@ export default function SettingsPanel() {
           </CardContent>
         </Card>
       ) : (
-        <>
-          {/* Skills 存储位置 */}
-          <Card>
-            <CardContent className="p-6">
-              <h3 className="text-sm font-semibold">
-                {t("settings.skillStorageTitle")}
-              </h3>
-              <p className="mt-0.5 text-xs text-muted-foreground">
-                {t("settings.skillStorageDescription")}
-              </p>
-              <div className="mt-4 flex flex-wrap gap-2">
-                {locationOptions.map((opt) => {
-                  const active = settings.storageLocation === opt.value;
-                  return (
-                    <button
-                      key={opt.value}
-                      type="button"
-                      disabled={pending}
-                      onClick={() => requestMigrate(opt.value)}
-                      className={`rounded-md border px-3 py-1.5 text-sm transition-colors ${
-                        active
-                          ? "border-primary bg-primary/10 text-primary"
-                          : "border-border-default text-muted-foreground hover:bg-muted"
-                      }`}
-                    >
-                      {opt.label}
-                    </button>
-                  );
-                })}
-              </div>
-              <p className="mt-2 text-xs text-muted-foreground">
-                {
-                  locationOptions.find(
-                    (o) => o.value === settings.storageLocation,
-                  )?.hint
-                }
-              </p>
-            </CardContent>
-          </Card>
+        <Tabs defaultValue="general" className="space-y-6">
+          <TabsList className="grid w-full grid-cols-2 glass rounded-lg">
+            <TabsTrigger value="general">
+              {t("settings.tabGeneral")}
+            </TabsTrigger>
+            <TabsTrigger value="advanced">
+              {t("settings.tabAdvanced")}
+            </TabsTrigger>
+          </TabsList>
 
-          {/* Skills 同步方式 */}
-          <Card>
-            <CardContent className="p-6">
-              <h3 className="text-sm font-semibold">
-                {t("settings.skillSyncTitle")}
-              </h3>
-              <p className="mt-0.5 text-xs text-muted-foreground">
-                {t("settings.skillSyncDescription")}
+          <TabsContent value="general" className="space-y-6 mt-0">
+            <LanguageSettings
+              value={currentLanguage}
+              onChange={handleLanguageChange}
+            />
+            <ThemeSettings />
+            <section className="space-y-2">
+              <header className="space-y-1">
+                <h3 className="text-sm font-medium">
+                  {t("settings.skillStorageTitle")}
+                </h3>
+                <p className="text-xs text-muted-foreground">
+                  {t("settings.skillStorageDescription")}
+                </p>
+              </header>
+              <div className="inline-flex gap-1 rounded-md border border-border-default bg-background p-1">
+                {(
+                  [
+                    ["cc_switch", t("settings.skillStorageCcSwitch")],
+                    ["unified", t("settings.skillStorageUnified")],
+                  ] as const
+                ).map(([value, label]) => (
+                  <SegmentButton
+                    key={value}
+                    active={settings.storageLocation === value}
+                    disabled={pending}
+                    onClick={() => requestMigrate(value)}
+                  >
+                    {label}
+                  </SegmentButton>
+                ))}
+              </div>
+              <p className="text-xs text-muted-foreground">
+                {settings.storageLocation === "unified"
+                  ? t("settings.skillStorageUnifiedHint")
+                  : t("settings.skillStorageCcSwitchHint")}
               </p>
-              <div className="mt-4 flex flex-wrap gap-2">
+            </section>
+
+            <section className="space-y-2">
+              <header className="space-y-1">
+                <h3 className="text-sm font-medium">
+                  {t("settings.skillSyncTitle")}
+                </h3>
+                <p className="text-xs text-muted-foreground">
+                  {t("settings.skillSyncDescription")}
+                </p>
+              </header>
+              <div className="inline-flex gap-1 rounded-md border border-border-default bg-background p-1">
                 {(
                   [
                     ["auto", t("settings.skillSyncSymlink")],
                     ["copy", t("settings.skillSyncCopy")],
                   ] as const
-                ).map(([value, label]) => {
-                  const active = settings.syncMethod === value;
-                  return (
-                    <button
-                      key={value}
-                      type="button"
-                      disabled={pending}
-                      onClick={() => void handleSyncMethod(value)}
-                      className={`rounded-md border px-3 py-1.5 text-sm transition-colors ${
-                        active
-                          ? "border-primary bg-primary/10 text-primary"
-                          : "border-border-default text-muted-foreground hover:bg-muted"
-                      }`}
-                    >
-                      {label}
-                    </button>
-                  );
-                })}
+                ).map(([value, label]) => (
+                  <SegmentButton
+                    key={value}
+                    active={settings.syncMethod === value}
+                    disabled={pending}
+                    onClick={() => void handleSyncMethod(value)}
+                  >
+                    {label}
+                  </SegmentButton>
+                ))}
               </div>
               {settings.syncMethod === "auto" && (
-                <p className="mt-2 text-xs text-muted-foreground">
+                <p className="text-xs text-muted-foreground">
                   {t("settings.skillSyncSymlinkHint")}
                 </p>
               )}
-            </CardContent>
-          </Card>
+            </section>
+          </TabsContent>
 
-          {/* CC Switch 配置目录 */}
-          <Card>
-            <CardContent className="p-6">
-              <h3 className="text-sm font-semibold">
-                {t("settings.appDataDir")}
-              </h3>
-              <p className="mt-0.5 text-xs text-muted-foreground">
-                {t("settings.appDataDirDescription")}
-              </p>
-              <div className="mt-4 flex gap-2">
-                <Input
-                  className="flex-1"
-                  value={appDataDir}
-                  onChange={(e) => setAppDataDir(e.target.value)}
-                  placeholder="~/.cc-switch"
-                  disabled={pending}
-                />
-                <Button
-                  variant="outline"
-                  size="icon"
-                  title={t("settings.browseDirectory")}
-                  disabled={pending}
-                  onClick={() => void handleAppDataDirBrowse()}
-                >
-                  <FolderSearch className="h-4 w-4" />
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  title={t("settings.resetDefault")}
-                  disabled={pending}
-                  onClick={() => void handleAppDataDirReset()}
-                >
-                  <Undo2 className="h-4 w-4" />
-                </Button>
-              </div>
-              <p className="mt-1 text-[11px] text-muted-foreground">
-                {t("settings.restartRequiredMessage")}
-              </p>
-            </CardContent>
-          </Card>
-
-          {/* 配置目录覆盖（高级） */}
-          <Card>
-            <CardContent className="p-6">
-              <h3 className="text-sm font-semibold">
-                {t("settings.configDirOverride")}
-              </h3>
-              <p className="mt-0.5 text-xs text-muted-foreground">
-                {t("settings.configDirOverrideDescription")}
-              </p>
-              <div className="mt-4 space-y-3">
-                {plugins.map((plugin) => {
-                  const current = overrides[plugin.id] ?? "";
-                  return (
-                    <div
-                      key={plugin.id}
-                      className="flex flex-wrap items-center gap-2"
-                    >
-                      <span className="w-32 shrink-0 text-sm">
-                        {plugin.name}
-                      </span>
-                      <Input
-                        className="min-w-[220px] flex-1"
-                        value={current}
-                        onChange={(e) =>
-                          setOverrides((prev) => ({
-                            ...prev,
-                            [plugin.id]: e.target.value,
-                          }))
-                        }
-                        onBlur={() =>
-                          void handleOverrideChange(plugin.id, current)
-                        }
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter") {
-                            void handleOverrideChange(plugin.id, current);
-                          }
-                        }}
-                        disabled={pending}
-                        placeholder="~/.config/opencode"
-                      />
-                      <Button
-                        variant="outline"
-                        size="icon"
-                        title={t("settings.browseDirectory")}
-                        disabled={pending}
-                        onClick={() =>
-                          void handleOverrideBrowse(plugin.id, current)
-                        }
-                      >
-                        <FolderSearch className="h-4 w-4" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        title={t("settings.resetDefault")}
-                        disabled={pending}
-                        onClick={() => void handleOverrideChange(plugin.id, "")}
-                      >
-                        <Undo2 className="h-4 w-4" />
-                      </Button>
+          <TabsContent value="advanced" className="mt-0 pb-4">
+            <Accordion
+              type="multiple"
+              defaultValue={[]}
+              className="w-full space-y-4"
+            >
+              <AccordionItem
+                value="directory"
+                className="rounded-xl glass-card overflow-hidden"
+              >
+                <AccordionTrigger className="px-6 py-4 hover:no-underline hover:bg-muted/50 data-[state=open]:bg-muted/50">
+                  <div className="flex items-center gap-3">
+                    <FolderSearch className="h-5 w-5 text-primary" />
+                    <div className="text-left">
+                      <h3 className="text-base font-semibold">
+                        {t("settings.advanced.configDir.title")}
+                      </h3>
+                      <p className="text-sm text-muted-foreground font-normal">
+                        {t("settings.advanced.configDir.description")}
+                      </p>
                     </div>
-                  );
-                })}
-                {plugins.length === 0 && (
-                  <p className="text-xs text-muted-foreground">
-                    {t("skills.noInstalled")}
-                  </p>
-                )}
-              </div>
-            </CardContent>
-          </Card>
-        </>
+                  </div>
+                </AccordionTrigger>
+                <AccordionContent className="px-6 pb-6 pt-4 border-t border-border/50">
+                  <div className="space-y-6">
+                    <section className="space-y-2">
+                      <h3 className="text-sm font-medium">
+                        {t("settings.appDataDir")}
+                      </h3>
+                      <p className="text-xs text-muted-foreground">
+                        {t("settings.appDataDirDescription")}
+                      </p>
+                      <div className="flex gap-2">
+                        <Input
+                          className="flex-1"
+                          value={appDataDir}
+                          onChange={(e) => setAppDataDir(e.target.value)}
+                          placeholder="~/.cc-switch"
+                          disabled={pending}
+                        />
+                        <Button
+                          variant="outline"
+                          size="icon"
+                          title={t("settings.browseDirectory")}
+                          disabled={pending}
+                          onClick={() => void handleAppDataDirBrowse()}
+                        >
+                          <FolderSearch className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          title={t("settings.resetDefault")}
+                          disabled={pending}
+                          onClick={() => void handleAppDataDirReset()}
+                        >
+                          <Undo2 className="h-4 w-4" />
+                        </Button>
+                      </div>
+                      <p className="text-[11px] text-muted-foreground">
+                        {t("settings.restartRequiredMessage")}
+                      </p>
+                    </section>
+
+                    <section className="space-y-2">
+                      <h3 className="text-sm font-medium">
+                        {t("settings.configDirOverride")}
+                      </h3>
+                      <p className="text-xs text-muted-foreground">
+                        {t("settings.configDirOverrideDescription")}
+                      </p>
+                      <div className="space-y-3">
+                        {plugins.map((plugin) => {
+                          const current = overrides[plugin.id] ?? "";
+                          return (
+                            <div
+                              key={plugin.id}
+                              className="flex flex-wrap items-center gap-2"
+                            >
+                              <span className="w-32 shrink-0 text-sm">
+                                {plugin.name}
+                              </span>
+                              <Input
+                                className="min-w-[220px] flex-1"
+                                value={current}
+                                onChange={(e) =>
+                                  setOverrides((prev) => ({
+                                    ...prev,
+                                    [plugin.id]: e.target.value,
+                                  }))
+                                }
+                                onBlur={() =>
+                                  void handleOverrideChange(plugin.id, current)
+                                }
+                                onKeyDown={(e) => {
+                                  if (e.key === "Enter") {
+                                    void handleOverrideChange(
+                                      plugin.id,
+                                      current,
+                                    );
+                                  }
+                                }}
+                                disabled={pending}
+                                placeholder="~/.config/opencode"
+                              />
+                              <Button
+                                variant="outline"
+                                size="icon"
+                                title={t("settings.browseDirectory")}
+                                disabled={pending}
+                                onClick={() =>
+                                  void handleOverrideBrowse(plugin.id, current)
+                                }
+                              >
+                                <FolderSearch className="h-4 w-4" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                title={t("settings.resetDefault")}
+                                disabled={pending}
+                                onClick={() =>
+                                  void handleOverrideChange(plugin.id, "")
+                                }
+                              >
+                                <Undo2 className="h-4 w-4" />
+                              </Button>
+                            </div>
+                          );
+                        })}
+                        {plugins.length === 0 && (
+                          <p className="text-xs text-muted-foreground">
+                            {t("skills.noInstalled")}
+                          </p>
+                        )}
+                      </div>
+                    </section>
+                  </div>
+                </AccordionContent>
+              </AccordionItem>
+            </Accordion>
+          </TabsContent>
+        </Tabs>
       )}
 
       <ConfirmDialog
@@ -455,5 +496,37 @@ export default function SettingsPanel() {
         onCancel={() => setRestartOpen(false)}
       />
     </div>
+  );
+}
+
+interface SegmentButtonProps {
+  active: boolean;
+  disabled?: boolean;
+  onClick: () => void;
+  children: React.ReactNode;
+}
+
+function SegmentButton({
+  active,
+  disabled,
+  onClick,
+  children,
+}: SegmentButtonProps) {
+  return (
+    <Button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      size="sm"
+      variant={active ? "default" : "ghost"}
+      className={cn(
+        "min-w-[96px]",
+        active
+          ? "shadow-sm"
+          : "text-muted-foreground hover:text-foreground hover:bg-muted",
+      )}
+    >
+      {children}
+    </Button>
   );
 }
