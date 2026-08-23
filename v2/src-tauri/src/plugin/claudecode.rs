@@ -75,6 +75,19 @@ fn projects_dir() -> PathBuf {
     config_dir().join("projects")
 }
 
+/// 安装守卫：未安装（`~/.claude` 目录与 `~/.claude.json` 均不存在且无目录覆盖）
+/// 时返回 false。对齐 v1 语义：MCP 写入跳过未安装的工具，不为其创建配置文件；
+/// 用户显式设置目录覆盖时视为已安装。
+fn mcp_target_installed() -> bool {
+    if crate::services::overrides::get(PLUGIN_ID).is_some()
+        || override_dir("CC_SWITCH_CLAUDE_CONFIG_DIR").is_some()
+        || override_dir("CC_SWITCH_CLAUDE_MCP_PATH").is_some()
+    {
+        return true;
+    }
+    config_dir().exists() || mcp_path().exists()
+}
+
 /// 原生 Claude Code 插件。
 #[derive(Debug, Default)]
 pub struct ClaudeCodePlugin;
@@ -586,6 +599,10 @@ impl McpPlugin for ClaudeCodePlugin {
     }
 
     fn set_mcp_server(&self, spec: &McpServerSpec) -> Result<(), PluginError> {
+        if !mcp_target_installed() {
+            log::info!("Claude Code 未安装，跳过写入 MCP 服务器 '{}'", spec.id);
+            return Ok(());
+        }
         let path = mcp_path();
         let mut root = read_json(&path)?;
         if !root.get("mcpServers").is_some_and(Value::is_object) {
@@ -598,6 +615,10 @@ impl McpPlugin for ClaudeCodePlugin {
     }
 
     fn remove_mcp_server(&self, id: &str) -> Result<(), PluginError> {
+        if !mcp_target_installed() {
+            log::info!("Claude Code 未安装，跳过移除 MCP 服务器 '{id}'");
+            return Ok(());
+        }
         let path = mcp_path();
         if !path.exists() {
             return Ok(());
@@ -647,6 +668,45 @@ mod tests {
         let dir = home.join(".claude").join("projects").join("proj");
         std::fs::create_dir_all(&dir).unwrap();
         std::fs::write(dir.join(name), content).unwrap();
+    }
+
+    #[test]
+    fn mcp_set_skips_uninstalled_target_without_creating_files() {
+        let temp = tempfile::tempdir().unwrap();
+        let _guard = HomeGuard::set(temp.path());
+        let p = ClaudeCodePlugin::new();
+
+        // 未安装（无 ~/.claude 与 ~/.claude.json）：set/remove 应静默跳过且不创建任何文件。
+        p.set_mcp_server(&McpServerSpec {
+            id: "fs".into(),
+            name: "FS".into(),
+            spec: serde_json::json!({ "type": "stdio", "command": "npx" }),
+        })
+        .unwrap();
+        p.remove_mcp_server("fs").unwrap();
+
+        assert!(!temp.path().join(".claude.json").exists());
+        assert!(!temp.path().join(".claude").exists());
+    }
+
+    #[test]
+    fn mcp_set_writes_when_installed() {
+        let temp = tempfile::tempdir().unwrap();
+        let _guard = HomeGuard::set(temp.path());
+        // 模拟已安装：存在 ~/.claude 目录。
+        std::fs::create_dir_all(temp.path().join(".claude")).unwrap();
+
+        let p = ClaudeCodePlugin::new();
+        p.set_mcp_server(&McpServerSpec {
+            id: "fs".into(),
+            name: "FS".into(),
+            spec: serde_json::json!({ "type": "stdio", "command": "npx" }),
+        })
+        .unwrap();
+
+        let servers = p.get_mcp_servers().unwrap();
+        assert_eq!(servers.len(), 1);
+        assert_eq!(servers[0].id, "fs");
     }
 
     #[test]

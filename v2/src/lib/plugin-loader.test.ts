@@ -219,7 +219,68 @@ describe("plugin-loader", () => {
         id: "fs",
         name: "fs",
         spec: { command: "npx" },
+        description: null,
+        homepage: null,
+        docs: null,
+        tags: [],
         apps: [["claudecode", true]],
+      },
+    });
+  });
+
+  it("importMcpServersFromPlugin merges into existing record without overwriting", async () => {
+    // 已存在记录：opencode 启用 + 旧 spec。从 TS 插件导入同名 id 时
+    // 应仅置位 claudecode 标志，保留旧 name/spec 与 opencode 的启用状态。
+    vi.mocked(invoke).mockImplementation(async (cmd: string) => {
+      if (cmd === "get_plugins")
+        return [
+          {
+            id: "claudecode",
+            name: "Claude Code",
+            version: "0.1.0",
+            apiVersion: "1",
+            source: "local",
+            installedAt: "",
+            entryType: "ts",
+            main: "main.js",
+          },
+        ];
+      if (cmd === "plugin_get_script")
+        return "const plugin={id:'claudecode',capabilities:{mcp:true},getMcpServers:async()=>[{id:'fs',name:'new-name',spec:{command:'new'}}]};";
+      if (cmd === "mcp_list")
+        return [
+          {
+            id: "fs",
+            name: "old-name",
+            spec: { command: "old" },
+            description: null,
+            homepage: null,
+            docs: null,
+            tags: [],
+            apps: [
+              ["opencode", true],
+              ["claudecode", false],
+            ],
+          },
+        ];
+      return null;
+    });
+
+    const n = await importMcpServersFromPlugin("claudecode");
+    expect(n).toBe(1);
+    expect(invoke).toHaveBeenCalledWith("mcp_upsert", {
+      server: {
+        id: "fs",
+        name: "old-name",
+        spec: { command: "old" },
+        description: null,
+        homepage: null,
+        docs: null,
+        tags: [],
+        apps: [
+          ["opencode", true],
+          ["claudecode", true],
+        ],
       },
     });
   });

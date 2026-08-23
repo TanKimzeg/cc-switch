@@ -60,6 +60,19 @@ fn config_path() -> PathBuf {
     config_dir().join("opencode.json")
 }
 
+/// 安装守卫：未安装（配置目录不存在且无目录覆盖）时返回 false。
+///
+/// 对齐 v1 语义：MCP 写入跳过未安装的工具，不为其创建配置文件；
+/// 用户显式设置目录覆盖时视为已安装。
+fn mcp_target_installed() -> bool {
+    if crate::services::overrides::get(PLUGIN_ID).is_some()
+        || override_dir("CC_SWITCH_OPENCODE_CONFIG_DIR").is_some()
+    {
+        return true;
+    }
+    config_dir().exists()
+}
+
 /// 原生 OpenCode 插件。
 #[derive(Debug, Default)]
 pub struct OpenCodePlugin;
@@ -369,6 +382,10 @@ impl McpPlugin for OpenCodePlugin {
     }
 
     fn set_mcp_server(&self, spec: &McpServerSpec) -> Result<(), PluginError> {
+        if !mcp_target_installed() {
+            log::info!("OpenCode 未安装，跳过写入 MCP 服务器 '{}'", spec.id);
+            return Ok(());
+        }
         let path = config_path();
         let mut config = read_config(&path)?;
         let opencode_spec = mcp::convert_to_opencode_format(&spec.spec)?;
@@ -383,7 +400,14 @@ impl McpPlugin for OpenCodePlugin {
     }
 
     fn remove_mcp_server(&self, id: &str) -> Result<(), PluginError> {
+        if !mcp_target_installed() {
+            log::info!("OpenCode 未安装，跳过移除 MCP 服务器 '{id}'");
+            return Ok(());
+        }
         let path = config_path();
+        if !path.exists() {
+            return Ok(());
+        }
         let mut config = read_config(&path)?;
         if let Some(map) = config.get_mut("mcp").and_then(Value::as_object_mut) {
             map.remove(id);
@@ -1123,6 +1147,8 @@ mod tests {
     fn mcp_servers_roundtrip_with_format_conversion() {
         let temp = tempfile::tempdir().unwrap();
         let _guard = HomeGuard::set(temp.path());
+        // 模拟已安装的 OpenCode（守卫要求配置目录存在）。
+        std::fs::create_dir_all(temp.path().join(".config").join("opencode")).unwrap();
         let p = OpenCodePlugin::new();
 
         p.set_mcp_server(&McpServerSpec {
@@ -1147,6 +1173,24 @@ mod tests {
 
         p.remove_mcp_server("filesystem").unwrap();
         assert!(p.get_mcp_servers().unwrap().is_empty());
+    }
+
+    #[test]
+    fn mcp_set_skips_uninstalled_target_without_creating_files() {
+        let temp = tempfile::tempdir().unwrap();
+        let _guard = HomeGuard::set(temp.path());
+        let p = OpenCodePlugin::new();
+
+        // 未安装（无 ~/.config/opencode）：set/remove 应静默跳过且不创建任何文件。
+        p.set_mcp_server(&McpServerSpec {
+            id: "fs".into(),
+            name: "FS".into(),
+            spec: serde_json::json!({ "type": "stdio", "command": "npx" }),
+        })
+        .unwrap();
+        p.remove_mcp_server("fs").unwrap();
+
+        assert!(!temp.path().join(".config").exists());
     }
 
     #[test]

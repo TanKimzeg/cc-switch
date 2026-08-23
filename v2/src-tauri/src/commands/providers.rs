@@ -233,7 +233,8 @@ pub fn get_provider(db: State<'_, Database>, id: String) -> Result<Option<Provid
         .map_err(|e| e.to_string())
 }
 
-/// 切换 provider：把 provider 写入插件 live 配置（current=true），并记录为当前。
+/// 切换 provider：把 provider 写入插件 live 配置（current=true），记录为当前，
+/// 并重新投影该插件启用的 MCP 服务器（对齐 v1：切换后重写 MCP 现场）。
 ///
 /// 供命令层与托盘菜单共用。
 pub fn switch_provider_core(
@@ -254,6 +255,12 @@ pub fn switch_provider_core(
             params![provider.plugin_id, provider.id],
         )
         .map_err(|e| e.to_string())?;
+    // MCP 重投影 best-effort：单条失败不影响切换本身。
+    if let Err(e) =
+        crate::services::mcp::McpService::project_all_for_plugin(db, registry, &provider.plugin_id)
+    {
+        log::error!("切换后重投影 MCP 失败（{}）: {e}", provider.plugin_id);
+    }
     Ok(())
 }
 
@@ -350,6 +357,12 @@ pub fn sync_all_providers_to_live(
         for provider in providers {
             plugin.apply(&provider, false).map_err(|e| e.to_string())?;
             written += 1;
+        }
+        // 全量投影后同样重写该插件的 MCP 现场（对齐 v1，best-effort）。
+        if let Err(e) =
+            crate::services::mcp::McpService::project_all_for_plugin(&db, &registry, &pid)
+        {
+            log::error!("全量同步后重投影 MCP 失败（{pid}）: {e}");
         }
     }
     Ok(written)

@@ -240,6 +240,94 @@ impl McpService {
         }
         Ok(())
     }
+
+    /// 落库并把服务器同步到启用插件的 live 配置。
+    ///
+    /// 对齐 v1：编辑时被取消勾选的插件，需从其 live 配置移除该服务器，
+    /// 避免残留脏数据。
+    pub fn upsert_server_full(
+        db: &Database,
+        registry: &PluginRegistry,
+        server: &McpServer,
+    ) -> Result<(), String> {
+        let previous = db.get_mcp_server(&server.id).map_err(|e| e.to_string())?;
+        db.upsert_mcp_server(server).map_err(|e| e.to_string())?;
+        Self::sync_server_to_enabled(db, registry, server)?;
+        if let Some(prev) = previous {
+            let disabled: Vec<String> = prev
+                .apps
+                .iter()
+                .filter(|(_, enabled)| *enabled)
+                .map(|(pid, _)| pid.clone())
+                .filter(|pid| !server.apps.iter().any(|(p, en)| p == pid && *en))
+                .collect();
+            for plugin_id in disabled {
+                Self::remove_server_from_plugin(db, registry, &server.id, &plugin_id)?;
+            }
+        }
+        Ok(())
+    }
+
+    /// 从插件 live 配置导入单个服务器到统一表。
+    ///
+    /// 对齐 v1 合并语义：记录已存在时仅置位当前插件的启用标志，
+    /// 不覆盖其它插件的启用状态，也不覆盖已有配置。
+    pub fn import_spec_with_merge(
+        db: &Database,
+        plugin_id: &str,
+        spec: &McpServerSpec,
+    ) -> Result<(), String> {
+        let server = match db.get_mcp_server(&spec.id).map_err(|e| e.to_string())? {
+            Some(mut existing) => {
+                match existing.apps.iter_mut().find(|(pid, _)| pid == plugin_id) {
+                    Some(slot) => slot.1 = true,
+                    None => existing.apps.push((plugin_id.to_string(), true)),
+                }
+                existing
+            }
+            None => McpServer {
+                id: spec.id.clone(),
+                name: spec.name.clone(),
+                spec: spec.spec.clone(),
+                description: None,
+                homepage: None,
+                docs: None,
+                tags: vec![],
+                apps: vec![(plugin_id.to_string(), true)],
+            },
+        };
+        db.upsert_mcp_server(&server).map_err(|e| e.to_string())
+    }
+
+    /// 把某插件启用的全部 MCP 服务器重新投影到其 live 配置（best-effort）。
+    ///
+    /// 对齐 v1：切换供应商后重写该应用的 MCP 现场，避免切换丢失 MCP 配置。
+    /// 无 `as_mcp` 能力的插件跳过；单条失败不中断，聚合返回错误。
+    pub fn project_all_for_plugin(
+        db: &Database,
+        registry: &PluginRegistry,
+        plugin_id: &str,
+    ) -> Result<(), String> {
+        let servers = db.list_mcp_servers().map_err(|e| e.to_string())?;
+        let mut errors = Vec::new();
+        for server in servers {
+            let enabled = server
+                .apps
+                .iter()
+                .any(|(pid, en)| pid == plugin_id && *en);
+            if !enabled {
+                continue;
+            }
+            if let Err(e) = Self::sync_server_to_plugin(db, registry, &server, plugin_id) {
+                errors.push(format!("{}: {e}", server.id));
+            }
+        }
+        if errors.is_empty() {
+            Ok(())
+        } else {
+            Err(errors.join("; "))
+        }
+    }
 }
 
 #[cfg(test)]
@@ -365,5 +453,157 @@ mod tests {
         let stored = db.get_mcp_server("fs").unwrap().unwrap();
         assert_eq!(stored.name, "Filesystem");
         assert!(stored.apps.is_empty());
+    }
+
+    /// 构造带内置插件注册表的隔离环境（CC_SWITCH_TEST_HOME 指向临时目录，
+    /// env_lock 串行化环境变量）。
+    struct TestEnv {
+        temp: tempfile::TempDir,
+        previous: Option<std::ffi::OsString>,
+        _lock: std::sync::MutexGuard<'static, ()>,
+    }
+
+    impl TestEnv {
+        fn path(&self) -> &std::path::Path {
+            self.temp.path()
+        }
+    }
+
+    impl Drop for TestEnv {
+        fn drop(&mut self) {
+            match self.previous.take() {
+                Some(v) => std::env::set_var("CC_SWITCH_TEST_HOME", v),
+                None => std::env::remove_var("CC_SWITCH_TEST_HOME"),
+            }
+        }
+    }
+
+    fn home_env() -> (
+        TestEnv,
+        Database,
+        crate::registry::PluginRegistry,
+    ) {
+        let lock = crate::test_support::env_lock().lock().unwrap();
+        let temp = tempfile::tempdir().unwrap();
+        let previous = std::env::var_os("CC_SWITCH_TEST_HOME");
+        std::env::set_var("CC_SWITCH_TEST_HOME", temp.path());
+        let env = TestEnv {
+            temp,
+            previous,
+            _lock: lock,
+        };
+
+        let db = Database::new(&env.temp.path().join("cc.db")).unwrap();
+        let registry =
+            crate::registry::PluginRegistry::new(env.temp.path().join("plugins"), db.clone());
+        let _ = registry.seed_builtin();
+        (env, db, registry)
+    }
+
+    fn opencode_config(home: &std::path::Path) -> serde_json::Value {
+        let path = home.join(".config").join("opencode").join("opencode.json");
+        let raw = std::fs::read_to_string(path).unwrap_or_default();
+        if raw.is_empty() {
+            serde_json::Value::Null
+        } else {
+            serde_json::from_str(&raw).unwrap()
+        }
+    }
+
+    #[test]
+    fn upsert_server_full_removes_from_unchecked_plugin_live() {
+        let (env, db, registry) = home_env();
+
+        // 模拟已安装的 OpenCode
+        let oc_dir = env.path().join(".config").join("opencode");
+        std::fs::create_dir_all(&oc_dir).unwrap();
+
+        let mut server = sample_server();
+        server.apps = vec![("opencode".into(), true)];
+        McpService::upsert_server_full(&db, &registry, &server).unwrap();
+        assert!(opencode_config(env.path())["mcp"]["filesystem"].is_object());
+
+        // 编辑后取消勾选 opencode → 应从其 live 移除，且关联行删除
+        let mut updated = sample_server();
+        updated.apps = vec![];
+        McpService::upsert_server_full(&db, &registry, &updated).unwrap();
+        let config = opencode_config(env.path());
+        assert!(
+            config["mcp"].is_null()
+                || config["mcp"]
+                    .get("filesystem")
+                    .is_none()
+        );
+        assert!(
+            db.get_mcp_server("filesystem")
+                .unwrap()
+                .unwrap()
+                .apps
+                .is_empty()
+        );
+    }
+
+    #[test]
+    fn import_spec_with_merge_preserves_existing_state() {
+        let (env, db, _registry) = home_env();
+        let _keep = env;
+
+        // 预置记录：opencode 启用、claudecode 禁用、已有配置
+        let existing = McpServer {
+            id: "shared".into(),
+            name: "Old Name".into(),
+            spec: serde_json::json!({ "type": "stdio", "command": "old" }),
+            description: None,
+            homepage: None,
+            docs: None,
+            tags: vec![],
+            apps: vec![("opencode".into(), true), ("claudecode".into(), false)],
+        };
+        db.upsert_mcp_server(&existing).unwrap();
+
+        // 从 claudecode 导入同名服务器（新 spec）→ 仅置位 claudecode 标志，
+        // 不覆盖 name/spec，也不动 opencode 的启用状态。
+        let spec = McpServerSpec {
+            id: "shared".into(),
+            name: "New Name".into(),
+            spec: serde_json::json!({ "type": "stdio", "command": "new" }),
+        };
+        McpService::import_spec_with_merge(&db, "claudecode", &spec).unwrap();
+
+        let stored = db.get_mcp_server("shared").unwrap().unwrap();
+        // get_mcp_server 的 apps 按 plugin_id 排序，做无序比较。
+        let apps: std::collections::BTreeMap<String, bool> =
+            stored.apps.iter().cloned().collect();
+        assert_eq!(stored.name, "Old Name");
+        assert_eq!(stored.spec["command"], "old");
+        assert_eq!(apps.get("opencode"), Some(&true));
+        assert_eq!(apps.get("claudecode"), Some(&true));
+    }
+
+    #[test]
+    fn project_all_for_plugin_rewrites_enabled_servers_only() {
+        let (env, db, registry) = home_env();
+        let oc_dir = env.path().join(".config").join("opencode");
+        std::fs::create_dir_all(&oc_dir).unwrap();
+
+        let enabled = sample_server(); // filesystem，启用 opencode
+        db.upsert_mcp_server(&enabled).unwrap();
+        let disabled = McpServer {
+            id: "not-enabled".into(),
+            name: "NotEnabled".into(),
+            spec: serde_json::json!({ "type": "stdio", "command": "x" }),
+            description: None,
+            homepage: None,
+            docs: None,
+            tags: vec![],
+            apps: vec![],
+        };
+        db.upsert_mcp_server(&disabled).unwrap();
+
+        McpService::project_all_for_plugin(&db, &registry, "opencode").unwrap();
+
+        let config = opencode_config(env.path());
+        assert!(config["mcp"]["filesystem"].is_object());
+        assert!(config["mcp"].get("not-enabled").is_none());
     }
 }

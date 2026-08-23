@@ -22,6 +22,9 @@ pub fn import_mcp_from_plugin(
 }
 
 /// 从插件 live 配置导入 MCP 服务器到统一表。
+///
+/// 对齐 v1 合并语义：记录已存在时仅置位当前插件的启用标志，
+/// 不覆盖其它插件的启用状态，也不覆盖已有配置。
 #[tauri::command]
 pub fn import_mcp_servers_from_plugin(
     db: State<'_, Database>,
@@ -37,17 +40,7 @@ pub fn import_mcp_servers_from_plugin(
         .map_err(|e| e.to_string())?;
     let mut imported = 0;
     for spec in servers {
-        let server = McpServer {
-            id: spec.id.clone(),
-            name: spec.name.clone(),
-            spec: spec.spec,
-            description: None,
-            homepage: None,
-            docs: None,
-            tags: vec![],
-            apps: vec![(id.clone(), true)],
-        };
-        db.upsert_mcp_server(&server).map_err(|e| e.to_string())?;
+        McpService::import_spec_with_merge(&db, &id, &spec)?;
         imported += 1;
     }
     Ok(imported)
@@ -70,15 +63,16 @@ pub fn mcp_list(db: State<'_, Database>) -> Result<Vec<McpServer>, String> {
 }
 
 /// 新增或更新 MCP 服务器，并同步到启用插件的 live 配置。
+///
+/// 对齐 v1：编辑时被取消勾选的插件，需从其 live 配置移除该服务器，
+/// 避免残留脏数据。
 #[tauri::command]
 pub fn mcp_upsert(
     db: State<'_, Database>,
     registry: State<'_, PluginRegistry>,
     server: McpServer,
 ) -> Result<(), String> {
-    db.upsert_mcp_server(&server).map_err(|e| e.to_string())?;
-    McpService::sync_server_to_enabled(&db, &registry, &server)?;
-    Ok(())
+    McpService::upsert_server_full(&db, &registry, &server)
 }
 
 /// 删除 MCP 服务器，并从所有启用插件的 live 配置移除。

@@ -361,8 +361,17 @@ export function mcpList(): Promise<McpServer[]> {
 
 /** 新增/更新 MCP 服务器并同步到启用的插件；TS 插件的 live 同步由前端脚本执行。 */
 export async function mcpUpsert(server: McpServer): Promise<void> {
+  // 编辑前快照：用于对比本次被取消勾选的插件。
+  let prevApps: [string, boolean][] = [];
+  try {
+    const all = await mcpList();
+    const prev = all.find((s) => s.id === server.id);
+    if (prev) prevApps = prev.apps;
+  } catch {
+    // 快照失败不阻塞保存
+  }
+
   await invoke<void>("mcp_upsert", { server });
-  // TS 插件：后端跳过其 live 同步（as_mcp 为 None），这里由前端脚本写 live。
   for (const [pluginId, enabled] of server.apps) {
     if (!enabled) continue;
     const ts = await loadTsPluginIfTs(pluginId);
@@ -372,6 +381,17 @@ export async function mcpUpsert(server: McpServer): Promise<void> {
         name: server.name,
         spec: server.spec,
       });
+    }
+  }
+  // 对齐后端语义：编辑时被取消勾选的 TS 插件，从其 live 配置移除该服务器。
+  const disabled = prevApps
+    .filter(([, enabled]) => enabled)
+    .map(([pluginId]) => pluginId)
+    .filter((pluginId) => !server.apps.some(([p, en]) => p === pluginId && en));
+  for (const pluginId of disabled) {
+    const ts = await loadTsPluginIfTs(pluginId);
+    if (ts?.removeMcpServer) {
+      await ts.removeMcpServer(server.id);
     }
   }
 }
@@ -420,14 +440,37 @@ export async function importMcpServersFromPlugin(
   if (ts?.getMcpServers) {
     const servers = await ts.getMcpServers();
     let imported = 0;
+    const all = (await mcpList().catch(() => [] as McpServer[])) ?? [];
     for (const spec of servers) {
       try {
-        await mcpUpsert({
-          id: spec.id,
-          name: spec.name,
-          spec: spec.spec,
-          apps: [[pluginId, true]],
-        });
+        const existing = all.find((s) => s.id === spec.id);
+        if (existing) {
+          // 合并语义（对齐 v1 与后端）：仅置位当前插件标志，不覆盖其它插件状态与已有配置。
+          const apps: [string, boolean][] = existing.apps.some(
+            ([p]) => p === pluginId,
+          )
+            ? existing.apps.map(([p, en]) =>
+                p === pluginId ? [p, true] : [p, en],
+              )
+            : [...existing.apps, [pluginId, true] as [string, boolean]];
+          // 直接落库（不经 mcpUpsert 的 live 同步：数据本就来自该插件的 live）。
+          await invoke<void>("mcp_upsert", {
+            server: { ...existing, apps },
+          });
+        } else {
+          await invoke<void>("mcp_upsert", {
+            server: {
+              id: spec.id,
+              name: spec.name,
+              spec: spec.spec,
+              description: null,
+              homepage: null,
+              docs: null,
+              tags: [],
+              apps: [[pluginId, true]],
+            },
+          });
+        }
         imported += 1;
       } catch {
         // 跳过冲突条目
