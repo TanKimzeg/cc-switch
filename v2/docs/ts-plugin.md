@@ -5,7 +5,7 @@ TS 插件由**前端（WebView）动态加载脚本执行**，通过注入的宿
 ## 1. 为什么需要 TS 插件
 
 - **无需重编译**：第三方可以分发一个 `.js` 脚本就完成插件接入，不需要用户编译 Rust。
-- **轻量自包含**：适合自包含插件，也适合通过 manifest `resources` 白名单管理用户目录配置的真实 Agent（如 claudecode 示例）。
+- **轻量自包含**：适合自包含插件，也适合通过 manifest `resources` 白名单管理用户目录配置的真实 Agent（如 claudecode-ts 示例）。
 - **统一功能面板**：TS 插件与 native/shell 共用同一套 `PluginDetail` 面板，操作经 `api.ts` 的 TS 路由自动调用加载的脚本。
 
 > **定位边界**：TS 插件的宿主文件操作限定在「插件目录 + manifest `resources` 白名单」内。未声明 `resources` 的脚本无法读写用户目录；声明后可管理 `~/.claude/` 等真实 Agent 配置（见下文「沙箱模型与演进」）。
@@ -188,7 +188,8 @@ const providers = await host.providers();
 1. 把 `ts-demo` 目录通过「添加插件」从本地目录安装。
 2. 应用将其注册为 TS 插件；前端 `api.ts` 会在操作时自动加载 `main.js` 并调用其方法。
 
-> **真实示例**：`examples/plugins/claudecode/` 是一个完整的 TS 插件，用资源白名单管理 Claude Code 的真实配置——`config` → `~/.claude/settings.json`、`mcp` → `~/.claude.json`、`projects` → `~/.claude/projects/**/*.jsonl`，实现 readLive/apply/import/sessions/loadMessages/deleteSession/MCP/rawConfig/syncUsage 全套能力。
+> **真实示例**：`examples/plugins/claudecode-ts/` 是一个完整的 TS 插件，用资源白名单管理 Claude Code 的真实配置——`config` → `~/.claude/settings.json`、`mcp` → `~/.claude.json`、`projects` → `~/.claude/projects/**/*.jsonl`，实现 readLive/apply/import/sessions/loadMessages/deleteSession/MCP/rawConfig/syncUsage 全套能力。
+> **注意**：Claude Code 的正式支持由内置 native 插件（`claudecode`，Rust 实现）提供；此示例改用 `claudecode-ts` id，用于 TS 插件开发参考，两者可共存。
 
 ## 7. 沙箱模型与演进
 

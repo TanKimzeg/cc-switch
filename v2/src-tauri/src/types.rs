@@ -99,4 +99,7 @@ pub struct InstalledPlugin {
     /// 安装来源：`builtin`（内置分发）或 `local`（本地目录安装）。
     pub source: String,
     pub installed_at: String,
+    /// 可后端切换（apply 能力且非 TS 入口）：托盘菜单/目录覆盖列表等场景的
+    /// 统一判定依据（对齐 v1「应用」概念，前端不再各自拼条件）。
+    pub backend_switchable: bool,
 }

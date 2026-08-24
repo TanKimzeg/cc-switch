@@ -8,7 +8,7 @@
 
 | 命令 | 参数 | 返回 | 说明 |
 |------|------|------|------|
-| `get_plugins` | — | `InstalledPlugin[]` | 列出已安装插件（含 manifest 字段 + 来源） |
+| `get_plugins` | — | `InstalledPlugin[]` | 列出已安装插件（manifest + 来源 + `backendSwitchable`；native 插件的 capabilities/skillsDir/promptFile 由 trait 实现回填，防声明漂移） |
 | `install_plugin` | `source: string` | `InstalledPlugin` | 从本地目录安装（目录须含 manifest.json） |
 | `uninstall_plugin` | `id: string` | `()` | 卸载；内置插件拒绝卸载 |
 | `plugin_read_live` | `id: string` | `LiveConfig` | 读取插件 live 配置（需 `read_live`） |

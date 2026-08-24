@@ -87,7 +87,7 @@ export default function SettingsPanel() {
       setInstalledCount(skills.length);
       setPlugins(
         pluginList
-          .filter((p) => p.capabilities?.apply && p.entryType !== "ts")
+          .filter((p) => p.backendSwitchable)
           .map((p) => ({ id: p.id, name: p.name, promptFile: p.promptFile })),
       );
       setOverrides(

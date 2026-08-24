@@ -100,14 +100,14 @@ describe("claudecode TS plugin (real main.js, resource host)", () => {
 
   const mainSource = () =>
     readFileSync(
-      join(__dirname, "../../examples/plugins/claudecode/main.js"),
+      join(__dirname, "../../examples/plugins/claudecode-ts/main.js"),
       "utf-8",
     );
 
   it("loads and aligns with the backend trait", async () => {
     const { host } = resourceHost({});
-    const plugin = await loadTsPlugin("claudecode", mainSource(), host);
-    expect(plugin.id).toBe("claudecode");
+    const plugin = await loadTsPlugin("claudecode-ts", mainSource(), host);
+    expect(plugin.id).toBe("claudecode-ts");
     expect(typeof plugin.readLive).toBe("function");
     expect(typeof plugin.apply).toBe("function");
     expect(typeof plugin.removeProvider).toBe("function");
@@ -130,7 +130,7 @@ describe("claudecode TS plugin (real main.js, resource host)", () => {
         permissions: { allow: ["Read"] },
       },
     });
-    const plugin = await loadTsPlugin("claudecode", mainSource(), host);
+    const plugin = await loadTsPlugin("claudecode-ts", mainSource(), host);
 
     const live = await plugin.readLive?.();
     expect(live?.providers).toHaveLength(1);
@@ -147,7 +147,7 @@ describe("claudecode TS plugin (real main.js, resource host)", () => {
 
   it("apply writes settings (sanitized), removeProvider clears fields", async () => {
     const { host, getSettings } = resourceHost({ settings: {} });
-    const plugin = await loadTsPlugin("claudecode", mainSource(), host);
+    const plugin = await loadTsPlugin("claudecode-ts", mainSource(), host);
 
     await plugin.apply?.(
       {
@@ -176,7 +176,7 @@ describe("claudecode TS plugin (real main.js, resource host)", () => {
     const { host } = resourceHost({
       sessions: { "proj-a/session-1.jsonl": SESSION_1 },
     });
-    const plugin = await loadTsPlugin("claudecode", mainSource(), host);
+    const plugin = await loadTsPlugin("claudecode-ts", mainSource(), host);
 
     const sessions = await plugin.sessions?.();
     expect(sessions).toHaveLength(1);
@@ -195,7 +195,7 @@ describe("claudecode TS plugin (real main.js, resource host)", () => {
         ].join("\n"),
       },
     });
-    const plugin = await loadTsPlugin("claudecode", mainSource(), host);
+    const plugin = await loadTsPlugin("claudecode-ts", mainSource(), host);
 
     const msgs = await plugin.loadMessages?.("proj-a/s.jsonl");
     expect(msgs).toHaveLength(2);
@@ -209,7 +209,7 @@ describe("claudecode TS plugin (real main.js, resource host)", () => {
     const { host, getUsage } = resourceHost({
       sessions: { "proj-a/session-u.jsonl": SESSION_USAGE },
     });
-    const plugin = await loadTsPlugin("claudecode", mainSource(), host);
+    const plugin = await loadTsPlugin("claudecode-ts", mainSource(), host);
 
     const records = await plugin.syncUsage?.();
     expect(records).toHaveLength(1);
@@ -224,7 +224,7 @@ describe("claudecode TS plugin (real main.js, resource host)", () => {
 
   it("mcp servers live in ~/.claude.json", async () => {
     const { host } = resourceHost({ mcp: {} });
-    const plugin = await loadTsPlugin("claudecode", mainSource(), host);
+    const plugin = await loadTsPlugin("claudecode-ts", mainSource(), host);
 
     await plugin.setMcpServer?.({
       id: "filesystem",
@@ -256,7 +256,7 @@ describe("claudecode TS plugin (real main.js, resource host)", () => {
         },
       },
     });
-    const plugin = await loadTsPlugin("claudecode", mainSource(), host);
+    const plugin = await loadTsPlugin("claudecode-ts", mainSource(), host);
     const servers = await plugin.getMcpServers?.();
     const byId = new Map((servers ?? []).map((s) => [s.id, s.spec]));
     expect(byId.get("fs")?.type).toBe("stdio");

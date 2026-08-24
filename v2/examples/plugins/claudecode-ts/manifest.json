@@ -1,0 +1,27 @@
+{
+  "id": "claudecode-ts",
+  "name": "Claude Code (TS)",
+  "version": "0.1.0",
+  "apiVersion": "1",
+  "author": "cc-switch",
+  "description": "TS 插件完整示例（Claude Code）：经宿主资源白名单读写 ~/.claude/settings.json、~/.claude.json 与会话 jsonl。Claude Code 的正式支持由内置 native 插件提供，此示例用于演示/开发 TS 插件。",
+  "capabilities": {
+    "readLive": true,
+    "apply": true,
+    "remove": true,
+    "import": true,
+    "sessions": true,
+    "mcp": true
+  },
+  "resources": {
+    "config": "~/.claude/settings.json",
+    "mcp": "~/.claude.json",
+    "projects": "~/.claude/projects"
+  },
+  "promptFile": "~/.claude/CLAUDE.md",
+  "skillsDir": "~/.claude/skills",
+  "entry": {
+    "type": "ts",
+    "main": "main.js"
+  }
+}

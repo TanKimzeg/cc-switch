@@ -8,7 +8,7 @@
 
 | 能力域 | v1 | v2 现状 | 差距 |
 |--------|----|---------|------|
-| Provider 配置与切换 | ✅ 8 工具、50+ 预设、一键切换、托盘 | ✅ 插件化 read_live/apply/import；native 两插件 | 预设/通用供应商缺失（预设搬运范围已定为内置插件高频子集） |
+| Provider 配置与切换 | ✅ 8 工具、50+ 预设、一键切换、托盘 | ✅ 插件化 read_live/apply/import；native 三插件（opencode/openclaw/**claudecode**）；托盘/重投影全后端 | 通用供应商缺失；预设**不做**（§3.7，用户决定） |
 | MCP | ✅ 统一面板、双向同步、Deep Link 导入 | ✅ mcp_servers + 插件同步 + 编辑/校验/预设/wizard(http)/智能粘贴/批量开关/搜索/删除确认；导入合并语义 + 取消勾选清理 + 安装守卫 + 切换后重投影 | 缺 Deep Link 导入（随 §3.5 一并做）|
 | Skill | ✅ GitHub 仓库 / ZIP 安装、skills.sh 公共注册表、SHA-256 更新检测、备份恢复、软链/复制 | ✅ 已对齐（仓库/ZIP 安装、skills.sh 搜索、更新检测、卸载备份+恢复、未管理导入、软链/复制、存储迁移；SSOT 默认 `~/.cc-switch/skills`） | 已补齐（见 §3.9） |
 | Prompt | ✅ Markdown 编辑、单应用互斥启用、回填保护 | ✅ 已对齐（互斥启用 + 回填保护 + 清空/删除保护 + 首启自动导入） | 已补齐（见 §3.11） |
@@ -104,14 +104,25 @@
 - 菜单数据由纯函数 `build_menu_spec` 生成（可单测）；`show`/`quit`/左键显示窗口/静态 tooltip 保留。
 - TS 插件（如 claudecode 示例）因后端无法执行脚本，托盘切换不含（`build_menu_spec` 排除）。
 
-### 3.7 供应商预设（50+）—— P1
+### 3.7 供应商预设（50+）—— ~~P1~~ **不做（用户决定，2026-08-23）**
 
 **v1**：内置 50+ 供应商预设（AWS Bedrock、NVIDIA NIM、社区中转等），复制 key 一键导入。
 
-**实现思路**：
-1. 新增 `services/presets.rs`（或 JSON 资源文件）：预设 provider 的 `settings_config` 模板（按 npm 包 + options）。
-2. 前端「添加供应商」下拉可选预设，预填 `settings_config`。
-> 预设本质是静态数据，工作量小、收益直接。
+> **不做的理由**：v1 的预设列表本质是推广位（置顶伙伴带 aff 推广链接），是商业化赞助机制的产物；本项目无赞助、未来可能转 GPL，不复制这套数据结构。用户经 JSON 编辑器添加 provider 即可。
+> 注：**MCP 预设**（无推广性质的常用服务器模板）已随 MCP 面板对齐落地（`src/config/mcpPresets.ts`），保留。
+
+### 3.19 Claude Code 原生内置 + 统一能力视图 —— ✅ **已实现（2026-08-24）**
+
+**背景**：`plugin/claudecode.rs` 早已实现完整 native 能力（Provider/MCP/Sessions/Usage/Prompt/Skills），但内置清单只有 openclaw/opencode，用户管理 Claude Code 只能手装 TS 示例 → 托盘排除 TS、后端 MCP 守卫/重投影/导入合并全部绕过（走前端 shim）。
+
+**落地**：
+1. **第三个内置插件**：`plugins/claudecode/manifest.json`（native，capabilities 全 true，声明 promptFile/skillsDir）。seed 每次启动覆盖 manifest → 已安装的 TS 版自动升级为 native（providers/prompts/skills 按 plugin_id 无缝继承，残留 main.js 无害），seed 时 log 提示。
+2. **TS 示例改 id**：`examples/plugins/claudecode` → `claudecode-ts`（native 版独占 `claudecode` id，一等公民；两者可共存）。
+3. **安装来源升级**：`sync_installs` 把内置 id 的既有 local 记录改标 builtin。
+4. **统一能力视图**：`list_installed` 对 native 回填 capabilities（与路径能力同源，防声明漂移）+ 新增 `backendSwitchable`（apply 且非 TS）计算字段；前端 SettingsPanel 目录覆盖列表改用该字段（此前各面板自行拼 `apply && entryType !== "ts"`）。
+5. **ProviderForm 兜底**：非 opencode 插件默认 raw JSON 编辑器（结构化字段是 OpenCode additive 形状专用）。
+
+**自动收益**：托盘出现 Claude Code 切换子菜单；MCP 安装守卫/切换重投影/导入合并对 Claude 生效；用量同步与会话走后端。
 
 ### 3.8 通用供应商（一份配置同步多 Agent）—— P1
 
@@ -256,7 +267,7 @@
 ## 5. 建议实施顺序
 
 1. ~~**P0**：本地代理（3.1）~~ —— **暂不考虑实现**（用户决定）。
-2. ~~**P1 快速项**：模型定价接线（3.3）、供应商预设（3.7）~~ —— 预设范围已定（内置插件高频子集）；**用量图表（3.12）、托盘切换（3.6）已完成**；**设置 Tab 化/主题语言/窗口行为/MCP 对齐/备份增强（§3.14、§3.18）已完成（2026-08-23）**。
-3. **P1 中型项**：余额/订阅（3.2）、Deep Link（3.5，含 MCP Deep Link 导入）、通用供应商（3.8）、云端同步（3.4）、**Profile 项目快照（3.10）**、**外壳重构（v1 header + 保留侧栏）与供应商预设机制**。（**Skill 仓库/skills.sh（3.9）、Prompt 互斥+回填（3.11）已完成**）
+2. ~~**P1 快速项**：模型定价接线（3.3）~~；~~**供应商预设（3.7）~~ —— **不做**（用户决定）。**用量图表（3.12）、托盘切换（3.6）、设置 Tab 化/主题语言/窗口行为/MCP 对齐/备份增强（§3.14、§3.18）已完成**。
+3. **P1 中型项**：余额/订阅（3.2）、Deep Link（3.5，含 MCP Deep Link 导入）、通用供应商（3.8）、云端同步（3.4）、**Profile 项目快照（3.10）**、**外壳重构（v1 header + 保留侧栏）**。（**Skill 仓库/skills.sh（3.9）、Prompt 互斥+回填（3.11）、Claude Code 原生内置 + 统一能力视图（§3.19）已完成**）
 4. **P2**：会话搜索（3.13）、工作区（3.15）、速度测试（3.16）。
 5. **TS 沙箱**：方案 A → B，作为贯穿性的架构演进。

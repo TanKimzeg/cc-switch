@@ -18,7 +18,7 @@
 | **shell** | 外部命令（manifest 声明 `command`+`args`） | 后端子进程 | 无 | 已有现成 CLI 可读写配置 |
 
 **选择建议**
-- 想快速写一个能管理真实 Agent 配置的插件，且愿意用 JS 表达解析/写入逻辑 → **TS 插件**（如 `claudecode` 示例）。
+- 想快速写一个能管理真实 Agent 配置的插件，且愿意用 JS 表达解析/写入逻辑 → **TS 插件**（如 `claudecode-ts` 示例）。
 - 需要高性能/复杂解析（如 opencode 的 SQLite 会话）、或希望插件随安装包分发 → **native 插件**（如 `opencode`）。
 - 已有 CLI 能处理一切 → **shell 插件**（如 `openclaw`）。
 
@@ -65,16 +65,16 @@
 
 ## 3. 开发一个 TS 插件
 
-### 3.1 完整示例：`examples/plugins/claudecode/`
+### 3.1 完整示例：`examples/plugins/claudecode-ts/`
 
-这是仓库里的真实示例：管理 Claude Code 的 `~/.claude/settings.json`（provider）、`~/.claude.json`（MCP）、`~/.claude/projects/**/*.jsonl`（会话/用量）。
+这是仓库里的真实示例：管理 Claude Code 的 `~/.claude/settings.json`（provider）、`~/.claude.json`（MCP）、`~/.claude/projects/**/*.jsonl`（会话/用量）。Claude Code 的正式支持由内置 native 插件提供，此示例（id `claudecode-ts`）用于 TS 插件开发参考。
 
 **manifest.json**
 
 ```jsonc
 {
-  "id": "claudecode",
-  "name": "Claude Code",
+  "id": "claudecode-ts",
+  "name": "Claude Code (TS)",
   "version": "0.1.0",
   "apiVersion": "1",
   "capabilities": {
@@ -106,7 +106,7 @@ async function readSettings() {
 }
 
 const plugin = {
-  id: "claudecode",
+  id: "claudecode-ts",
   capabilities: { readLive: true, apply: true, remove: true, import: true, sessions: true, mcp: true },
 
   async readLive() {
@@ -185,7 +185,7 @@ const plugin = {
 
 ## 4. 开发一个 native 插件
 
-native 插件是随二进制编译的 Rust 实现。仓库里现有 `opencode`、`claudecode`（native 参考实现）。
+native 插件是随二进制编译的 Rust 实现。仓库里现有 `opencode`、`claudecode`（均内置分发）。
 
 ### 4.1 步骤
 
@@ -274,9 +274,9 @@ impl AgentPlugin for MyAgentPlugin {
 
 | 插件 | 形态 | 位置 | 亮点 |
 |------|------|------|------|
-| `opencode` | native | `src-tauri/src/plugin/opencode.rs` | additive 模型、SQLite 会话、MCP 格式转换 |
-| `claudecode` | ts（示例） | `examples/plugins/claudecode/` | 资源白名单、会话 jsonl、用量聚合 |
-| `claudecode`（native 参考） | native | `src-tauri/src/plugin/claudecode.rs` | 同一 Agent 的 Rust 实现对照 |
+| `opencode` | native（内置） | `src-tauri/src/plugin/opencode.rs` | additive 模型、SQLite 会话、MCP 格式转换 |
+| `claudecode` | native（内置） | `src-tauri/src/plugin/claudecode.rs` | 非 additive、会话 jsonl、用量聚合、MCP 安装守卫 |
+| `claudecode-ts` | ts（示例） | `examples/plugins/claudecode-ts/` | 同一 Agent 的 TS 实现对照（资源白名单） |
 | `ts-demo` | ts（示例） | `examples/plugins/ts-demo/` | 最简 TS 插件 + 资源/DB 演示 |
 | `openclaw` | shell | `src-tauri/plugins/openclaw/` | 外部命令约定 |
 

@@ -19,9 +19,10 @@ pub const SUPPORTED_API_VERSION: &str = "1";
 /// 内置插件随二进制分发，首次运行写入插件目录（不覆盖用户已有内容）。
 const OPENCLAW_MANIFEST: &str = include_str!("../plugins/openclaw/manifest.json");
 const OPENCODE_MANIFEST: &str = include_str!("../plugins/opencode/manifest.json");
+const CLAUDECODE_MANIFEST: &str = include_str!("../plugins/claudecode/manifest.json");
 
 /// 内置插件 id（随应用分发，启动时 seed 覆盖）。
-const BUILTIN_IDS: [&str; 2] = ["openclaw", "opencode"];
+const BUILTIN_IDS: [&str; 3] = ["openclaw", "opencode", "claudecode"];
 
 /// 磁盘上的 manifest.json 文件格式。
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -292,10 +293,19 @@ impl PluginRegistry {
         for (id, manifest) in [
             ("openclaw", OPENCLAW_MANIFEST),
             ("opencode", OPENCODE_MANIFEST),
+            ("claudecode", CLAUDECODE_MANIFEST),
         ] {
             let plugin_dir = self.dir.join(id);
             std::fs::create_dir_all(&plugin_dir).map_err(|e| ManifestError::io(&plugin_dir, e))?;
             let target = plugin_dir.join("manifest.json");
+            // 存量 TS 示例安装（id=claudecode）被 native manifest 覆盖即完成升级：
+            // providers/prompts/skills 按 plugin_id 继承，残留 main.js 不影响解析。
+            if target.exists() && manifest.contains("\"type\": \"native\"") {
+                let previous = std::fs::read_to_string(&target).unwrap_or_default();
+                if previous.contains("\"type\": \"ts\"") {
+                    log::info!("插件 {id} 由 TS 示例升级为内置 native 实现（数据自动继承）");
+                }
+            }
             std::fs::write(&target, manifest).map_err(|e| ManifestError::io(&target, e))?;
         }
         Ok(())
@@ -335,6 +345,8 @@ impl PluginRegistry {
     ///
     /// 内置插件标记为 builtin；手动安装（local）的插件**保留其原有来源**，
     /// 仅更新版本 —— 避免重启后把本地插件误标为 builtin。
+    /// 例外：id 属于内置清单的既有 local 记录（如 TS 示例升级为 native），
+    /// 来源同步改为 builtin。
     pub fn sync_installs(&self, manifests: &[PluginManifest]) -> rusqlite::Result<()> {
         for m in manifests {
             let source = if BUILTIN_IDS.contains(&m.id.as_str()) {
@@ -344,28 +356,34 @@ impl PluginRegistry {
             };
             self.db
                 .insert_plugin_install_if_absent(&m.id, &m.version, source, None)?;
+            if source == "builtin" {
+                self.db
+                    .update_plugin_install_source(&m.id, "builtin", &m.version)?;
+            }
         }
         Ok(())
     }
 
     /// 返回全部已安装插件（manifest + 安装来源）。
     ///
-    /// native 插件的路径能力（skills_dir/prompt_file）以二进制内 trait 实现为准
-    /// 回填到暴露的 manifest —— 避免「trait 已支持但 manifest 忘了声明」导致
-    /// 前端按声明过滤时隐藏该插件（Skills/Prompts 面板的应用列表来源），
+    /// native 插件的路径能力（skills_dir/prompt_file）与 capabilities 以二进制内
+    /// trait 实现为准回填到暴露的 manifest —— 避免「trait 已支持但 manifest 忘了
+    /// 声明」导致前端按声明过滤时隐藏该插件（Skills/Prompts 面板的应用列表来源），
     /// 同时让暴露的路径跟随目录覆盖等动态解析。
+    ///
+    /// 另计算 `backend_switchable`（apply 且非 TS 入口）作为统一切换依据。
     pub fn list_installed(&self) -> Result<Vec<InstalledPlugin>, ManifestError> {
         let mut manifests = self.discover()?;
         for manifest in &mut manifests {
-            if manifest.entry_type != "native" {
-                continue;
-            }
-            if let Ok(plugin) = self.resolve_plugin(&manifest.id) {
-                if let Some(dir) = plugin.skills_dir() {
-                    manifest.skills_dir = Some(dir.to_string_lossy().to_string());
-                }
-                if let Some(file) = plugin.prompt_file_path() {
-                    manifest.prompt_file = Some(file.to_string_lossy().to_string());
+            if manifest.entry_type == "native" {
+                if let Ok(plugin) = self.resolve_plugin(&manifest.id) {
+                    manifest.capabilities = Some(plugin.capabilities().clone());
+                    if let Some(dir) = plugin.skills_dir() {
+                        manifest.skills_dir = Some(dir.to_string_lossy().to_string());
+                    }
+                    if let Some(file) = plugin.prompt_file_path() {
+                        manifest.prompt_file = Some(file.to_string_lossy().to_string());
+                    }
                 }
             }
         }
@@ -374,12 +392,18 @@ impl PluginRegistry {
             .into_iter()
             .map(|manifest| {
                 let inst = installs.iter().find(|i| i.plugin_id == manifest.id);
+                let backend_switchable = manifest.entry_type != "ts"
+                    && manifest
+                        .capabilities
+                        .as_ref()
+                        .is_some_and(|caps| caps.apply);
                 InstalledPlugin {
                     manifest,
                     source: inst
                         .map(|i| i.source.clone())
                         .unwrap_or_else(|| "unknown".to_string()),
                     installed_at: inst.map(|i| i.installed_at.clone()).unwrap_or_default(),
+                    backend_switchable,
                 }
             })
             .collect())
@@ -419,10 +443,17 @@ impl PluginRegistry {
             src.display(),
             sha
         );
+        let projected = mf.to_manifest();
+        let backend_switchable = projected.entry_type != "ts"
+            && projected
+                .capabilities
+                .as_ref()
+                .is_some_and(|caps| caps.apply);
         Ok(InstalledPlugin {
-            manifest: mf.to_manifest(),
+            manifest: projected,
             source: "local".to_string(),
             installed_at,
+            backend_switchable,
         })
     }
 
@@ -630,6 +661,27 @@ mod tests {
         );
     }
 
+    #[test]
+    fn sync_installs_upgrades_builtin_id_local_record() {
+        // TS 示例升级场景：同 id 的 local 安装在 sync 后改标为 builtin。
+        let dir = tempfile::tempdir().unwrap();
+        let (registry, db) = registry_in(dir.path());
+
+        let source = dir.path().join("claudecode-src");
+        write_plugin(&source, "claudecode");
+        registry.install_from_dir(&source).unwrap();
+        assert_eq!(
+            db.get_plugin_install("claudecode").unwrap().unwrap().source,
+            "local"
+        );
+
+        let found = registry.discover().unwrap();
+        registry.sync_installs(&found).unwrap();
+
+        let after = db.get_plugin_install("claudecode").unwrap().unwrap();
+        assert_eq!(after.source, "builtin");
+    }
+
     fn write_plugin(dir: &Path, id: &str) {
         std::fs::create_dir_all(dir).unwrap();
         let manifest = SAMPLE.replace("\"id\": \"openclaw\"", &format!("\"id\": \"{id}\""));
@@ -700,15 +752,15 @@ mod tests {
     fn install_from_real_example() {
         let example = concat!(
             env!("CARGO_MANIFEST_DIR"),
-            "/../examples/plugins/claudecode"
+            "/../examples/plugins/claudecode-ts"
         );
         assert!(Path::new(example).join("manifest.json").exists());
         assert!(Path::new(example).join("main.js").exists());
         let dir = tempfile::tempdir().unwrap();
         let (registry, _db) = registry_in(dir.path());
         let installed = registry.install_from_dir(Path::new(example)).unwrap();
-        assert_eq!(installed.manifest.id, "claudecode");
-        assert_eq!(installed.manifest.name, "Claude Code");
+        assert_eq!(installed.manifest.id, "claudecode-ts");
+        assert_eq!(installed.manifest.name, "Claude Code (TS)");
         assert_eq!(installed.manifest.entry_type, "ts");
         assert_eq!(installed.manifest.main.as_deref(), Some("main.js"));
     }
@@ -717,13 +769,13 @@ mod tests {
     fn real_example_resource_roots_expand_home() {
         let example = concat!(
             env!("CARGO_MANIFEST_DIR"),
-            "/../examples/plugins/claudecode"
+            "/../examples/plugins/claudecode-ts"
         );
         let dir = tempfile::tempdir().unwrap();
         let (registry, _db) = registry_in(dir.path());
         registry.install_from_dir(Path::new(example)).unwrap();
 
-        let roots = registry.resource_roots("claudecode").unwrap();
+        let roots = registry.resource_roots("claudecode-ts").unwrap();
         let root_map: std::collections::HashMap<&str, &Path> = roots
             .iter()
             .map(|(k, v)| (k.as_str(), v.as_path()))
@@ -810,12 +862,17 @@ mod tests {
         registry.install_from_dir(&source).unwrap();
 
         let list = registry.list_installed().unwrap();
-        assert_eq!(list.len(), 3);
+        assert_eq!(list.len(), 4);
         let openclaw = list.iter().find(|p| p.manifest.id == "openclaw").unwrap();
         let opencode = list.iter().find(|p| p.manifest.id == "opencode").unwrap();
+        let claudecode = list
+            .iter()
+            .find(|p| p.manifest.id == "claudecode")
+            .unwrap();
         let demo = list.iter().find(|p| p.manifest.id == "demo").unwrap();
         assert_eq!(openclaw.source, "builtin");
         assert_eq!(opencode.source, "builtin");
+        assert_eq!(claudecode.source, "builtin");
         assert_eq!(demo.source, "local");
     }
 
@@ -881,6 +938,36 @@ mod tests {
             prompt_file.ends_with("AGENTS.md"),
             "prompt_file 应由 trait 回填，实际: {prompt_file}"
         );
+        // capabilities 同样以 trait 实现回填（manifest 只声明了 readLive）。
+        let caps = opencode.manifest.capabilities.as_ref().unwrap();
+        assert!(caps.apply, "native capabilities 应由 trait 回填");
+        assert!(caps.mcp, "native capabilities 应由 trait 回填");
+        assert!(opencode.backend_switchable);
+    }
+
+    #[test]
+    fn backend_switchable_excludes_ts_entry() {
+        // TS 插件即使声明 apply，也无法由后端切换。
+        let dir = tempfile::tempdir().unwrap();
+        let (registry, _db) = registry_in(dir.path());
+        let plugin_dir = dir.path().join("plugins/ts-apply");
+        std::fs::create_dir_all(&plugin_dir).unwrap();
+        std::fs::write(
+            plugin_dir.join("manifest.json"),
+            r#"{
+                "id": "ts-apply",
+                "name": "TS Apply",
+                "version": "0.1.0",
+                "apiVersion": "1",
+                "capabilities": { "apply": true },
+                "entry": { "type": "ts", "main": "main.js" }
+            }"#,
+        )
+        .unwrap();
+
+        let list = registry.list_installed().unwrap();
+        let ts = list.iter().find(|p| p.manifest.id == "ts-apply").unwrap();
+        assert!(!ts.backend_switchable);
     }
 
     #[test]
@@ -890,9 +977,17 @@ mod tests {
         let (registry, _db) = registry_in(dir.path());
         registry.seed_builtin().unwrap();
         let list = registry.list_installed().unwrap();
-        let opencode = list.iter().find(|p| p.manifest.id == "opencode").unwrap();
-        assert!(opencode.manifest.skills_dir.is_some());
-        assert!(opencode.manifest.prompt_file.is_some());
+        for id in ["opencode", "claudecode"] {
+            let plugin = list.iter().find(|p| p.manifest.id == id).unwrap();
+            assert!(
+                plugin.manifest.skills_dir.is_some(),
+                "{id} 内置 manifest 应声明 skillsDir"
+            );
+            assert!(
+                plugin.manifest.prompt_file.is_some(),
+                "{id} 内置 manifest 应声明 promptFile"
+            );
+        }
         // shell 插件（openclaw）不参与 Skills 分发（对齐 v1 应用清单）。
         let openclaw = list.iter().find(|p| p.manifest.id == "openclaw").unwrap();
         assert!(openclaw.manifest.skills_dir.is_none());

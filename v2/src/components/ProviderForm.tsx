@@ -41,6 +41,9 @@ export default function ProviderForm({
 }) {
   const { t } = useTranslation();
   const isEdit = !!existing;
+  // 结构化字段是 OpenCode（additive npm/options/models）专用形状；
+  // 其它插件一律落到 raw JSON 编辑（各 Agent 的 settings_config 形状由插件定义）。
+  const supportsStructuredForm = pluginId === "opencode";
 
   const initialSettings = existing
     ? parseSettings(existing.settingsConfig ?? "")
@@ -137,12 +140,21 @@ export default function ProviderForm({
     return settingsConfig;
   };
 
-  const [tab, setTab] = useState<"structured" | "raw">("structured");
-  const [rawJson, setRawJson] = useState(() =>
-    existing
-      ? JSON.stringify(parseSettings(existing.settingsConfig ?? ""), null, 2)
-      : JSON.stringify(buildSettingsConfig(), null, 2),
+  const [tab, setTab] = useState<"structured" | "raw">(
+    supportsStructuredForm ? "structured" : "raw",
   );
+  const [rawJson, setRawJson] = useState(() => {
+    if (existing) {
+      return JSON.stringify(
+        parseSettings(existing.settingsConfig ?? ""),
+        null,
+        2,
+      );
+    }
+    return supportsStructuredForm
+      ? JSON.stringify(buildSettingsConfig(), null, 2)
+      : "{}";
+  });
 
   const switchToRaw = () => {
     setRawJson(JSON.stringify(buildSettingsConfig(), null, 2));
@@ -238,191 +250,202 @@ export default function ProviderForm({
         </div>
       )}
 
-      <Tabs
-        value={tab}
-        onValueChange={(v) => {
-          if (v === "raw") switchToRaw();
-          else setTab("structured");
-        }}
-      >
-        <TabsList>
-          <TabsTrigger value="structured">
-            {t("features.formStructured")}
-          </TabsTrigger>
-          <TabsTrigger value="raw">{t("features.formRawJson")}</TabsTrigger>
-        </TabsList>
-        <TabsContent value="structured" className="space-y-3">
-          <div>
-            <label className="mb-1 block text-xs text-muted-foreground">
-              {t("shell.providerName")}
-            </label>
-            <input
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              className="w-full rounded-md border border-border bg-background px-2 py-1 text-sm"
-            />
-          </div>
-
-          <div>
-            <label className="mb-1 block text-xs text-muted-foreground">
-              {t("shell.providerNpm")}
-            </label>
-            <select
-              value={npm}
-              onChange={(e) => setNpm(e.target.value)}
-              className="w-full rounded-md border border-border bg-background px-2 py-1 text-sm"
-            >
-              {NPM_PACKAGES.map((p) => (
-                <option key={p.value} value={p.value}>
-                  {p.label}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <div>
-            <label className="mb-1 block text-xs text-muted-foreground">
-              {t("shell.providerBaseUrl")}
-            </label>
-            <input
-              value={baseUrl}
-              onChange={(e) => setBaseUrl(e.target.value)}
-              placeholder="https://api.example.com/v1"
-              className="w-full rounded-md border border-border bg-background px-2 py-1 text-sm"
-            />
-          </div>
-
-          <div>
-            <label className="mb-1 block text-xs text-muted-foreground">
-              {t("shell.providerApiKey")}
-            </label>
-            <input
-              value={apiKey}
-              onChange={(e) => setApiKey(e.target.value)}
-              type="password"
-              placeholder="sk-…"
-              className="w-full rounded-md border border-border bg-background px-2 py-1 text-sm"
-            />
-          </div>
-
-          <div>
-            <div className="mb-1 flex items-center justify-between">
-              <label className="text-xs text-muted-foreground">
-                {t("shell.providerHeaders")}
+      {supportsStructuredForm ? (
+        <Tabs
+          value={tab}
+          onValueChange={(v) => {
+            if (v === "raw") switchToRaw();
+            else setTab("structured");
+          }}
+        >
+          <TabsList>
+            <TabsTrigger value="structured">
+              {t("features.formStructured")}
+            </TabsTrigger>
+            <TabsTrigger value="raw">{t("features.formRawJson")}</TabsTrigger>
+          </TabsList>
+          <TabsContent value="structured" className="space-y-3">
+            <div>
+              <label className="mb-1 block text-xs text-muted-foreground">
+                {t("shell.providerName")}
               </label>
-              <button
-                type="button"
-                onClick={() =>
-                  setHeaders((h) => ({ ...h, [`h-${Date.now()}`]: "" }))
-                }
-                className="inline-flex items-center gap-1 rounded border border-border px-1.5 py-0.5 text-xs transition-colors hover:bg-accent"
-              >
-                <Plus className="h-3 w-3" />
-              </button>
+              <input
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                className="w-full rounded-md border border-border bg-background px-2 py-1 text-sm"
+              />
             </div>
-            {Object.entries(headers).map(([k, v]) => (
-              <div key={k} className="mb-1 flex items-center gap-1">
-                <input
-                  value={k.startsWith("h-") ? "" : k}
-                  onChange={(e) => {
-                    const val = e.target.value.trim();
-                    setHeaders((prev) => {
-                      const next = { ...prev };
-                      if (val) {
-                        next[val] = prev[k];
-                        if (val !== k) delete next[k];
-                      } else {
-                        delete next[k];
-                      }
-                      return next;
-                    });
-                  }}
-                  placeholder="X-Header"
-                  className="flex-1 rounded-md border border-border bg-background px-2 py-1 text-xs"
-                />
-                <input
-                  value={v}
-                  onChange={(e) =>
-                    setHeaders((prev) => ({ ...prev, [k]: e.target.value }))
-                  }
-                  placeholder="value"
-                  className="flex-1 rounded-md border border-border bg-background px-2 py-1 text-xs"
-                />
+
+            <div>
+              <label className="mb-1 block text-xs text-muted-foreground">
+                {t("shell.providerNpm")}
+              </label>
+              <select
+                value={npm}
+                onChange={(e) => setNpm(e.target.value)}
+                className="w-full rounded-md border border-border bg-background px-2 py-1 text-sm"
+              >
+                {NPM_PACKAGES.map((p) => (
+                  <option key={p.value} value={p.value}>
+                    {p.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label className="mb-1 block text-xs text-muted-foreground">
+                {t("shell.providerBaseUrl")}
+              </label>
+              <input
+                value={baseUrl}
+                onChange={(e) => setBaseUrl(e.target.value)}
+                placeholder="https://api.example.com/v1"
+                className="w-full rounded-md border border-border bg-background px-2 py-1 text-sm"
+              />
+            </div>
+
+            <div>
+              <label className="mb-1 block text-xs text-muted-foreground">
+                {t("shell.providerApiKey")}
+              </label>
+              <input
+                value={apiKey}
+                onChange={(e) => setApiKey(e.target.value)}
+                type="password"
+                placeholder="sk-…"
+                className="w-full rounded-md border border-border bg-background px-2 py-1 text-sm"
+              />
+            </div>
+
+            <div>
+              <div className="mb-1 flex items-center justify-between">
+                <label className="text-xs text-muted-foreground">
+                  {t("shell.providerHeaders")}
+                </label>
                 <button
                   type="button"
                   onClick={() =>
-                    setHeaders((prev) => {
-                      const next = { ...prev };
-                      delete next[k];
-                      return next;
-                    })
+                    setHeaders((h) => ({ ...h, [`h-${Date.now()}`]: "" }))
                   }
-                  className="rounded p-1 text-muted-foreground hover:text-destructive"
+                  className="inline-flex items-center gap-1 rounded border border-border px-1.5 py-0.5 text-xs transition-colors hover:bg-accent"
                 >
-                  <Trash2 className="h-3 w-3" />
+                  <Plus className="h-3 w-3" />
                 </button>
               </div>
-            ))}
-          </div>
-
-          <div>
-            <div className="mb-1 flex items-center justify-between">
-              <label className="text-xs text-muted-foreground">
-                {t("shell.providerModels")}
-              </label>
-              <button
-                type="button"
-                onClick={addModel}
-                className="inline-flex items-center gap-1 rounded border border-border px-1.5 py-0.5 text-xs transition-colors hover:bg-accent"
-              >
-                <Plus className="h-3 w-3" />
-              </button>
+              {Object.entries(headers).map(([k, v]) => (
+                <div key={k} className="mb-1 flex items-center gap-1">
+                  <input
+                    value={k.startsWith("h-") ? "" : k}
+                    onChange={(e) => {
+                      const val = e.target.value.trim();
+                      setHeaders((prev) => {
+                        const next = { ...prev };
+                        if (val) {
+                          next[val] = prev[k];
+                          if (val !== k) delete next[k];
+                        } else {
+                          delete next[k];
+                        }
+                        return next;
+                      });
+                    }}
+                    placeholder="X-Header"
+                    className="flex-1 rounded-md border border-border bg-background px-2 py-1 text-xs"
+                  />
+                  <input
+                    value={v}
+                    onChange={(e) =>
+                      setHeaders((prev) => ({ ...prev, [k]: e.target.value }))
+                    }
+                    placeholder="value"
+                    className="flex-1 rounded-md border border-border bg-background px-2 py-1 text-xs"
+                  />
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setHeaders((prev) => {
+                        const next = { ...prev };
+                        delete next[k];
+                        return next;
+                      })
+                    }
+                    className="rounded p-1 text-muted-foreground hover:text-destructive"
+                  >
+                    <Trash2 className="h-3 w-3" />
+                  </button>
+                </div>
+              ))}
             </div>
-            {Object.values(models).map((m) => (
-              <div
-                key={m.id}
-                className="mb-1 grid grid-cols-[1fr_1fr_1fr_auto] gap-1"
-              >
-                <input
-                  value={m.id.startsWith("model-") ? "" : m.id}
-                  onChange={(e) =>
-                    updateModel(m.id, { id: e.target.value.trim() || m.id })
-                  }
-                  placeholder={t("shell.providerModelId")}
-                  className="rounded-md border border-border bg-background px-2 py-1 text-xs"
-                />
-                <input
-                  value={m.name}
-                  onChange={(e) => updateModel(m.id, { name: e.target.value })}
-                  placeholder={t("shell.providerModelName")}
-                  className="rounded-md border border-border bg-background px-2 py-1 text-xs"
-                />
-                <input
-                  value={m.context}
-                  onChange={(e) =>
-                    updateModel(m.id, { context: e.target.value })
-                  }
-                  placeholder="context"
-                  className="rounded-md border border-border bg-background px-2 py-1 text-xs"
-                />
+
+            <div>
+              <div className="mb-1 flex items-center justify-between">
+                <label className="text-xs text-muted-foreground">
+                  {t("shell.providerModels")}
+                </label>
                 <button
                   type="button"
-                  onClick={() => removeModel(m.id)}
-                  className="rounded p-1 text-muted-foreground hover:text-destructive"
+                  onClick={addModel}
+                  className="inline-flex items-center gap-1 rounded border border-border px-1.5 py-0.5 text-xs transition-colors hover:bg-accent"
                 >
-                  <Trash2 className="h-3 w-3" />
+                  <Plus className="h-3 w-3" />
                 </button>
               </div>
-            ))}
-          </div>
-        </TabsContent>
-        <TabsContent value="raw" className="space-y-2">
+              {Object.values(models).map((m) => (
+                <div
+                  key={m.id}
+                  className="mb-1 grid grid-cols-[1fr_1fr_1fr_auto] gap-1"
+                >
+                  <input
+                    value={m.id.startsWith("model-") ? "" : m.id}
+                    onChange={(e) =>
+                      updateModel(m.id, { id: e.target.value.trim() || m.id })
+                    }
+                    placeholder={t("shell.providerModelId")}
+                    className="rounded-md border border-border bg-background px-2 py-1 text-xs"
+                  />
+                  <input
+                    value={m.name}
+                    onChange={(e) =>
+                      updateModel(m.id, { name: e.target.value })
+                    }
+                    placeholder={t("shell.providerModelName")}
+                    className="rounded-md border border-border bg-background px-2 py-1 text-xs"
+                  />
+                  <input
+                    value={m.context}
+                    onChange={(e) =>
+                      updateModel(m.id, { context: e.target.value })
+                    }
+                    placeholder="context"
+                    className="rounded-md border border-border bg-background px-2 py-1 text-xs"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => removeModel(m.id)}
+                    className="rounded p-1 text-muted-foreground hover:text-destructive"
+                  >
+                    <Trash2 className="h-3 w-3" />
+                  </button>
+                </div>
+              ))}
+            </div>
+          </TabsContent>
+          <TabsContent value="raw" className="space-y-2">
+            <p className="text-xs text-muted-foreground">
+              {t("features.rawJsonHint")}
+            </p>
+            <JsonEditor value={rawJson} onChange={setRawJson} rows={16} />
+          </TabsContent>
+        </Tabs>
+      ) : (
+        <div className="space-y-2">
           <p className="text-xs text-muted-foreground">
             {t("features.rawJsonHint")}
           </p>
           <JsonEditor value={rawJson} onChange={setRawJson} rows={16} />
-        </TabsContent>
-      </Tabs>
+        </div>
+      )}
 
       <button
         type="button"

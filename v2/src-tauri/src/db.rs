@@ -283,6 +283,20 @@ impl Database {
         Ok(())
     }
 
+    /// 更新插件安装来源与版本（内置插件升级时把 local 记录改标为 builtin）。
+    pub fn update_plugin_install_source(
+        &self,
+        plugin_id: &str,
+        source: &str,
+        version: &str,
+    ) -> rusqlite::Result<()> {
+        self.lock().execute(
+            "UPDATE plugin_installs SET source = ?2, version = ?3 WHERE plugin_id = ?1",
+            params![plugin_id, source, version],
+        )?;
+        Ok(())
+    }
+
     /// 读取单个插件安装记录。
     pub fn get_plugin_install(&self, plugin_id: &str) -> rusqlite::Result<Option<PluginInstall>> {
         self.lock()

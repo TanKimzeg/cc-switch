@@ -69,6 +69,8 @@ export interface InstalledPlugin extends PluginManifest {
   /** 安装来源：builtin（内置）| local（本地目录安装） */
   source: string;
   installedAt: string;
+  /** 可后端切换（apply 且非 TS 入口）：托盘/目录覆盖等场景的统一判定依据 */
+  backendSwitchable: boolean;
 }
 
 /** 插件 live 配置视图（plugin_read_live 返回值）。 */

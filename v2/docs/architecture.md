@@ -25,11 +25,11 @@ v2 的核心目标是：**把 v1 散落分布的 Agent 特点，用「插件设�
 
 | 形态 | 执行位置 | 沙箱 | 适用场景 | v2 现状 |
 |------|----------|------|----------|---------|
-| **native** | 后端二进制内（Rust） | 无限制 | 真实 Agent，配置在用户目录 | ✅ `opencode` |
+| **native** | 后端二进制内（Rust） | 无限制 | 真实 Agent，配置在用户目录 | ✅ `opencode`、`claudecode` |
 | **shell** | 后端调用外部命令 | 无限制（后端执行） | 外部 CLI（`openclaw config ...`） | ✅ `openclaw` |
-| **ts** | 前端 WebView 脚本 | 插件目录 + manifest `resources` 白名单 | 自包含 / 资源白名单声明的第三方插件 | ✅ `claudecode`（示例）、`ts-demo` |
+| **ts** | 前端 WebView 脚本 | 插件目录 + manifest `resources` 白名单 | 自包含 / 资源白名单声明的第三方插件 | ✅ `claudecode-ts`（示例）、`ts-demo` |
 
-> **关键结论**：`native` / `shell` 都在**后端**执行，没有沙箱限制，能读写 `~/.claude/`、`~/.config/opencode/` 等真实配置。**TS 插件**的宿主文件操作限定在「插件目录 + manifest `resources` 白名单」内（见 [ts-plugin.md](ts-plugin.md)），白名单声明后后端代劳文件 I/O——claudecode 示例正是用 TS + 资源白名单管理 `~/.claude/`。
+> **关键结论**：`native` / `shell` 都在**后端**执行，没有沙箱限制，能读写 `~/.claude/`、`~/.config/opencode/` 等真实配置。**TS 插件**的宿主文件操作限定在「插件目录 + manifest `resources` 白名单」内（见 [ts-plugin.md](ts-plugin.md)），白名单声明后后端代劳文件 I/O——claudecode-ts 示例正是用 TS + 资源白名单管理 `~/.claude/`（Claude Code 的正式支持由内置 native 插件提供）。
 
 ## 4. 数据流
 
@@ -77,8 +77,8 @@ v2/
 │   ├── commands/     # Tauri 命令（IPC API 层）
 │   ├── plugin/       # 插件协议（trait + 各实现）
 │   │   ├── mod.rs    # AgentPlugin trait、PluginCapabilities、数据类型
-│   │   ├── opencode.rs    # 原生插件：~/.config/opencode/opencode.json
-│   │   ├── claudecode.rs  # 原生参考实现（示例已切换为 TS 插件）
+│   │   ├── opencode.rs    # 原生插件（内置）：~/.config/opencode/opencode.json
+│   │   ├── claudecode.rs  # 原生插件（内置）：~/.claude/settings.json + ~/.claude.json + 会话 jsonl
 │   │   ├── process.rs     # shell 插件：调用外部命令
 │   │   ├── mcp.rs        # McpPlugin trait + 格式转换
 │   │   ├── ts.rs         # TS 插件占位（TsPluginStub）
@@ -91,7 +91,7 @@ v2/
 │   ├── lib/api.ts    # 前端 → 后端 IPC 封装
 │   ├── lib/plugin-loader.ts  # TS 插件加载器
 │   └── components/   # 各 Panel
-└── examples/plugins/ # 示例插件（claudecode 为 TS + 资源白名单，ts-demo）
+└── examples/plugins/ # 示例插件（claudecode-ts 为 TS + 资源白名单，ts-demo）
 ```
 
 ## 7. 演进方向（摘要）

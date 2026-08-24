@@ -150,15 +150,15 @@ pub struct PluginCapabilities {
   - `promptFile` / `skillsDir` → `TsPluginStub` / registry 暴露 `prompt_file_path()` / `skills_dir()`。
   - `resources` → `registry.resource_roots()` 暴露资源白名单，供 TS 宿主命令 `host_read/write/list_resource` 校验路径（见 [ts-plugin.md](ts-plugin.md)）。
 
-> **前端可见性**：`to_manifest()` 将 `promptFile` / `skillsDir` 一并暴露到前端 `PluginManifest`（`get_plugins` 返回）。Skills 面板据此筛选「支持 skills 同步」的插件做启用开关；未声明 `skillsDir` 的插件在 `skills_toggle_plugin` 等命令中会被拒绝。
+> **前端可见性**：`to_manifest()` 将 `promptFile` / `skillsDir` 一并暴露到前端 `PluginManifest`（`get_plugins` 返回）。Skills 面板据此筛选「支持 skills 同步」的插件做启用开关。**native 插件由 `list_installed` 以 trait 实现回填 `capabilities` / `skillsDir` / `promptFile`**（含目录覆盖动态解析），manifest 漏声明不会导致前端隐藏；TS 插件以 manifest 声明为准。
 
 ## 7. 插件生命周期（registry）
 
 - **发现**：`discover()` 扫描 `plugins/` 目录，解析并校验所有 manifest。
 - **安装**：`install_plugin(source)` 从本地目录复制到 `plugins/<id>/`。
 - **卸载**：`uninstall(id)` 删除目录与 `plugin_installs` 记录；内置插件拒绝卸载。
-- **内置 seed**：`seed_builtin()` 首次运行写入 `openclaw` / `opencode` 内置 manifest。
-- **安装来源**：`plugin_installs.source` = `builtin` | `local`；`sync_installs` 仅把内置 id 标记为 builtin，手动安装的插件保留 local（避免重启被覆盖成 builtin）。
+- **内置 seed**：`seed_builtin()` 每次启动覆盖写入 `openclaw` / `opencode` / `claudecode` 内置 manifest。
+- **安装来源**：`plugin_installs.source` = `builtin` | `local`；`sync_installs` 仅把内置 id 标记为 builtin，手动安装的插件保留 local（避免重启被覆盖成 builtin）。例外：id 属于内置清单的既有 local 记录（如 TS 示例升级为 native）同步改标 builtin。
 
 ## 8. 内置插件
 
@@ -166,5 +166,6 @@ pub struct PluginCapabilities {
 |----|------|----------|------|
 | `opencode` | native | `~/.config/opencode/opencode.json`（additive）+ `~/.config/opencode/opencode.db`（会话/用量） | Provider/MCP/Sessions/Usage/Prompt/Skills |
 | `openclaw` | shell | 外部 `openclaw` 命令 | Provider（read_live/apply/import） |
-| `claudecode`（示例，需手动安装） | ts | `~/.claude/settings.json` + `~/.claude.json` + `~/.claude/projects/**/*.jsonl`（经 manifest `resources` 白名单） | Provider/MCP/Sessions/Usage/Prompt/Skills |
+| `claudecode` | native | `~/.claude/settings.json`（非 additive）+ `~/.claude.json`（MCP）+ `~/.claude/projects/**/*.jsonl`（会话/用量） | Provider/MCP/Sessions/Usage/Prompt/Skills |
+| `claudecode-ts`（示例，需手动安装） | ts | 同上（经 manifest `resources` 白名单，由前端脚本宿主执行） | Provider/MCP/Sessions/Usage/Prompt/Skills |
 | `ts-demo`（示例） | ts | 插件目录内 `state.json` + `~/.cc-switch-demo`（资源白名单） | Provider（readLive/apply） |

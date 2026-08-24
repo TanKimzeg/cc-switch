@@ -165,7 +165,7 @@ async function parseSessionMeta(relPath) {
 }
 
 const plugin = {
-  id: "claudecode",
+  id: "claudecode-ts",
   capabilities: {
     readLive: true,
     apply: true,
