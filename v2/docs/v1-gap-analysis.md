@@ -8,7 +8,7 @@
 
 | 能力域 | v1 | v2 现状 | 差距 |
 |--------|----|---------|------|
-| Provider 配置与切换 | ✅ 8 工具、50+ 预设、一键切换、托盘 | ✅ 插件化 read_live/apply/import；native 三插件（opencode/openclaw/**claudecode**）；托盘/重投影全后端 | 通用供应商缺失；预设**不做**（§3.7，用户决定） |
+| Provider 配置与切换 | ✅ 8 工具、50+ 预设、一键切换、托盘 | ✅ 插件化 read_live/apply/import；native 六插件（opencode/openclaw/claudecode/codex/grokbuild/hermes）；托盘/重投影全后端 | 通用供应商缺失；预设**不做**（§3.7，用户决定）；gemini/claude-desktop 未插件化 |
 | MCP | ✅ 统一面板、双向同步、Deep Link 导入 | ✅ mcp_servers + 插件同步 + 编辑/校验/预设/wizard(http)/智能粘贴/批量开关/搜索/删除确认；导入合并语义 + 取消勾选清理 + 安装守卫 + 切换后重投影 | 缺 Deep Link 导入（随 §3.5 一并做）|
 | Skill | ✅ GitHub 仓库 / ZIP 安装、skills.sh 公共注册表、SHA-256 更新检测、备份恢复、软链/复制 | ✅ 已对齐（仓库/ZIP 安装、skills.sh 搜索、更新检测、卸载备份+恢复、未管理导入、软链/复制、存储迁移；SSOT 默认 `~/.cc-switch/skills`） | 已补齐（见 §3.9） |
 | Prompt | ✅ Markdown 编辑、单应用互斥启用、回填保护 | ✅ 已对齐（互斥启用 + 回填保护 + 清空/删除保护 + 首启自动导入） | 已补齐（见 §3.11） |
@@ -123,6 +123,27 @@
 5. **ProviderForm 兜底**：非 opencode 插件默认 raw JSON 编辑器（结构化字段是 OpenCode additive 形状专用）。
 
 **自动收益**：托盘出现 Claude Code 切换子菜单；MCP 安装守卫/切换重投影/导入合并对 Claude 生效；用量同步与会话走后端。
+
+### 3.20 Codex / Grok Build / Hermes 原生内置 —— ✅ **已实现（2026-08-24，Usage 暂缺）**
+
+**v1**：三工具均为一等应用（provider 切换 + MCP + 会话 + Skills/Prompt；codex/grokbuild 另有 proxy 适配器——v2 proxy 不做）。
+
+**v2 现状**：✅ 三个新 native 内置插件（`plugin/codex.rs` / `grokbuild.rs` / `hermes.rs`，语义照抄 v1 对应模块）：
+
+| 插件 | Provider 语义 | MCP | 会话 |
+|---|---|---|---|
+| `codex` | 非 additive 整文档：`{"auth":{},"config":"<toml>"}` → `~/.codex/config.toml` + `auth.json`（先 auth 后 config，失败回滚 auth）；remove 不支持（对齐 v1） | `[mcp_servers.*]`（toml_edit 保注释；`http_headers`↔`headers`；扩展字段白名单+通用转换；容错读 `mcp.servers`） | `sessions/`+`archived_sessions/` rollout jsonl（session_meta/首条用户消息标题含 VS Code 上下文提取/subagent 过滤/session_index.jsonl 标题/resume 命令） |
+| `grokbuild` | 非 additive：`{"config":"<toml>"}` → `~/.grok/config.toml`；强校验 `[models]+[model.<name>]`（官方 category 允许空文档回落 OAuth）；remove 不支持 | 同布局但无 `type`、`headers`（复用 codex 转换器后剥离） | `summary.json`（info.id/cwd/title）+ `chat_history.jsonl`（reasoning 不算消息）；删除=删目录（id+目录名校验） |
+| `hermes` | additive：`custom_providers:` 序列 upsert（models 数组↔字典、camelCase 治理、保留盘上未知字段）+ `model.provider/default` 切换；`providers:` 字典只读（`_cc_source` 标记，写删报错）；支持 remove | `mcp_servers:` YAML mapping（section 级替换保注释、CRLF/重复键修复；merge 保留 Hermes 特有字段；enabled 自动加/剥离） | `state.db`（sessions/messages 表，sqlite: 源）∪ `sessions/*.jsonl`（id 冲突 sqlite 优先）；删除双路（sqlite 校验路径归属） |
+
+**共享设施**：`plugin/session_utils.rs`（v1 会话工具移植：head/tail 读取、时间戳解析、文本提取、截断）；Cargo 新增 toml/toml_edit/serde_yaml/regex。
+
+**目录覆盖**：三插件 `config_dir()` 接入 `overrideDir.<id>`（优先）→ 环境变量（`CC_SWITCH_CODEX_CONFIG_DIR` / `CC_SWITCH_GROK_CONFIG_DIR` / `HERMES_HOME`）→ 平台默认（hermes Windows 为 `%LOCALAPPDATA%\hermes`，对齐 Hermes 自身）。
+
+**已知差距（后续补）**：
+- **Usage 同步**：三插件 `sync_usage` 未实现（trait 默认不支持）。v1 的 session_usage_codex（110KB）/grokbuild（52KB）口径复杂（turn 级 token/缓存聚合），需独立里程碑；hermes 无独立用量源。
+- codex 会话标题的 state DB 增强源（`~/.codex` 下 SQLite threads 表）未接，仅 session_index.jsonl。
+- codex 切换的 model catalog 生成与 OAuth 模型目录（v1 为 proxy 服务，随 proxy 一并评估）。
 
 ### 3.8 通用供应商（一份配置同步多 Agent）—— P1
 
@@ -249,7 +270,7 @@
 
 **工具配置目录覆盖**：
 1. settings 表键 `overrideDir.<plugin_id>` 存原始路径（`~` 读取时展开），静态注册表 `overrides::get(id)` 供 native 插件 `config_dir()` 读取（优先于 env，回退默认）。
-2. opencode/claudecode 的 `config_dir()` 已接入；`config_path/skills_dir/prompt_file_path` 自动跟随；claudecode `mcp_path` 特殊处理（自定义目录 → `<dir>/.claude.json`，对齐 v1）。
+2. opencode/claudecode/codex/grokbuild/hermes 的 `config_dir()` 已接入（codex/grokbuild 另支持 `CC_SWITCH_*_CONFIG_DIR` 环境变量、hermes 支持 `HERMES_HOME`，对齐 v1 解析顺序）；`config_path/skills_dir/prompt_file_path` 自动跟随；claudecode `mcp_path` 特殊处理（自定义目录 → `<dir>/.claude.json`，对齐 v1）。
 3. 命令 `settings_get_overrides` / `settings_set_override`；设置后前端调用 `syncAllProvidersToLive` 重写当前 provider 到新 live。
 4. TS 插件（manifest 声明路径）暂不支持 override，文档注明。
 
@@ -268,6 +289,6 @@
 
 1. ~~**P0**：本地代理（3.1）~~ —— **暂不考虑实现**（用户决定）。
 2. ~~**P1 快速项**：模型定价接线（3.3）~~；~~**供应商预设（3.7）~~ —— **不做**（用户决定）。**用量图表（3.12）、托盘切换（3.6）、设置 Tab 化/主题语言/窗口行为/MCP 对齐/备份增强（§3.14、§3.18）已完成**。
-3. **P1 中型项**：余额/订阅（3.2）、Deep Link（3.5，含 MCP Deep Link 导入）、通用供应商（3.8）、云端同步（3.4）、**Profile 项目快照（3.10）**、**外壳重构（v1 header + 保留侧栏）**。（**Skill 仓库/skills.sh（3.9）、Prompt 互斥+回填（3.11）、Claude Code 原生内置 + 统一能力视图（§3.19）已完成**）
+3. **P1 中型项**：余额/订阅（3.2）、Deep Link（3.5，含 MCP Deep Link 导入）、通用供应商（3.8）、云端同步（3.4）、**Profile 项目快照（3.10）**、**外壳重构（v1 header + 保留侧栏）**、**codex/grokbuild/hermes 用量同步（§3.20 差距）**、gemini/claude-desktop 插件化。（**Skill 仓库/skills.sh（3.9）、Prompt 互斥+回填（3.11）、Claude Code 原生内置 + 统一能力视图（§3.19）、Codex/Grok Build/Hermes 原生内置（§3.20）已完成**）
 4. **P2**：会话搜索（3.13）、工作区（3.15）、速度测试（3.16）。
 5. **TS 沙箱**：方案 A → B，作为贯穿性的架构演进。

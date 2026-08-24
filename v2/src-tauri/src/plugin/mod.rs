@@ -15,14 +15,21 @@
 //!   由 [`super::registry`] 包装成进程插件调用。
 
 pub mod claudecode;
+pub mod codex;
 pub mod error;
+pub mod grokbuild;
+pub mod hermes;
 pub mod mcp;
 pub mod opencode;
 pub mod process;
+pub mod session_utils;
 pub mod ts;
 
 pub use claudecode::ClaudeCodePlugin;
+pub use codex::CodexPlugin;
 pub use error::PluginError;
+pub use grokbuild::GrokBuildPlugin;
+pub use hermes::HermesPlugin;
 pub use opencode::OpenCodePlugin;
 pub use process::ProcessPlugin;
 pub use ts::TsPluginStub;

@@ -139,7 +139,7 @@ pub struct PluginCapabilities {
 
 | `entry.type` | 额外字段 | 解析结果 |
 |--------------|----------|----------|
-| `native` | `module`（默认取 `id`） | `resolve_plugin` 匹配内置模块：`opencode` → `OpenCodePlugin`，`claudecode` → `ClaudeCodePlugin`；未知模块报错 |
+| `native` | `module`（默认取 `id`） | `resolve_plugin` 匹配内置模块：`opencode` → `OpenCodePlugin`，`claudecode` → `ClaudeCodePlugin`，`codex` → `CodexPlugin`，`grokbuild` → `GrokBuildPlugin`，`hermes` → `HermesPlugin`；未知模块报错 |
 | `shell` | `command`, `args` | 包装为 `ProcessPlugin`，调用外部命令的子命令（`read-live` / `apply` / `import` / `sessions`） |
 | `ts` | `main`（如 `main.js`） | `TsPluginStub` 占位；实际逻辑由前端加载脚本执行 |
 
@@ -157,7 +157,7 @@ pub struct PluginCapabilities {
 - **发现**：`discover()` 扫描 `plugins/` 目录，解析并校验所有 manifest。
 - **安装**：`install_plugin(source)` 从本地目录复制到 `plugins/<id>/`。
 - **卸载**：`uninstall(id)` 删除目录与 `plugin_installs` 记录；内置插件拒绝卸载。
-- **内置 seed**：`seed_builtin()` 每次启动覆盖写入 `openclaw` / `opencode` / `claudecode` 内置 manifest。
+- **内置 seed**：`seed_builtin()` 每次启动覆盖写入 `openclaw` / `opencode` / `claudecode` / `codex` / `grokbuild` / `hermes` 内置 manifest。
 - **安装来源**：`plugin_installs.source` = `builtin` | `local`；`sync_installs` 仅把内置 id 标记为 builtin，手动安装的插件保留 local（避免重启被覆盖成 builtin）。例外：id 属于内置清单的既有 local 记录（如 TS 示例升级为 native）同步改标 builtin。
 
 ## 8. 内置插件
@@ -167,5 +167,10 @@ pub struct PluginCapabilities {
 | `opencode` | native | `~/.config/opencode/opencode.json`（additive）+ `~/.config/opencode/opencode.db`（会话/用量） | Provider/MCP/Sessions/Usage/Prompt/Skills |
 | `openclaw` | shell | 外部 `openclaw` 命令 | Provider（read_live/apply/import） |
 | `claudecode` | native | `~/.claude/settings.json`（非 additive）+ `~/.claude.json`（MCP）+ `~/.claude/projects/**/*.jsonl`（会话/用量） | Provider/MCP/Sessions/Usage/Prompt/Skills |
-| `claudecode-ts`（示例，需手动安装） | ts | 同上（经 manifest `resources` 白名单，由前端脚本宿主执行） | Provider/MCP/Sessions/Usage/Prompt/Skills |
+| `codex` | native | `~/.codex/config.toml` + `auth.json`（非 additive，settings_config 形状 `{"auth":{},"config":"<toml>"}`）+ `~/.codex/sessions`（rollout jsonl） | Provider/MCP/Sessions/Prompt/Skills（Usage 暂缺，见 gap-analysis §3.20） |
+| `grokbuild` | native | `~/.grok/config.toml`（非 additive，settings_config 形状 `{"config":"<toml>"}`；官方条目允许空文档）+ `~/.grok/sessions`（summary.json + chat_history.jsonl） | Provider/MCP/Sessions/Prompt/Skills（Usage 暂缺） |
+| `hermes` | native | `~/.hermes/config.yaml`（additive `custom_providers`，Windows 默认 `%LOCALAPPDATA%\hermes`）+ `state.db` + `sessions/*.jsonl` | Provider/MCP/Sessions（含 remove）/Prompt/Skills（Usage 暂缺） |
+| `claudecode-ts`（示例，需手动安装） | ts | 同 claudecode（经 manifest `resources` 白名单，由前端脚本宿主执行） | Provider/MCP/Sessions/Usage/Prompt/Skills |
 | `ts-demo`（示例） | ts | 插件目录内 `state.json` + `~/.cc-switch-demo`（资源白名单） | Provider（readLive/apply） |
+
+> 三个 TOML/YAML 配置型插件的目录覆盖：`overrideDir.<id>`（设置页）优先，其次环境变量（codex/grokbuild：`CC_SWITCH_<NAME>_CONFIG_DIR`；hermes：`HERMES_HOME`），最后平台默认。

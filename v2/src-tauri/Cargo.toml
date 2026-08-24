@@ -26,6 +26,10 @@ dirs = "5.0"
 uuid = { version = "1", features = ["v4"] }
 sha2 = "0.10"
 rusqlite = { version = "0.31", features = ["bundled", "backup"] }
+toml = "0.8"
+toml_edit = "0.22"
+serde_yaml = "0.9"
+regex = "1"
 reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "json", "gzip", "stream"] }
 zip = { version = "2", default-features = false, features = ["deflate"] }
 url = "2.5"

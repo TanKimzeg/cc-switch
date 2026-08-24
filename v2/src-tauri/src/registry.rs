@@ -20,9 +20,19 @@ pub const SUPPORTED_API_VERSION: &str = "1";
 const OPENCLAW_MANIFEST: &str = include_str!("../plugins/openclaw/manifest.json");
 const OPENCODE_MANIFEST: &str = include_str!("../plugins/opencode/manifest.json");
 const CLAUDECODE_MANIFEST: &str = include_str!("../plugins/claudecode/manifest.json");
+const CODEX_MANIFEST: &str = include_str!("../plugins/codex/manifest.json");
+const GROKBUILD_MANIFEST: &str = include_str!("../plugins/grokbuild/manifest.json");
+const HERMES_MANIFEST: &str = include_str!("../plugins/hermes/manifest.json");
 
 /// 内置插件 id（随应用分发，启动时 seed 覆盖）。
-const BUILTIN_IDS: [&str; 3] = ["openclaw", "opencode", "claudecode"];
+const BUILTIN_IDS: [&str; 6] = [
+    "openclaw",
+    "opencode",
+    "claudecode",
+    "codex",
+    "grokbuild",
+    "hermes",
+];
 
 /// 磁盘上的 manifest.json 文件格式。
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -246,6 +256,9 @@ impl PluginRegistry {
                 match module.as_str() {
                     "opencode" => Ok(Box::new(OpenCodePlugin::new())),
                     "claudecode" => Ok(Box::new(ClaudeCodePlugin::new())),
+                    "codex" => Ok(Box::new(crate::plugin::CodexPlugin::new())),
+                    "grokbuild" => Ok(Box::new(crate::plugin::GrokBuildPlugin::new())),
+                    "hermes" => Ok(Box::new(crate::plugin::HermesPlugin::new())),
                     other => Err(ManifestError::Invalid {
                         id: mf.id.clone(),
                         reason: format!("未知的原生插件模块: {other}"),
@@ -294,6 +307,9 @@ impl PluginRegistry {
             ("openclaw", OPENCLAW_MANIFEST),
             ("opencode", OPENCODE_MANIFEST),
             ("claudecode", CLAUDECODE_MANIFEST),
+            ("codex", CODEX_MANIFEST),
+            ("grokbuild", GROKBUILD_MANIFEST),
+            ("hermes", HERMES_MANIFEST),
         ] {
             let plugin_dir = self.dir.join(id);
             std::fs::create_dir_all(&plugin_dir).map_err(|e| ManifestError::io(&plugin_dir, e))?;
@@ -862,17 +878,26 @@ mod tests {
         registry.install_from_dir(&source).unwrap();
 
         let list = registry.list_installed().unwrap();
-        assert_eq!(list.len(), 4);
+        assert_eq!(list.len(), 7);
         let openclaw = list.iter().find(|p| p.manifest.id == "openclaw").unwrap();
         let opencode = list.iter().find(|p| p.manifest.id == "opencode").unwrap();
         let claudecode = list
             .iter()
             .find(|p| p.manifest.id == "claudecode")
             .unwrap();
+        let codex = list.iter().find(|p| p.manifest.id == "codex").unwrap();
+        let grokbuild = list
+            .iter()
+            .find(|p| p.manifest.id == "grokbuild")
+            .unwrap();
+        let hermes = list.iter().find(|p| p.manifest.id == "hermes").unwrap();
         let demo = list.iter().find(|p| p.manifest.id == "demo").unwrap();
         assert_eq!(openclaw.source, "builtin");
         assert_eq!(opencode.source, "builtin");
         assert_eq!(claudecode.source, "builtin");
+        assert_eq!(codex.source, "builtin");
+        assert_eq!(grokbuild.source, "builtin");
+        assert_eq!(hermes.source, "builtin");
         assert_eq!(demo.source, "local");
     }
 
