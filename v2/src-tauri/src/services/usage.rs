@@ -12,11 +12,24 @@ use crate::db::Database;
 
 impl Database {
     /// 写入插件解析出的用量记录（`INSERT OR IGNORE` 去重）。返回导入条数。
+    ///
+    /// - `active_provider_id` 记录写入时该插件的当前供应商（供应商维度定价的归属依据）；
+    /// - 记录 cost 为 0 时按 `model_pricing` 补算（PricingService 是唯一成本计算方）。
     pub fn insert_usage_records(
         &self,
         plugin_id: &str,
         records: &[crate::plugin::UsageRecord],
     ) -> usize {
+        let pricing_rows = self.list_model_pricing().unwrap_or_default();
+        let active_provider: Option<String> = self
+            .lock()
+            .query_row(
+                "SELECT current_provider_id FROM app_state WHERE plugin_id = ?1",
+                params![plugin_id],
+                |row| row.get::<_, Option<String>>(0),
+            )
+            .unwrap_or(None);
+
         let mut imported = 0;
         for r in records {
             let created_at = if r.timestamp_ms > 0 {
@@ -28,26 +41,49 @@ impl Database {
                     .unwrap_or(0)
             };
             let output_with_reasoning = r.output_tokens + r.reasoning_tokens;
+            let cost = if r.cost != 0.0 {
+                r.cost.to_string()
+            } else {
+                crate::services::pricing::resolve_pricing(
+                    &pricing_rows,
+                    &r.model,
+                    active_provider.as_deref(),
+                )
+                .map(|pricing| {
+                    let cost = crate::services::pricing::compute_cost(
+                        pricing,
+                        r.input_tokens,
+                        output_with_reasoning,
+                        r.cache_read_tokens,
+                        r.cache_write_tokens,
+                        created_at,
+                    );
+                    crate::services::pricing::format_micro(cost.total())
+                })
+                .unwrap_or_else(|| "0".into())
+            };
             let conn = self.lock();
             let inserted = conn
                 .execute(
                     "INSERT OR IGNORE INTO request_logs (
                         request_id, provider_id, plugin_id, model, request_model,
+                        active_provider_id,
                         input_tokens, output_tokens, cache_read_tokens, cache_creation_tokens,
                         total_cost_usd, latency_ms, status_code, session_id, is_streaming,
                         created_at, data_source
-                    ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, 0, 200, ?11, 1, ?12, 'plugin')",
+                    ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, 0, 200, ?12, 1, ?13, 'plugin')",
                     params![
                         r.source_id,
                         format!("_{plugin_id}_session"),
                         plugin_id,
                         r.model,
                         r.model,
+                        active_provider,
                         r.input_tokens,
                         output_with_reasoning,
                         r.cache_read_tokens,
                         r.cache_write_tokens,
-                        r.cost.to_string(),
+                        cost,
                         r.session_id,
                         created_at,
                     ],

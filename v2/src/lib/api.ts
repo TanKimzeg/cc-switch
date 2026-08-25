@@ -29,6 +29,7 @@ import type {
   BackupRecord,
   ExportPayload,
   AppBehavior,
+  ModelPricing,
 } from "@/types";
 
 export function getProviders(): Promise<Provider[]> {
@@ -713,6 +714,26 @@ export function backupRename(id: string, name: string): Promise<void> {
 
 export function backupRestore(id: string): Promise<string> {
   return invoke<string>("backup_restore", { id });
+}
+
+export function pricingList(): Promise<ModelPricing[]> {
+  return invoke<ModelPricing[]>("pricing_list");
+}
+
+export function pricingUpsert(pricing: ModelPricing): Promise<void> {
+  return invoke<void>("pricing_upsert", { pricing });
+}
+
+export function pricingDelete(id: string): Promise<boolean> {
+  return invoke<boolean>("pricing_delete", { id });
+}
+
+export function pricingSyncModelsDev(): Promise<[number, number]> {
+  return invoke<[number, number]>("pricing_sync_models_dev");
+}
+
+export function usageRecomputeCosts(): Promise<number> {
+  return invoke<number>("usage_recompute_costs");
 }
 
 export function exportConfigJson(): Promise<ExportPayload> {

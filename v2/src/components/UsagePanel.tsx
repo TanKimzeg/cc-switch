@@ -45,6 +45,7 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import UsageTrendChart, { type TrendPoint } from "@/components/UsageTrendChart";
 import { UsageDateRangePicker } from "@/components/UsageDateRangePicker";
+import ModelPricingSection from "@/components/usage/ModelPricingSection";
 import {
   getRangeDayStrings,
   getRangeHourKeys,
@@ -276,6 +277,8 @@ export default function UsagePanel({ pluginId }: { pluginId: string }) {
           </button>
         </div>
       </div>
+
+      <ModelPricingSection />
 
       {logs.length === 0 ? (
         <Card>

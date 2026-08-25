@@ -3,6 +3,7 @@
 pub mod backup;
 pub mod mcp;
 pub mod overrides;
+pub mod pricing;
 pub mod profiles;
 pub mod prompts;
 pub mod settings;

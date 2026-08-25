@@ -328,6 +328,28 @@ export interface AppBehavior {
   launchOnStartup: boolean;
 }
 
+/** 模型定价（PricingService 唯一成本计算来源）。 */
+export interface ModelPricing {
+  id: string;
+  /** 模型匹配键：精确名或前缀。 */
+  modelMatch: string;
+  /** 供应商限定（NULL=通用默认；中转站差价场景）。 */
+  providerScope: string | null;
+  displayName: string;
+  inputCostPerMillion: string;
+  outputCostPerMillion: string;
+  cacheReadCostPerMillion: string;
+  cacheCreationCostPerMillion: string;
+  /** 错峰折扣百分比（如 50 = 半价）；null = 无峰谷。 */
+  offPeakDiscountPercent: number | null;
+  /** UTC "HH:MM" 窗口（可跨午夜）。 */
+  offPeakStart: string | null;
+  offPeakEnd: string | null;
+  /** user（手填，同步不覆盖）| models_dev（目录同步）。 */
+  source: "user" | "models_dev";
+  updatedAt: number;
+}
+
 /** 完整配置导出负载。 */
 export interface ExportPayload {
   version: number;
