@@ -57,7 +57,7 @@ const ADVANCED_PLACEHOLDER = `{
   "permission": { "edit": "allow", "bash": "ask" }
 }`;
 
-interface OmoFormFieldsProps {
+export interface OmoFormFieldsProps {
   modelOptions: Array<{ value: string; label: string }>;
   modelVariantsMap?: Record<string, string[]>;
   presetMetaMap?: Record<

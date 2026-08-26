@@ -71,7 +71,7 @@ interface EndpointCandidate {
   url: string;
 }
 
-interface ClaudeFormFieldsProps {
+export interface ClaudeFormFieldsProps {
   providerId?: string;
   // API Key
   shouldShowApiKey: boolean;

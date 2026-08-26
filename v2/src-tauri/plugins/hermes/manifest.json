@@ -1,0 +1,22 @@
+{
+  "id": "hermes",
+  "name": "Hermes",
+  "version": "0.1.0",
+  "apiVersion": "1",
+  "author": "cc-switch",
+  "description": "Hermes 插件：读写 ~/.hermes/config.yaml（additive 供应商）、MCP 与会话。",
+  "capabilities": {
+    "readLive": true,
+    "apply": true,
+    "remove": true,
+    "import": true,
+    "sessions": true,
+    "mcp": true
+  },
+  "promptFile": "~/.hermes/AGENTS.md",
+  "skillsDir": "~/.hermes/skills",
+  "entry": {
+    "type": "native",
+    "module": "hermes"
+  }
+}

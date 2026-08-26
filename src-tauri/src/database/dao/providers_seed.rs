@@ -117,4 +117,19 @@ mod tests {
         // 空 config = 官方登录态：切换时不注入自定义模型表
         assert_eq!(seed.settings_config_json, r#"{"config":""}"#);
     }
+
+    #[test]
+    fn official_seeds_match_registry_descriptors() {
+        // 每个官方种子 id 必须与其 app 的 descriptor 声明一致，
+        // 避免注册表与种子数据源漂移。
+        for seed in OFFICIAL_SEEDS {
+            let descriptor_id = seed.app_type.descriptor().official_seed_provider_id();
+            assert_eq!(
+                descriptor_id,
+                Some(seed.id),
+                "OFFICIAL_SEEDS[{id}] app_type {} descriptor.official_seed_provider_id() 不一致",
+                id = seed.id,
+            );
+        }
+    }
 }

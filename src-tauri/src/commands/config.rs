@@ -145,36 +145,22 @@ pub async fn get_claude_code_config_path() -> Result<String, String> {
 
 #[tauri::command]
 pub async fn get_config_dir(app: String) -> Result<String, String> {
-    let dir = match AppType::from_str(&app).map_err(|e| e.to_string())? {
-        AppType::Claude => config::get_claude_config_dir(),
-        AppType::ClaudeDesktop => {
-            crate::claude_desktop_config::get_config_library_path().map_err(|e| e.to_string())?
-        }
-        AppType::Codex => codex_config::get_codex_config_dir(),
-        AppType::Gemini => crate::gemini_config::get_gemini_dir(),
-        AppType::GrokBuild => crate::grok_config::get_grok_config_dir(),
-        AppType::OpenCode => crate::opencode_config::get_opencode_dir(),
-        AppType::OpenClaw => crate::openclaw_config::get_openclaw_dir(),
-        AppType::Hermes => crate::hermes_config::get_hermes_dir(),
-    };
+    let app_type = AppType::from_str(&app).map_err(|e| e.to_string())?;
+    let dir = app_type
+        .descriptor()
+        .config_dir()
+        .map_err(|e| e.to_string())?;
 
     Ok(dir.to_string_lossy().to_string())
 }
 
 #[tauri::command]
 pub async fn open_config_folder(handle: AppHandle, app: String) -> Result<bool, String> {
-    let config_dir = match AppType::from_str(&app).map_err(|e| e.to_string())? {
-        AppType::Claude => config::get_claude_config_dir(),
-        AppType::ClaudeDesktop => {
-            crate::claude_desktop_config::get_config_library_path().map_err(|e| e.to_string())?
-        }
-        AppType::Codex => codex_config::get_codex_config_dir(),
-        AppType::Gemini => crate::gemini_config::get_gemini_dir(),
-        AppType::GrokBuild => crate::grok_config::get_grok_config_dir(),
-        AppType::OpenCode => crate::opencode_config::get_opencode_dir(),
-        AppType::OpenClaw => crate::openclaw_config::get_openclaw_dir(),
-        AppType::Hermes => crate::hermes_config::get_hermes_dir(),
-    };
+    let app_type = AppType::from_str(&app).map_err(|e| e.to_string())?;
+    let config_dir = app_type
+        .descriptor()
+        .config_dir()
+        .map_err(|e| e.to_string())?;
 
     if !config_dir.exists() {
         std::fs::create_dir_all(&config_dir).map_err(|e| format!("创建目录失败: {e}"))?;

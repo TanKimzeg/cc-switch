@@ -402,10 +402,7 @@ impl AppType {
     /// - Switch mode (false): Only the current provider is written to live config (Claude, Codex, Gemini)
     /// - Additive mode (true): All providers are written to live config (OpenCode, OpenClaw, Hermes)
     pub fn is_additive_mode(&self) -> bool {
-        matches!(
-            self,
-            AppType::OpenCode | AppType::OpenClaw | AppType::Hermes
-        )
+        self.descriptor().is_additive()
     }
 
     /// Return an iterator over all app types
@@ -421,6 +418,14 @@ impl AppType {
             AppType::Hermes,
         ]
         .into_iter()
+    }
+
+    /// 返回该 app 在注册表中的 [`AppDescriptor`]。
+    ///
+    /// 注册表由 `apps::REGISTRY` 提供；每个变体都必须注册（B7 有完整性测试保证）。
+    /// 行为逻辑请优先通过 descriptor 获取，而不是手写 `match`。
+    pub fn descriptor(&self) -> &'static dyn crate::apps::AppDescriptor {
+        crate::apps::for_app_type(self)
     }
 }
 

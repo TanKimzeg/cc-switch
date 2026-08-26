@@ -1,0 +1,56 @@
+[package]
+name = "cc-switch-v2"
+version = "0.1.0"
+description = "cc-switch v2 — plugin-based agent switcher"
+authors = ["cc-switch team"]
+license = "MIT"
+edition = "2021"
+rust-version = "1.85.0"
+
+[lib]
+name = "cc_switch_v2_lib"
+crate-type = ["rlib"]
+doctest = false
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = { version = "1", features = ["preserve_order"] }
+json5 = "0.4"
+log = "0.4"
+chrono = { version = "0.4", features = ["serde"] }
+thiserror = "2.0"
+dirs = "5.0"
+uuid = { version = "1", features = ["v4"] }
+sha2 = "0.10"
+rusqlite = { version = "0.31", features = ["bundled", "backup"] }
+toml = "0.8"
+toml_edit = "0.22"
+serde_yaml = "0.9"
+regex = "1"
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "json", "gzip", "stream"] }
+zip = { version = "2", default-features = false, features = ["deflate"] }
+url = "2.5"
+futures = "0.3"
+tokio = { version = "1", features = ["time"] }
+tempfile = "3"
+tauri = { version = "2", features = ["tray-icon", "image-png"] }
+tauri-plugin-log = "2"
+tauri-plugin-process = "2"
+tauri-plugin-dialog = "2"
+tauri-plugin-autostart = "2"
+
+[target.'cfg(any(target_os = "macos", target_os = "windows", target_os = "linux"))'.dependencies]
+tauri-plugin-single-instance = "2"
+
+[profile.release]
+codegen-units = 1
+lto = "thin"
+opt-level = "s"
+panic = "unwind"
+strip = "symbols"
+
+[dev-dependencies]
+tempfile = "3"
