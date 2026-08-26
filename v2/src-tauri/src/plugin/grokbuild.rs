@@ -275,6 +275,15 @@ impl AgentPlugin for GrokBuildPlugin {
         }
         std::fs::write(&path, content).map_err(|e| PluginError::io(&path, e))
     }
+
+    fn sync_usage(&self) -> Result<Vec<crate::plugin::UsageRecord>, PluginError> {
+        sync_usage_impl()
+    }
+
+    // rewind 后同一 prompt_id 的行需要刷新（少记不双算）。
+    fn usage_upsert(&self) -> bool {
+        true
+    }
 }
 
 // ============================================================================
@@ -566,6 +575,155 @@ fn load_session_messages(
     Ok(messages)
 }
 
+/// 会话用量聚合（简化口径）：解析各会话 `updates.jsonl` 的 `turn_completed`
+/// 事件（逐轮独立值），每轮一条记录，request_id 锚定 `prompt_id`。
+/// 成本不在此计算（PricingService 统一补算）。
+fn sync_usage_impl() -> Result<Vec<crate::plugin::UsageRecord>, PluginError> {
+    let mut files = Vec::new();
+    for root in session_roots() {
+        collect_updates_files(&root, &mut files, 0);
+    }
+
+    let mut records = Vec::new();
+    for path in files {
+        if let Ok(meta) = std::fs::metadata(&path) {
+            if meta.len() > 50 * 1024 * 1024 {
+                log::warn!("Grok 会话日志过大，跳过用量: {}", path.display());
+                continue;
+            }
+        }
+        let Ok(content) = std::fs::read_to_string(&path) else {
+            continue;
+        };
+        // 会话 id = 会话目录名（与 summary.json 的 info.id 一致）。
+        let session_id = path
+            .parent()
+            .and_then(|dir| dir.file_name())
+            .and_then(|n| n.to_str())
+            .unwrap_or("unknown")
+            .to_string();
+
+        for (idx, line) in content.lines().enumerate() {
+            let Ok(value) = serde_json::from_str::<Value>(line) else {
+                continue;
+            };
+            let Some(update) = value
+                .get("params")
+                .and_then(|p| p.get("update"))
+            else {
+                continue;
+            };
+            // 只认 turn_completed（usage_snapshot 等是中途快照，导入会双算）。
+            if update.get("sessionUpdate").and_then(Value::as_str)
+                != Some("turn_completed")
+            {
+                continue;
+            }
+            let Some(usage) = update.get("usage") else {
+                continue;
+            };
+            let timestamp = value.get("timestamp").and_then(parse_timestamp_to_ms);
+
+            // 优先 modelUsage（逐模型），缺省退回顶层计数（模型名未知）。
+            let mut entries: Vec<(String, i64, i64, i64)> = Vec::new(); // (model, input, cached, output)
+            if let Some(model_usage) = usage.get("modelUsage").and_then(Value::as_object) {
+                for (model, counters) in model_usage {
+                    entries.push((
+                        model.clone(),
+                        counters
+                            .get("inputTokens")
+                            .and_then(Value::as_u64)
+                            .unwrap_or(0) as i64,
+                        counters
+                            .get("cachedReadTokens")
+                            .and_then(Value::as_u64)
+                            .unwrap_or(0) as i64,
+                        counters
+                            .get("outputTokens")
+                            .and_then(Value::as_u64)
+                            .unwrap_or(0) as i64,
+                    ));
+                }
+            } else if usage.get("inputTokens").is_some() {
+                entries.push((
+                    "unknown".into(),
+                    usage
+                        .get("inputTokens")
+                        .and_then(Value::as_u64)
+                        .unwrap_or(0) as i64,
+                    usage
+                        .get("cachedReadTokens")
+                        .and_then(Value::as_u64)
+                        .unwrap_or(0) as i64,
+                    usage
+                        .get("outputTokens")
+                        .and_then(Value::as_u64)
+                        .unwrap_or(0) as i64,
+                ));
+            }
+            if entries.is_empty() {
+                continue;
+            }
+
+            let prompt_id = update
+                .get("prompt_id")
+                .and_then(Value::as_str)
+                .filter(|s| !s.trim().is_empty())
+                .map(str::to_string)
+                .unwrap_or_else(|| format!("idx{idx}"));
+
+            let multi_model = entries.len() > 1;
+            for (model, input_total, cached, output) in entries {
+                if input_total == 0 && cached == 0 && output == 0 {
+                    continue;
+                }
+                // xAI 口径 inputTokens 含 cached：fresh 输入 = 总输入 - 命中。
+                let fresh_input = (input_total - cached).max(0);
+                let model_key = if multi_model {
+                    format!("{prompt_id}:{model}")
+                } else {
+                    prompt_id.clone()
+                };
+                records.push(crate::plugin::UsageRecord {
+                    source_id: format!("grok_turn:{model_key}"),
+                    session_id: session_id.clone(),
+                    model: model.clone(),
+                    input_tokens: fresh_input,
+                    output_tokens: output,
+                    reasoning_tokens: 0,
+                    cache_read_tokens: cached,
+                    cache_write_tokens: 0,
+                    cost: 0.0,
+                    timestamp_ms: timestamp.unwrap_or(0),
+                });
+            }
+        }
+    }
+    records.sort_by(|a, b| b.timestamp_ms.cmp(&a.timestamp_ms));
+    Ok(records)
+}
+
+/// 递归收集会话目录下的 updates.jsonl（跳过符号链接，限深 16，对齐 v1）。
+fn collect_updates_files(root: &Path, files: &mut Vec<PathBuf>, depth: usize) {
+    if depth > 16 {
+        return;
+    }
+    let Ok(entries) = std::fs::read_dir(root) else {
+        return;
+    };
+    for entry in entries.flatten() {
+        let path = entry.path();
+        if entry.metadata().map(|m| m.is_symlink()).unwrap_or(false) {
+            continue;
+        }
+        if path.is_dir() {
+            collect_updates_files(&path, files, depth + 1);
+        } else if path.file_name().and_then(|n| n.to_str()) == Some("updates.jsonl") {
+            files.push(path);
+        }
+    }
+}
+
 fn delete_session_dir(summary_path: &Path, session_id: &str) -> Result<bool, PluginError> {
     let summary: GrokSessionSummary = serde_json::from_str(
         &std::fs::read_to_string(summary_path).map_err(|e| PluginError::io(summary_path, e))?,
@@ -592,6 +750,7 @@ fn delete_session_dir(summary_path: &Path, session_id: &str) -> Result<bool, Plu
 #[cfg(test)]
 mod tests {
     use super::*;
+    use chrono::TimeZone;
     use std::sync::Mutex;
 
     fn env_lock() -> &'static Mutex<()> {
@@ -741,6 +900,54 @@ context_window = 500000
         })
         .unwrap();
         assert!(!temp.path().join(".grok").exists());
+    }
+
+    #[test]
+    fn usage_sync_parses_turn_completed_only() {
+        let temp = tempfile::tempdir().unwrap();
+        let _guard = HomeGuard::set(temp.path());
+        let session_id = "019f6af2-18b0-7673-958e-d25be650e172";
+        let session_dir = temp
+            .path()
+            .join(".grok")
+            .join("sessions")
+            .join("proj")
+            .join(session_id);
+        std::fs::create_dir_all(&session_dir).unwrap();
+        std::fs::write(
+            session_dir.join("updates.jsonl"),
+            concat!(
+                // 中途快照：不得导入（防双算）
+                "{\"timestamp\":\"2026-07-20T13:26:20Z\",\"method\":\"_x.ai/session/update\",\"params\":{\"update\":{\"sessionUpdate\":\"usage_snapshot\",\"prompt_id\":\"px\",\"usage\":{\"inputTokens\":9999,\"outputTokens\":9,\"cachedReadTokens\":0}}}}\n",
+                // turn_completed + modelUsage
+                "{\"timestamp\":\"2026-07-20T13:26:24Z\",\"method\":\"_x.ai/session/update\",\"params\":{\"update\":{\"sessionUpdate\":\"turn_completed\",\"prompt_id\":\"p1\",\"usage\":{\"inputTokens\":16632,\"outputTokens\":104,\"cachedReadTokens\":0,\"modelUsage\":{\"grok-4.5-build\":{\"inputTokens\":16632,\"outputTokens\":104,\"cachedReadTokens\":0}}}}}}\n",
+                // turn_completed 无 modelUsage → 顶层计数回退
+                "{\"timestamp\":\"2026-07-20T13:27:00Z\",\"method\":\"_x.ai/session/update\",\"params\":{\"update\":{\"sessionUpdate\":\"turn_completed\",\"prompt_id\":\"p2\",\"usage\":{\"inputTokens\":500,\"outputTokens\":20,\"cachedReadTokens\":100}}}}\n"
+            ),
+        )
+        .unwrap();
+
+        let p = GrokBuildPlugin::new();
+        let mut records = p.sync_usage().unwrap();
+        assert_eq!(records.len(), 2, "usage_snapshot 不得导入");
+        records.sort_by(|a, b| a.source_id.cmp(&b.source_id));
+
+        let p1 = records.iter().find(|r| r.source_id == "grok_turn:p1").unwrap();
+        assert_eq!(p1.model, "grok-4.5-build");
+        assert_eq!(p1.session_id, session_id);
+        assert_eq!(p1.input_tokens, 16632);
+        assert_eq!(p1.output_tokens, 104);
+        let expected_ts = chrono::Utc
+            .with_ymd_and_hms(2026, 7, 20, 13, 26, 24)
+            .unwrap()
+            .timestamp_millis();
+        assert_eq!(p1.timestamp_ms, expected_ts);
+
+        let p2 = records.iter().find(|r| r.source_id == "grok_turn:p2").unwrap();
+        assert_eq!(p2.model, "unknown");
+        // xAI 口径 inputTokens 含 cached → fresh = 500 - 100
+        assert_eq!(p2.input_tokens, 400);
+        assert_eq!(p2.cache_read_tokens, 100);
     }
 
     #[test]

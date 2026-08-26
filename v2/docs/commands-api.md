@@ -56,10 +56,15 @@
 
 | 命令 | 参数 | 返回 | 说明 |
 |------|------|------|------|
-| `plugin_sync_usage` | `plugin_id` | `usize` | 从插件解析用量写入 `request_logs`（需 `sessions`） |
+| `plugin_sync_usage` | `plugin_id` | `usize` | 从插件解析用量写入 `request_logs`（需 `sessions`；累计快照型插件走 UPSERT 刷新，其余 INSERT OR IGNORE 去重；零成本记录按定价补算） |
 | `usage_insert_records` | `plugin_id`, `records: UsageRecord[]` | `usize` | 写入用量记录（TS 插件前端解析后调用；`INSERT OR IGNORE` 去重） |
 | `usage_list_request_logs` | `plugin_id?`, `limit?` | `RequestLogRow[]` | 查询请求日志（按时间倒序） |
 | `usage_daily_summary` | `plugin_id?` | `DailyUsageRow[]` | 按日汇总用量 |
+| `pricing_list` | — | `ModelPricing[]` | 列出模型定价（PricingService 唯一成本来源） |
+| `pricing_upsert` | `pricing: ModelPricing` | `()` | 新增/更新定价（校验价格/峰谷窗口；`model_match` 支持前缀，`provider_scope` 供应商覆盖） |
+| `pricing_delete` | `id` | `bool` | 删除定价 |
+| `pricing_sync_models_dev` | — | `[usize, usize]` | 从 models.dev 拉取公共价格（不覆盖用户手填行）；返回 (同步数, 跳过数) |
+| `usage_recompute_costs` | — | `usize` | 回填历史零成本行（不覆盖插件自带成本）；返回更新条数 |
 
 ## 5. Skills（skills）
 

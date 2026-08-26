@@ -225,6 +225,13 @@ pub trait AgentPlugin: Send + Sync {
         )))
     }
 
+    /// `sync_usage` 记录是否为「累计快照/可变值」语义：true 时软件层用
+    /// UPSERT 写入（同 source_id 刷新），false 用 INSERT OR IGNORE 去重。
+    /// codex（会话累计 total_token_usage）与 grokbuild（rewind 后同键更新）为 true。
+    fn usage_upsert(&self) -> bool {
+        false
+    }
+
     /// 从插件自己的会话存储解析 token 用量。
     ///
     /// 返回的记录由软件层（命令）写入 `request_logs` 表；插件只负责解析。

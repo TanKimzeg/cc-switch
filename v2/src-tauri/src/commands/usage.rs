@@ -8,6 +8,9 @@ use crate::registry::PluginRegistry;
 use crate::services::usage::{DailyUsageRow, RequestLogRow};
 
 /// 从插件自己的会话存储同步用量到 `request_logs`（由插件实现解析）。
+///
+/// 累计快照型插件（codex/grokbuild，见 `AgentPlugin::usage_upsert`）走 UPSERT
+/// 刷新同键记录；逐条独立值插件走 INSERT OR IGNORE 去重。
 #[tauri::command]
 pub fn plugin_sync_usage(
     db: State<'_, Database>,
@@ -19,7 +22,11 @@ pub fn plugin_sync_usage(
         .map_err(|e| e.to_string())?;
     require_usage(plugin.as_ref(), &plugin_id)?;
     let records = plugin.sync_usage().map_err(|e| e.to_string())?;
-    Ok(db.insert_usage_records(&plugin_id, &records))
+    if plugin.usage_upsert() {
+        Ok(db.upsert_usage_records(&plugin_id, &records))
+    } else {
+        Ok(db.insert_usage_records(&plugin_id, &records))
+    }
 }
 
 /// 写入 TS 插件在前端解析出的用量记录（`INSERT OR IGNORE` 去重）。返回导入条数。

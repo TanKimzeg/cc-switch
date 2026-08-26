@@ -247,6 +247,15 @@ impl AgentPlugin for CodexPlugin {
         }
         std::fs::write(&path, content).map_err(|e| PluginError::io(&path, e))
     }
+
+    fn sync_usage(&self) -> Result<Vec<crate::plugin::UsageRecord>, PluginError> {
+        sync_usage_impl()
+    }
+
+    // total_token_usage 是会话累计快照：同一 source_id 需随会话增长刷新。
+    fn usage_upsert(&self) -> bool {
+        true
+    }
 }
 
 // ============================================================================
@@ -776,6 +785,132 @@ fn load_session_messages(path: &Path) -> Result<Vec<crate::plugin::SessionMessag
     Ok(messages)
 }
 
+/// 会话级用量聚合（简化口径，对齐 v1 数据源但去掉 turn 级增量/ fork 解析的
+/// 复杂度）：取每个 rollout 文件最后一次 `token_count` 的 `total_token_usage`
+/// 会话累计快照作为整条记录；模型取最后一个 `turn_context` 声明的值；
+/// 子代理会话跳过。成本不在此计算（PricingService 统一补算）。
+fn sync_usage_impl() -> Result<Vec<crate::plugin::UsageRecord>, PluginError> {
+    let mut files = Vec::new();
+    for root in session_roots() {
+        collect_files_with_ext(&root, "jsonl", &mut files);
+    }
+
+    let mut records = Vec::new();
+    for path in files {
+        // 异常大文件跳过（对齐 v1 的 50MiB 上限）。
+        if let Ok(meta) = std::fs::metadata(&path) {
+            if meta.len() > 50 * 1024 * 1024 {
+                log::warn!("Codex 会话日志过大，跳过用量: {}", path.display());
+                continue;
+            }
+        }
+        let Ok(content) = std::fs::read_to_string(&path) else {
+            continue;
+        };
+
+        let mut session_id: Option<String> = None;
+        let mut is_subagent = false;
+        let mut model: Option<String> = None;
+        let mut total: Option<(i64, i64, i64)> = None; // (input_total, cached_input, output)
+        let mut last_ts: Option<i64> = None;
+
+        for line in content.lines() {
+            let Ok(value) = serde_json::from_str::<Value>(line) else {
+                continue;
+            };
+            if let Some(ts) = value.get("timestamp").and_then(parse_timestamp_to_ms) {
+                last_ts = Some(ts);
+            }
+            match value.get("type").and_then(Value::as_str).unwrap_or("") {
+                "session_meta" => {
+                    if let Some(payload) = value.get("payload") {
+                        if payload
+                            .get("source")
+                            .and_then(Value::as_object)
+                            .is_some_and(|s| s.contains_key("subagent"))
+                        {
+                            is_subagent = true;
+                            break;
+                        }
+                        if session_id.is_none() {
+                            session_id =
+                                payload.get("id").and_then(Value::as_str).map(String::from);
+                        }
+                    }
+                }
+                "turn_context" => {
+                    if let Some(m) = value
+                        .get("payload")
+                        .and_then(|p| p.get("model"))
+                        .and_then(Value::as_str)
+                        .filter(|m| !m.trim().is_empty())
+                    {
+                        model = Some(m.trim().to_string());
+                    }
+                }
+                "event_msg" => {
+                    let Some(payload) = value.get("payload") else {
+                        continue;
+                    };
+                    if payload.get("type").and_then(Value::as_str) != Some("token_count") {
+                        continue;
+                    }
+                    let Some(info) = payload.get("info").filter(|i| !i.is_null()) else {
+                        continue;
+                    };
+                    let Some(usage) = info.get("total_token_usage") else {
+                        continue;
+                    };
+                    let input = usage
+                        .get("input_tokens")
+                        .and_then(Value::as_u64)
+                        .unwrap_or(0);
+                    let cached = usage
+                        .get("cached_input_tokens")
+                        .and_then(Value::as_u64)
+                        .unwrap_or(0);
+                    let output = usage
+                        .get("output_tokens")
+                        .and_then(Value::as_u64)
+                        .unwrap_or(0);
+                    total = Some((input as i64, cached as i64, output as i64));
+                }
+                _ => {}
+            }
+        }
+
+        if is_subagent {
+            continue;
+        }
+        let Some((input_total, cached, output)) = total else {
+            continue;
+        };
+        if input_total == 0 && cached == 0 && output == 0 {
+            continue;
+        }
+        let session_id = session_id.or_else(|| infer_session_id_from_filename(&path));
+        let Some(session_id) = session_id else {
+            continue;
+        };
+        // OpenAI 口径 input_tokens 含 cached_input：fresh 输入 = 总输入 - 命中。
+        let fresh_input = (input_total - cached).max(0);
+        records.push(crate::plugin::UsageRecord {
+            source_id: format!("codex_session:{session_id}"),
+            session_id: session_id.clone(),
+            model: model.unwrap_or_else(|| "unknown".into()),
+            input_tokens: fresh_input,
+            output_tokens: output,
+            reasoning_tokens: 0,
+            cache_read_tokens: cached,
+            cache_write_tokens: 0,
+            cost: 0.0,
+            timestamp_ms: last_ts.unwrap_or(0),
+        });
+    }
+    records.sort_by(|a, b| b.timestamp_ms.cmp(&a.timestamp_ms));
+    Ok(records)
+}
+
 fn delete_session_file(path: &Path, session_id: &str) -> Result<bool, PluginError> {
     // 删除前校验文件确属该会话（防误删）。
     if let Some(meta) = parse_session(path, &std::collections::HashMap::new()) {
@@ -1027,8 +1162,63 @@ mod tests {
     }
 
     #[test]
-    fn session_title_skips_agents_md_and_extracts_vscode_request() {
+    fn usage_sync_takes_last_cumulative_snapshot() {
+        use chrono::TimeZone;
         let temp = tempfile::tempdir().unwrap();
+        let _guard = HomeGuard::set(temp.path());
+        let dir = temp.path().join(".codex").join("sessions").join("d");
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(
+            dir.join("rollout-2026-08-24T10-00-00-019f6af2-18b0-7673-958e-d25be650e172.jsonl"),
+            concat!(
+                "{\"timestamp\":\"2026-08-24T10:00:00Z\",\"type\":\"session_meta\",\"payload\":{\"id\":\"019f6af2-18b0-7673-958e-d25be650e172\",\"cwd\":\"/w\"}}\n",
+                "{\"timestamp\":\"2026-08-24T10:00:01Z\",\"type\":\"turn_context\",\"payload\":{\"model\":\"gpt-5.5\"}}\n",
+                "{\"timestamp\":\"2026-08-24T10:00:02Z\",\"type\":\"event_msg\",\"payload\":{\"type\":\"token_count\",\"info\":{\"total_token_usage\":{\"input_tokens\":1000,\"cached_input_tokens\":400,\"output_tokens\":50}}}}\n",
+                "{\"timestamp\":\"2026-08-24T10:01:00Z\",\"type\":\"event_msg\",\"payload\":{\"type\":\"token_count\",\"info\":{\"total_token_usage\":{\"input_tokens\":2000,\"cached_input_tokens\":900,\"output_tokens\":120}}}}\n",
+                "{\"timestamp\":\"2026-08-24T10:01:01Z\",\"type\":\"event_msg\",\"payload\":{\"type\":\"other\",\"info\":{}}}\n"
+            ),
+        )
+        .unwrap();
+
+        let p = CodexPlugin::new();
+        let records = p.sync_usage().unwrap();
+        assert_eq!(records.len(), 1);
+        let r = &records[0];
+        assert_eq!(r.source_id, "codex_session:019f6af2-18b0-7673-958e-d25be650e172");
+        assert_eq!(r.model, "gpt-5.5");
+        // 最后一次累计快照；OpenAI 口径 input 含 cached → fresh = 2000 - 900
+        assert_eq!(r.input_tokens, 1100);
+        assert_eq!(r.cache_read_tokens, 900);
+        assert_eq!(r.output_tokens, 120);
+        let expected_ts = chrono::Utc
+            .with_ymd_and_hms(2026, 8, 24, 10, 1, 1)
+            .unwrap()
+            .timestamp_millis();
+        assert_eq!(r.timestamp_ms, expected_ts);
+        assert_eq!(r.cost, 0.0, "成本交由 PricingService 计算");
+    }
+
+    #[test]
+    fn usage_sync_skips_subagent_sessions() {
+        let temp = tempfile::tempdir().unwrap();
+        let _guard = HomeGuard::set(temp.path());
+        let dir = temp.path().join(".codex").join("sessions").join("sub");
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(
+            dir.join("rollout-sub.jsonl"),
+            concat!(
+                "{\"timestamp\":\"2026-08-24T10:00:00Z\",\"type\":\"session_meta\",\"payload\":{\"id\":\"sub-1\",\"source\":{\"subagent\":{\"thread_spawn\":{\"parent_thread_id\":\"p\"}}}}}\n",
+                "{\"timestamp\":\"2026-08-24T10:00:01Z\",\"type\":\"event_msg\",\"payload\":{\"type\":\"token_count\",\"info\":{\"total_token_usage\":{\"input_tokens\":500,\"cached_input_tokens\":0,\"output_tokens\":10}}}}\n"
+            ),
+        )
+        .unwrap();
+
+        let p = CodexPlugin::new();
+        assert!(p.sync_usage().unwrap().is_empty());
+    }
+
+    #[test]
+    fn session_title_skips_agents_md_and_extracts_vscode_request() {        let temp = tempfile::tempdir().unwrap();
         let _guard = HomeGuard::set(temp.path());
         let dir = temp.path().join(".codex").join("sessions").join("d");
         std::fs::create_dir_all(&dir).unwrap();
