@@ -30,7 +30,7 @@ toml = "0.8"
 toml_edit = "0.22"
 serde_yaml = "0.9"
 regex = "1"
-reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "json", "gzip", "stream"] }
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "json", "gzip", "stream", "socks", "system-proxy"] }
 zip = { version = "2", default-features = false, features = ["deflate"] }
 url = "2.5"
 futures = "0.3"

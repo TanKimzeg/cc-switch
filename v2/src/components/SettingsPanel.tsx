@@ -12,6 +12,9 @@ import {
   Power,
   Settings as SettingsIcon,
   Undo2,
+  Globe,
+  CheckCircle,
+  XCircle,
 } from "lucide-react";
 import { PanelHeader } from "@/components/PanelHeader";
 import { Card, CardContent } from "@/components/ui/card";
@@ -49,6 +52,9 @@ import {
   skillsMigrateStorage,
   skillsSetSyncMethod,
   syncAllProvidersToLive,
+  getGlobalProxyUrl,
+  setGlobalProxyUrl,
+  testGlobalProxyUrl,
 } from "@/lib/api";
 import type { AppBehavior, SkillStorageLocation, SyncSettings } from "@/types";
 
@@ -68,12 +74,19 @@ export default function SettingsPanel() {
   >([]);
   const [overrides, setOverrides] = useState<Record<string, string>>({});
   const [appDataDir, setAppDataDir] = useState("");
+  const [proxyUrl, setProxyUrl] = useState("");
+  const [proxyTesting, setProxyTesting] = useState(false);
+  const [proxyResult, setProxyResult] = useState<{
+    ok: boolean;
+    latencyMs: number | null;
+    error: string | null;
+  } | null>(null);
   const [restartOpen, setRestartOpen] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const [s, skills, pluginList, overridesList, appDir, b] =
+      const [s, skills, pluginList, overridesList, appDir, b, proxy] =
         await Promise.all([
           skillsGetSyncSettings(),
           skillsList(),
@@ -81,6 +94,7 @@ export default function SettingsPanel() {
           settingsGetOverrides(),
           getAppDataDirOverride(),
           settingsGetAppBehavior(),
+          getGlobalProxyUrl(),
         ]);
       setSettings(s);
       setBehavior(b);
@@ -94,6 +108,7 @@ export default function SettingsPanel() {
         Object.fromEntries(overridesList.map((o) => [o.pluginId, o.path])),
       );
       setAppDataDir(appDir ?? "");
+      setProxyUrl(proxy ?? "");
     } catch (e) {
       toast.error(skillErrorText(t, e));
     } finally {
@@ -262,6 +277,35 @@ export default function SettingsPanel() {
     const picked = await browseDir(current);
     if (!picked) return;
     await handleOverrideChange(pluginId, picked);
+  };
+
+  const handleProxySave = async () => {
+    setPending(true);
+    try {
+      await setGlobalProxyUrl(proxyUrl);
+      toast.success(t("common.save"));
+    } catch (e) {
+      toast.error(skillErrorText(t, e));
+    } finally {
+      setPending(false);
+    }
+  };
+
+  const handleProxyTest = async () => {
+    setProxyTesting(true);
+    setProxyResult(null);
+    try {
+      const result = await testGlobalProxyUrl(proxyUrl);
+      setProxyResult(result);
+    } catch (e) {
+      setProxyResult({
+        ok: false,
+        latencyMs: null,
+        error: skillErrorText(t, e),
+      });
+    } finally {
+      setProxyTesting(false);
+    }
   };
 
   return (
@@ -541,6 +585,84 @@ export default function SettingsPanel() {
                         )}
                       </div>
                     </section>
+                  </div>
+                </AccordionContent>
+              </AccordionItem>
+              <AccordionItem
+                value="proxy"
+                className="rounded-xl glass-card overflow-hidden"
+              >
+                <AccordionTrigger className="px-6 py-4 hover:no-underline hover:bg-muted/50 data-[state=open]:bg-muted/50">
+                  <div className="flex items-center gap-3">
+                    <Globe className="h-5 w-5 text-primary" />
+                    <div className="text-left">
+                      <h3 className="text-base font-semibold">
+                        {t("settings.advanced.proxy.title")}
+                      </h3>
+                      <p className="text-sm text-muted-foreground font-normal">
+                        {t("settings.advanced.proxy.description")}
+                      </p>
+                    </div>
+                  </div>
+                </AccordionTrigger>
+                <AccordionContent className="px-6 pb-6 pt-4 border-t border-border/50">
+                  <div className="space-y-4">
+                    <p className="text-xs text-muted-foreground">
+                      {t("settings.advanced.proxy.hint")}
+                    </p>
+                    <div className="flex gap-2">
+                      <Input
+                        className="flex-1"
+                        value={proxyUrl}
+                        onChange={(e) => setProxyUrl(e.target.value)}
+                        placeholder="http://127.0.0.1:7890"
+                        disabled={pending}
+                      />
+                      <Button
+                        variant="outline"
+                        onClick={() => void handleProxySave()}
+                        disabled={pending}
+                      >
+                        {t("common.save")}
+                      </Button>
+                      <Button
+                        variant="outline"
+                        onClick={() => void handleProxyTest()}
+                        disabled={proxyTesting || pending}
+                      >
+                        {proxyTesting ? (
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : (
+                          t("settings.advanced.proxy.test")
+                        )}
+                      </Button>
+                    </div>
+                    {proxyResult && (
+                      <div
+                        className={cn(
+                          "flex items-center gap-2 text-sm",
+                          proxyResult.ok
+                            ? "text-green-600"
+                            : "text-destructive",
+                        )}
+                      >
+                        {proxyResult.ok ? (
+                          <>
+                            <CheckCircle className="h-4 w-4" />
+                            <span>
+                              {t("settings.advanced.proxy.testSuccess", {
+                                ms: proxyResult.latencyMs,
+                              })}
+                            </span>
+                          </>
+                        ) : (
+                          <>
+                            <XCircle className="h-4 w-4" />
+                            <span>{proxyResult.error}</span>
+                          </>
+                        )}
+                      </div>
+                    )}
                   </div>
                 </AccordionContent>
               </AccordionItem>

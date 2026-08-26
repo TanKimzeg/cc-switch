@@ -481,6 +481,13 @@
       "configDir": {
         "title": "Configuration Directory",
         "description": "Manage CC Switch data directory and config storage paths for each tool"
+      },
+      "proxy": {
+        "title": "Outbound Proxy",
+        "description": "Configure HTTP/SOCKS5 proxy for outbound requests (e.g. models.dev, GitHub)",
+        "hint": "Required when behind a firewall. Format: http://127.0.0.1:7890 or socks5://127.0.0.1:1080",
+        "test": "Test",
+        "testSuccess": "Connection OK ({{ms}}ms)"
       }
     },
     "skillStorageTitle": "Skills storage location",

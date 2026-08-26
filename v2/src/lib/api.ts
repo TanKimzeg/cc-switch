@@ -760,3 +760,23 @@ export function importConfig(payload: ExportPayload): Promise<number> {
 export function importConfigFromFile(path: string): Promise<number> {
   return invoke<number>("import_config_from_file", { path });
 }
+
+// ========== 全局出站代理 ==========
+
+export function getGlobalProxyUrl(): Promise<string | null> {
+  return invoke<string | null>("get_global_proxy_url");
+}
+
+export function setGlobalProxyUrl(url: string): Promise<void> {
+  return invoke<void>("set_global_proxy_url", { url });
+}
+
+export function testGlobalProxyUrl(
+  url: string,
+): Promise<{ ok: boolean; latencyMs: number | null; error: string | null }> {
+  return invoke<{
+    ok: boolean;
+    latencyMs: number | null;
+    error: string | null;
+  }>("test_global_proxy_url", { url });
+}

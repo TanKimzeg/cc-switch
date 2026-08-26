@@ -929,10 +929,7 @@ fn choose_doc_path(
 // ========== HTTP ==========
 
 fn http_client() -> reqwest::Client {
-    reqwest::Client::builder()
-        .timeout(REPO_DOWNLOAD_TIMEOUT)
-        .build()
-        .unwrap_or_else(|_| reqwest::Client::new())
+    crate::services::http_client::get()
 }
 
 /// 下载并卡住压缩体大小，返回完整字节。

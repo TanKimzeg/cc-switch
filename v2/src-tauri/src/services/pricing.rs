@@ -452,12 +452,10 @@ fn price_to_string(v: f64) -> String {
 /// 从 models.dev 拉取公共模型价格并 upsert（仅 `models_dev` 来源行；
 /// 用户手填行同 key 时跳过不覆盖）。返回 (同步数, 跳过的用户行数)。
 pub async fn sync_models_dev(db: &Database) -> Result<(usize, usize), String> {
-    let client = reqwest::Client::builder()
-        .timeout(std::time::Duration::from_secs(30))
-        .build()
-        .map_err(|e| e.to_string())?;
+    let client = crate::services::http_client::get();
     let resp = client
         .get(MODELS_DEV_API_URL)
+        .timeout(std::time::Duration::from_secs(30))
         .send()
         .await
         .map_err(|e| format!("拉取 models.dev 失败: {e}"))?;

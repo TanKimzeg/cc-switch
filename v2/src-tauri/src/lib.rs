@@ -76,6 +76,10 @@ pub fn run() {
         }))
         .setup(|app| {
             init_db(app)?;
+            // 全局出站代理：从 settings 加载并初始化 HTTP 客户端（GFW 场景必需）。
+            if let Some(db) = app.try_state::<Database>() {
+                crate::services::http_client::init_from_db(db.inner());
+            }
             setup_app_behavior(app);
             start_backup_scheduler(app.handle().clone());
             Ok(())
@@ -111,6 +115,9 @@ pub fn run() {
             commands::pricing::pricing_delete,
             commands::pricing::pricing_sync_models_dev,
             commands::pricing::usage_recompute_costs,
+            commands::global_proxy::get_global_proxy_url,
+            commands::global_proxy::set_global_proxy_url,
+            commands::global_proxy::test_global_proxy_url,
             commands::skills::skills_list,
             commands::skills::skills_install_local_dir,
             commands::skills::skills_install_skill,

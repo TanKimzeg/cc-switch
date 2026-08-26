@@ -481,6 +481,13 @@
       "configDir": {
         "title": "配置文件目录",
         "description": "管理 CC Switch 数据目录与各工具的配置存储路径"
+      },
+      "proxy": {
+        "title": "全局出站代理",
+        "description": "配置出站请求的 HTTP/SOCKS5 代理（如 models.dev、GitHub 等）",
+        "hint": "防火墙环境下必须配置。格式: http://127.0.0.1:7890 或 socks5://127.0.0.1:1080",
+        "test": "测试",
+        "testSuccess": "连接成功（{{ms}}ms）"
       }
     },
     "skillStorageTitle": "Skills 存储位置",
