@@ -19,7 +19,7 @@
 | 云端同步 | ✅ Dropbox/OneDrive/iCloud/WebDAV/S3 | ❌ 无 | P1 |
 | Deep Link | ✅ `ccswitch://` 导入 | ❌ 无 | P1 |
 | 托盘快捷切换 | ✅ | ✅ 插件→provider 两级菜单 + 勾选当前 + 切换即重建；托盘显隐可设置 | 已补齐（见 §3.6） |
-| 配置方案 Profile | ✅ 项目级配置快照（供应商/MCP/Skills/记忆文件），一键应用 | ⚠️ 仅 profiles 表 CRUD 存 JSON，apply 未真正恢复现场 | **缺快照语义 + 应用到 live** |
+| 配置方案 Profile | ✅ 项目级配置快照（供应商/MCP/Skills/记忆文件），一键应用 | ✅ 按插件快照/应用/自动保存旧项目（§3.10）；header ProfileSwitcher 随 M4 做 | — |
 | 备份/导入导出 | ✅ 自动备份、导入导出 | ✅ db_backups + export/import + 恢复（安全备份）/重命名/自动备份 interval+retain 轮换 | 已补齐（见 §3.14） |
 | 工作区编辑器（OpenClaw） | ✅ AGENTS.md/SOUL.md 编辑 | ❌ 无 | P2 |
 | 速度测试 / 健康监控 | ✅ SpeedtestService、供应商健康 | ❌ 无 | P2 |
@@ -183,17 +183,19 @@
 
 > 说明：SSOT 默认路径为 `~/.cc-switch/skills/`（与 v1 完全一致），UI 文案沿用「CC Switch」；`~/.agents/skills` 为可切换存储位置。`~` 解析走 `CC_SWITCH_TEST_HOME`（测试可隔离）。
 
-### 3.10 Profile（配置方案）：对齐 v1「项目快照」语义 —— **P1（用户点名）**
+### 3.10 Profile（配置方案）：对齐 v1「项目快照」语义 —— ✅ **已实现（2026-08-24）**
 
-**v1（`src/components/profiles/`）**：Profile 是**项目级配置快照**——把某应用分组（Claude 组 / Codex 组）当前的供应商、MCP、Skills、记忆文件（prompt）快照存为命名 profile，可一键切换回某项目配置。UI 是 header 的 ProfileSwitcher（"从当前创建"、下拉切换、管理对话框）。**切换会真正把快照恢复到各应用的 live 配置**。
+**v1（`src/components/profiles/` + `services/profile.rs`）**：Profile 是**项目级配置快照**——把某应用分组当前的供应商、MCP、Skills、记忆文件（prompt）选择快照存为命名 profile，可一键切换回某项目配置。**切换会真正把快照恢复到各应用的 live 配置**，且切走时自动保存旧项目。
 
-**v2 现状**：`profiles` 表 CRUD 存 JSON payload；`profiles_apply` 只把 id 写进 `settings.current_profile_id`，**未真正应用到 live**——本质是占位，不是 v1 的项目快照。
+**v2 现状**：✅ 已对齐（`services/profiles.rs` 重写 + ProfilesPanel 重做），插件化映射：
+- **scope = 单插件**（v1 是应用分组；v2 插件天然独立，各插件 current 指针互不牵连，settings 键 `profile.current.<plugin_id>`）。
+- **payload**：`{<plugin_id>: {provider, mcpEnabledIds, skillEnabledIds, activePromptId}}`，槽位 Option 严格区分「未拍摄」（应用时不动）与「拍到的空集」（应用时清空）——对齐 v1 语义。
+- **create**：只拍发起插件；**update**：重命名和/或重拍某插件槽位；**delete**：清除指向它的 current 指针。
+- **apply**（best-effort，warnings 聚合）：①自动保存旧项目（重拍发起插件槽位，失败不阻塞）②供应商走 `switch_provider_core`（apply live）③MCP/Skills 最小 toggle 差异（仅动目标态≠当前态的条目，悬空 id 记 warning）④Prompt 已激活幂等跳过。
+- **UI**：ProfilesPanel 重做——列表 + 当前徽标（按当前插件）、从当前创建、应用（warnings toast）、以当前状态更新、重命名、删除确认。
+- **测试**：7 个（快照内容/自动保存/未拍摄语义/最小 toggle/悬空警告/指针清理/空名校验）。
 
-**实现思路**：
-1. `profiles_upsert` 生成快照：遍历某插件分组的 provider/MCP/skills/prompt 实际状态，序列化为 payload（对齐 v1 的 snapshot 结构）。
-2. `profiles_apply`：解析 payload → 恢复 provider（`apply`/`set_current_provider`）、MCP（`mcp_upsert` + 同步）、skills（`skills_toggle_plugin`）、prompt（`prompts_toggle`）到 live。
-3. 前端：header 加 ProfileSwitcher（对齐 v1：当前分组显示当前 profile、从当前创建、下拉切换、管理对话框）；`GlobalPanels` 的 ProfilesPanel 改为承载该交互。
-4. 快照按插件分组（Claude 组 vs Codex 组各自独立 current），对齐 v1 `APP_PROFILE_SCOPE`。
+**遗留**：header ProfileSwitcher 随 M4 外壳重构一并做（当前入口为「配置方案」页）。
 
 ### 3.11 Prompt：互斥启用 + 回填保护 —— ✅ **已实现（2026-08-16）**
 
@@ -292,6 +294,6 @@
 
 1. ~~**P0**：本地代理（3.1）~~ —— **暂不考虑实现**（用户决定）。
 2. ~~**P1 快速项**：模型定价接线（3.3）~~ —— ✅ 已完成（§3.3，超越 v1）；~~**供应商预设（3.7）~~ —— **不做**（用户决定）。**用量图表（3.12）、托盘切换（3.6）、设置 Tab 化/主题语言/窗口行为/MCP 对齐/备份增强（§3.14、§3.18）、codex/grokbuild 用量同步（§3.20）已完成**。
-3. **P1 中型项**：余额/订阅（3.2）、Deep Link（3.5，含 MCP Deep Link 导入，**到时重新设计解析层不照抄 v1**）、通用供应商（3.8）、云端同步（3.4）、**Profile 项目快照（3.10）**、**外壳重构（v1 header + 保留侧栏）**、gemini/claude-desktop 插件化。（**Skill 仓库/skills.sh（3.9）、Prompt 互斥+回填（3.11）、Claude Code 原生内置 + 统一能力视图（§3.19）、Codex/Grok Build/Hermes 原生内置（§3.20）已完成**）
+3. **P1 中型项**：余额/订阅（3.2）、Deep Link（3.5，含 MCP Deep Link 导入，**到时重新设计解析层不照抄 v1**）、通用供应商（3.8）、云端同步（3.4）、**外壳重构（v1 header + 保留侧栏）**、gemini/claude-desktop 插件化。（**Skill 仓库/skills.sh（3.9）、Prompt 互斥+回填（3.11）、Profile 项目快照（3.10）、Claude Code 原生内置 + 统一能力视图（§3.19）、Codex/Grok Build/Hermes 原生内置（§3.20）已完成**）
 4. **P2**：会话搜索（3.13）、工作区（3.15）、速度测试（3.16）。
 5. **TS 沙箱**：方案 A → B，作为贯穿性的架构演进。

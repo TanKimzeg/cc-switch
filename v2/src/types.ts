@@ -250,14 +250,20 @@ export interface PromptRecord {
   updatedAt: string;
 }
 
-/** 配置方案（profile）。 */
+/** 配置方案（profile）：按插件分槽的项目快照。 */
 export interface Profile {
   id: string;
   name: string;
+  /** 插件 id → { provider, mcpEnabledIds, skillEnabledIds, activePromptId }（槽位可空 = 未拍摄）。 */
   payload: Record<string, unknown>;
   sortOrder?: number | null;
   createdAt?: number | null;
   updatedAt?: number | null;
+}
+
+/** Profile + 当前插件是否激活标记。 */
+export interface ProfileWithCurrent extends Profile {
+  isCurrent: boolean;
 }
 
 /** 单条用量记录（plugin_sync_usage / TS 插件 syncUsage 返回值）。 */

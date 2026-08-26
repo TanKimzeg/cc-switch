@@ -208,7 +208,7 @@ v2 使用 SQLite，单一数据库文件 `{app_data_dir}/cc-switch-v2.db`。Sche
 
 当前激活的 profile 存储在 `settings` 表，键为 `current_profile_id`。
 
-> ⚠️ **现状**：v2 的 profiles 目前只是「命名 + JSON payload」的 CRUD，`profiles_apply` 仅记录 current 而不真正恢复到 live。v1 的语义是「项目快照」（把某分组当前 provider/MCP/Skills/prompt 状态存下、一键恢复现场），差距与实现思路见 [v1-gap-analysis.md](v1-gap-analysis.md) §3.10。
+> Profile 是「项目快照」（对齐 v1）：payload 为 `{<plugin_id>: {provider, mcpEnabledIds, skillEnabledIds, activePromptId}}`（槽位可空 = 未拍摄）；`profiles_apply` 真正恢复现场（provider 切 live、MCP/Skills 最小 toggle、Prompt 启用），各插件 current 指针存于 settings `profile.current.<plugin_id>`。
 
 ## 16. db_backups
 

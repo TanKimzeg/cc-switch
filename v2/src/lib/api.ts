@@ -30,6 +30,7 @@ import type {
   ExportPayload,
   AppBehavior,
   ModelPricing,
+  ProfileWithCurrent,
 } from "@/types";
 
 export function getProviders(): Promise<Provider[]> {
@@ -672,28 +673,36 @@ export function promptsToggle(id: string, enabled: boolean): Promise<void> {
   return invoke<void>("prompts_toggle", { id, enabled });
 }
 
-export function profilesList(): Promise<Profile[]> {
-  return invoke<Profile[]>("profiles_list");
+export function profilesList(pluginId: string): Promise<ProfileWithCurrent[]> {
+  return invoke<ProfileWithCurrent[]>("profiles_list", { pluginId });
 }
 
-export function profilesCurrent(): Promise<string | null> {
-  return invoke<string | null>("profiles_current");
+export function profilesCurrent(pluginId: string): Promise<string | null> {
+  return invoke<string | null>("profiles_current", { pluginId });
 }
 
-export function profilesUpsert(profile: Profile): Promise<void> {
-  return invoke<void>("profiles_upsert", { profile });
+export function profilesCreate(
+  name: string,
+  pluginId: string,
+): Promise<Profile> {
+  return invoke<Profile>("profiles_create", { name, pluginId });
+}
+
+export function profilesUpdate(
+  id: string,
+  name?: string,
+  resnapshotPluginId?: string,
+): Promise<Profile> {
+  return invoke<Profile>("profiles_update", { id, name, resnapshotPluginId });
 }
 
 export function profilesDelete(id: string): Promise<void> {
   return invoke<void>("profiles_delete", { id });
 }
 
-export function profilesApply(id: string): Promise<void> {
-  return invoke<void>("profiles_apply", { id });
-}
-
-export function profilesClearCurrent(): Promise<void> {
-  return invoke<void>("profiles_clear_current");
+/** 应用项目快照到插件；返回 best-effort warnings。 */
+export function profilesApply(id: string, pluginId: string): Promise<string[]> {
+  return invoke<string[]>("profiles_apply", { id, pluginId });
 }
 
 export function backupCreate(): Promise<BackupRecord> {

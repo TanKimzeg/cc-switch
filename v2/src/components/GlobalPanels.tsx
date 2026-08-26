@@ -27,11 +27,10 @@ import {
   getSetting,
   importConfigFromFile,
   profilesApply,
-  profilesClearCurrent,
-  profilesCurrent,
+  profilesCreate,
   profilesDelete,
   profilesList,
-  profilesUpsert,
+  profilesUpdate,
   applyProvider,
   addProvider,
   deleteProvider,
@@ -44,7 +43,7 @@ import {
   syncAllProvidersToLive,
   writeRawConfig,
 } from "@/lib/api";
-import type { BackupRecord, Profile, Provider } from "@/types";
+import type { BackupRecord, Provider, ProfileWithCurrent } from "@/types";
 import SkillsPanel from "@/components/skills/SkillsPanel";
 import PromptPanel from "@/components/prompts/PromptPanel";
 import McpGlobalPanel from "@/components/mcp/McpGlobalPanel";
@@ -64,72 +63,102 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 
-function ProfilesPanel() {
+function ProfilesPanel({ pluginId }: { pluginId: string }) {
   const { t } = useTranslation();
   const queryClient = useQueryClient();
-  const query = useQuery({ queryKey: ["profiles"], queryFn: profilesList });
-  const currentQuery = useQuery({
-    queryKey: ["profiles-current"],
-    queryFn: profilesCurrent,
-  });
-  const [showForm, setShowForm] = useState(false);
+  const [showCreate, setShowCreate] = useState(false);
   const [name, setName] = useState("");
-  const [payloadJson, setPayloadJson] = useState("{}");
+  const [renaming, setRenaming] = useState<ProfileWithCurrent | null>(null);
+  const [renameText, setRenameText] = useState("");
+  const [deleting, setDeleting] = useState<ProfileWithCurrent | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  const query = useQuery({
+    queryKey: ["profiles", pluginId],
+    queryFn: () => profilesList(pluginId),
+  });
   const profiles = query.data ?? [];
 
-  const handleAdd = async () => {
+  const invalidate = () =>
+    queryClient.invalidateQueries({ queryKey: ["profiles", pluginId] });
+
+  const handleCreate = async () => {
     if (!name.trim()) {
       toast.error(t("common.error"));
       return;
     }
-    let payload: Record<string, unknown>;
+    setBusy(true);
     try {
-      payload = JSON.parse(payloadJson || "{}");
-    } catch {
-      toast.error(t("jsonEditor.invalidJson"));
-      return;
-    }
-    try {
-      await profilesUpsert({
-        id: `profile_${Date.now()}`,
-        name: name.trim(),
-        payload,
-      });
-      await queryClient.invalidateQueries({ queryKey: ["profiles"] });
-      setShowForm(false);
+      await profilesCreate(name.trim(), pluginId);
+      await invalidate();
+      setShowCreate(false);
       setName("");
-      toast.success(t("common.save"));
+      toast.success(t("profiles.created"));
     } catch (e) {
       toast.error(String(e));
+    } finally {
+      setBusy(false);
     }
   };
 
-  const handleApply = async (id: string) => {
+  const handleApply = async (p: ProfileWithCurrent) => {
+    setBusy(true);
     try {
-      await profilesApply(id);
-      await queryClient.invalidateQueries({ queryKey: ["profiles-current"] });
-      toast.success(t("features.profilesApply"));
+      const warnings = await profilesApply(p.id, pluginId);
+      await invalidate();
+      if (warnings.length === 0) {
+        toast.success(t("profiles.applied", { name: p.name }));
+      } else {
+        toast.warning(
+          t("profiles.appliedWithWarnings", {
+            name: p.name,
+            warnings: warnings.join("\n"),
+          }),
+          { duration: 8000 },
+        );
+      }
     } catch (e) {
       toast.error(String(e));
+    } finally {
+      setBusy(false);
     }
   };
 
-  const handleClear = async () => {
+  const handleResnapshot = async (p: ProfileWithCurrent) => {
+    setBusy(true);
     try {
-      await profilesClearCurrent();
-      await queryClient.invalidateQueries({ queryKey: ["profiles-current"] });
+      await profilesUpdate(p.id, undefined, pluginId);
+      await invalidate();
+      toast.success(t("profiles.resnapshotted", { name: p.name }));
     } catch (e) {
       toast.error(String(e));
+    } finally {
+      setBusy(false);
     }
   };
 
-  const handleDelete = async (id: string) => {
+  const handleRename = async () => {
+    if (!renaming) return;
     try {
-      await profilesDelete(id);
-      await queryClient.invalidateQueries({ queryKey: ["profiles"] });
-      await queryClient.invalidateQueries({ queryKey: ["profiles-current"] });
+      await profilesUpdate(renaming.id, renameText.trim());
+      await invalidate();
+      toast.success(t("profiles.renamed"));
     } catch (e) {
       toast.error(String(e));
+    } finally {
+      setRenaming(null);
+    }
+  };
+
+  const handleDelete = async (p: ProfileWithCurrent) => {
+    try {
+      await profilesDelete(p.id);
+      await invalidate();
+      toast.success(t("common.delete"));
+    } catch (e) {
+      toast.error(String(e));
+    } finally {
+      setDeleting(null);
     }
   };
 
@@ -142,46 +171,35 @@ function ProfilesPanel() {
       >
         <button
           type="button"
-          onClick={() => setShowForm((v) => !v)}
+          onClick={() => setShowCreate((v) => !v)}
           className="inline-flex items-center gap-1 rounded-md border border-border px-2 py-1 text-xs transition-colors hover:bg-accent"
         >
           <Plus className="h-3 w-3" />
-          {t("features.profilesAdd")}
+          {t("profiles.createFromCurrent")}
         </button>
       </PanelHeader>
-      {currentQuery.data && (
-        <div className="flex items-center justify-between rounded-lg border border-primary/30 bg-primary/5 px-4 py-2.5 text-xs">
-          <span className="flex items-center gap-2 text-primary">
-            <span className="h-2 w-2 rounded-full bg-primary" />
-            {t("features.profilesCurrent")}
-          </span>
-          <button
-            type="button"
-            onClick={handleClear}
-            className="text-muted-foreground hover:text-foreground"
-          >
-            {t("features.profilesClear")}
-          </button>
-        </div>
-      )}
-      {showForm && (
-        <div className="space-y-2 rounded-xl border border-border bg-card p-3 shadow-sm">
-          <input
+
+      <p className="text-xs text-muted-foreground">
+        {t("profiles.description")}
+      </p>
+
+      {showCreate && (
+        <div className="flex gap-2 rounded-xl border border-border bg-card p-3 shadow-sm">
+          <Input
             value={name}
             onChange={(e) => setName(e.target.value)}
-            placeholder={t("features.profilesTitle")}
-            className="flex-1 rounded-md border border-border bg-background px-2 py-1 text-xs"
+            placeholder={t("profiles.namePlaceholder")}
+            className="flex-1"
+            onKeyDown={(e) => {
+              if (e.key === "Enter") void handleCreate();
+            }}
           />
-          <JsonEditor value={payloadJson} onChange={setPayloadJson} rows={8} />
-          <button
-            type="button"
-            onClick={handleAdd}
-            className="rounded-md bg-primary px-3 py-1 text-xs text-primary-foreground transition-colors hover:bg-primary/90"
-          >
-            {t("common.save")}
-          </button>
+          <Button size="sm" disabled={busy} onClick={() => void handleCreate()}>
+            {t("profiles.snapshotNow")}
+          </Button>
         </div>
       )}
+
       {query.isLoading ? (
         <Card>
           <CardContent className="py-10 text-center text-xs text-muted-foreground">
@@ -196,34 +214,108 @@ function ProfilesPanel() {
       ) : (
         <Card>
           <ul className="divide-y divide-border">
-            {profiles.map((p: Profile) => (
+            {profiles.map((p) => (
               <li
                 key={p.id}
                 className="flex items-center justify-between gap-2 px-4 py-3 transition-colors hover:bg-muted/40"
               >
                 <div className="min-w-0 flex-1">
-                  <div className="truncate text-sm font-medium">{p.name}</div>
+                  <div className="flex items-center gap-2">
+                    <span className="truncate text-sm font-medium">
+                      {p.name}
+                    </span>
+                    {p.isCurrent && (
+                      <span className="rounded-full bg-primary/10 px-2 py-0.5 text-xs text-primary">
+                        {t("features.profilesCurrent")}
+                      </span>
+                    )}
+                  </div>
+                  <div className="mt-0.5 text-xs text-muted-foreground">
+                    {new Date((p.updatedAt ?? 0) * 1000).toLocaleString()}
+                  </div>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => handleApply(p.id)}
-                  className="shrink-0 rounded-md bg-primary px-2.5 py-1 text-xs text-primary-foreground transition-colors hover:bg-primary/90"
-                >
-                  {t("features.profilesApply")}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => handleDelete(p.id)}
-                  className="shrink-0 rounded p-1.5 text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
-                  title={t("common.delete")}
-                >
-                  <Trash2 className="h-4 w-4" />
-                </button>
+                <div className="flex shrink-0 items-center gap-1">
+                  {!p.isCurrent && (
+                    <button
+                      type="button"
+                      disabled={busy}
+                      onClick={() => void handleApply(p)}
+                      className="rounded-md bg-primary px-2.5 py-1 text-xs text-primary-foreground transition-colors hover:bg-primary/90"
+                    >
+                      {t("features.profilesApply")}
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    disabled={busy}
+                    onClick={() => void handleResnapshot(p)}
+                    className="rounded p-1.5 text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
+                    title={t("profiles.updateFromCurrent")}
+                  >
+                    <RefreshCw className="h-3.5 w-3.5" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setRenaming(p);
+                      setRenameText(p.name);
+                    }}
+                    className="rounded p-1.5 text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
+                    title={t("profiles.rename")}
+                  >
+                    <Pencil className="h-3.5 w-3.5" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setDeleting(p)}
+                    className="rounded p-1.5 text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
+                    title={t("common.delete")}
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </button>
+                </div>
               </li>
             ))}
           </ul>
         </Card>
       )}
+
+      <ConfirmDialog
+        isOpen={deleting !== null}
+        title={t("profiles.deleteTitle")}
+        message={
+          deleting ? t("profiles.deleteMessage", { name: deleting.name }) : ""
+        }
+        confirmText={t("common.delete")}
+        cancelText={t("common.cancel")}
+        variant="destructive"
+        onConfirm={() => deleting && void handleDelete(deleting)}
+        onCancel={() => setDeleting(null)}
+      />
+
+      <Dialog
+        open={renaming !== null}
+        onOpenChange={(o) => !o && setRenaming(null)}
+      >
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>{t("profiles.rename")}</DialogTitle>
+          </DialogHeader>
+          <Input
+            value={renameText}
+            onChange={(e) => setRenameText(e.target.value)}
+            placeholder={t("profiles.namePlaceholder")}
+          />
+          <div className="flex justify-end gap-2">
+            <Button variant="ghost" size="sm" onClick={() => setRenaming(null)}>
+              {t("common.cancel")}
+            </Button>
+            <Button size="sm" onClick={() => void handleRename()}>
+              {t("common.save")}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
@@ -887,7 +979,7 @@ export default function GlobalPanels({
     case "prompts":
       return <PromptPanel pluginId={pluginId} />;
     case "profiles":
-      return <ProfilesPanel />;
+      return <ProfilesPanel pluginId={pluginId} />;
     case "backup":
       return <BackupPanel />;
     default:

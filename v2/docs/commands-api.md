@@ -113,14 +113,14 @@
 
 | 命令 | 参数 | 返回 | 说明 |
 |------|------|------|------|
-| `profiles_list` | — | `Profile[]` | 列出配置方案 |
-| `profiles_current` | — | `string \| null` | 当前激活的 profile id |
-| `profiles_upsert` | `profile: Profile` | `()` | 新增/更新 |
-| `profiles_delete` | `id` | `()` | 删除 |
-| `profiles_apply` | `id` | `()` | 激活某 profile |
-| `profiles_clear_current` | — | `()` | 清除当前激活 |
+| `profiles_list` | `plugin_id` | `ProfileWithCurrent[]` | 列出配置方案（附当前插件是否激活标记） |
+| `profiles_current` | `plugin_id` | `string \| null` | 该插件当前激活的 profile id |
+| `profiles_create` | `name`, `plugin_id` | `Profile` | 创建项目：拍取该插件当前状态（provider/MCP/Skills/Prompt 选择） |
+| `profiles_update` | `id`, `name?`, `resnapshot_plugin_id?` | `Profile` | 重命名和/或以当前状态重拍某插件槽位 |
+| `profiles_delete` | `id` | `()` | 删除；指向它的插件 current 指针一并清除 |
+| `profiles_apply` | `id`, `plugin_id` | `string[]` | 应用快照到插件（自动保存旧项目；provider 切 live、MCP/Skills 最小 toggle、Prompt 幂等启用）；返回 best-effort warnings |
 
-> ⚠️ **现状差距**：v2 的 `profiles_apply` 只记录 current_profile_id，**未真正把快照恢复到各插件 live**。v1 是「项目快照」（存/恢复某分组 provider/MCP/Skills/prompt 现场），见 [v1-gap-analysis.md](v1-gap-analysis.md) §3.10。
+> Profile 是「项目快照」（对齐 v1 §3.10）：scope = 单插件，各插件 current 指针独立；槽位 None = 未拍摄（应用时不动）。
 
 ## 8. 备份 / 导入导出（backup）
 
