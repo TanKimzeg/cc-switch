@@ -108,7 +108,7 @@ interface TsHost {
   "apiVersion": "1",
   "capabilities": { "readLive": true, "apply": true },
   "resources": {
-    "demo": "~/.cc-switch-demo"   // 资源白名单：TS 插件只能访问这里声明的根
+    "demo": "~/.agentswitch-demo"   // 资源白名单：TS 插件只能访问这里声明的根
   },
   "entry": { "type": "ts", "main": "main.js" }
 }

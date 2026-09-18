@@ -23,7 +23,7 @@ async function writeConfig(config) {
   await host.writeFile(CONFIG_PATH, JSON.stringify(config, null, 2));
 }
 
-// 资源白名单示例（manifest `resources.demo` → ~/.cc-switch-demo）：
+// 资源白名单示例（manifest `resources.demo` → ~/.agentswitch-demo）：
 // 宿主把文件 I/O 交给后端执行，TS 插件只写读取/解析逻辑。
 const RESOURCE_NAME = "demo";
 const RESOURCE_FILE = "note.txt";

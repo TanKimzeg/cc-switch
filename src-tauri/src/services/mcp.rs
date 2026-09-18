@@ -1,6 +1,6 @@
 //! MCP 服务器管理服务。
 //!
-//! 数据源为 `mcp_servers` 表（统一 CC Switch 格式），通过 `mcp_server_apps`
+//! 数据源为 `mcp_servers` 表（统一 AgentSwitch 格式），通过 `mcp_server_apps`
 //! 关联表记录每个服务器在哪些插件中启用。写操作会把服务器同步到启用插件的
 //! live 配置（利用 [`crate::plugin::McpPlugin`] 的格式转换）。
 
@@ -527,7 +527,7 @@ mod tests {
         assert!(stored.apps.is_empty());
     }
 
-    /// 构造带内置插件注册表的隔离环境（CC_SWITCH_TEST_HOME 指向临时目录，
+    /// 构造带内置插件注册表的隔离环境（AGENT_SWITCH_TEST_HOME 指向临时目录，
     /// env_lock 串行化环境变量）。
     struct TestEnv {
         temp: tempfile::TempDir,
@@ -544,8 +544,8 @@ mod tests {
     impl Drop for TestEnv {
         fn drop(&mut self) {
             match self.previous.take() {
-                Some(v) => std::env::set_var("CC_SWITCH_TEST_HOME", v),
-                None => std::env::remove_var("CC_SWITCH_TEST_HOME"),
+                Some(v) => std::env::set_var("AGENT_SWITCH_TEST_HOME", v),
+                None => std::env::remove_var("AGENT_SWITCH_TEST_HOME"),
             }
         }
     }
@@ -557,8 +557,8 @@ mod tests {
     ) {
         let lock = crate::test_support::env_lock().lock().unwrap();
         let temp = tempfile::tempdir().unwrap();
-        let previous = std::env::var_os("CC_SWITCH_TEST_HOME");
-        std::env::set_var("CC_SWITCH_TEST_HOME", temp.path());
+        let previous = std::env::var_os("AGENT_SWITCH_TEST_HOME");
+        std::env::set_var("AGENT_SWITCH_TEST_HOME", temp.path());
         let env = TestEnv {
             temp,
             previous,

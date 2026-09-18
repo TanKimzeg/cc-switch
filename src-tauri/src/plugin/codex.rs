@@ -26,7 +26,7 @@ const CODEX_REQUEST_MARKER: &str = "my request for codex";
 const VSCODE_CONTEXT_PREFIX: &str = "# Context from my IDE setup:";
 
 fn home_dir() -> PathBuf {
-    if let Ok(dir) = std::env::var("CC_SWITCH_TEST_HOME") {
+    if let Ok(dir) = std::env::var("AGENT_SWITCH_TEST_HOME") {
         if !dir.is_empty() {
             return PathBuf::from(dir);
         }
@@ -44,7 +44,7 @@ fn override_dir(name: &str) -> Option<PathBuf> {
 /// Codex 配置目录（`~/.codex`；可经设置 overrideDir.codex 覆盖）。
 fn config_dir() -> PathBuf {
     crate::services::overrides::get(PLUGIN_ID)
-        .or_else(|| override_dir("CC_SWITCH_CODEX_CONFIG_DIR"))
+        .or_else(|| override_dir("AGENT_SWITCH_CODEX_CONFIG_DIR"))
         .unwrap_or_else(|| home_dir().join(".codex"))
 }
 
@@ -264,7 +264,7 @@ impl AgentPlugin for CodexPlugin {
 
 fn mcp_target_installed() -> bool {
     crate::services::overrides::get(PLUGIN_ID).is_some()
-        || override_dir("CC_SWITCH_CODEX_CONFIG_DIR").is_some()
+        || override_dir("AGENT_SWITCH_CODEX_CONFIG_DIR").is_some()
         || config_dir().exists()
 }
 
@@ -950,8 +950,8 @@ mod tests {
     impl HomeGuard {
         fn set(home: &Path) -> Self {
             let lock = env_lock().lock().unwrap();
-            let previous = std::env::var_os("CC_SWITCH_TEST_HOME");
-            std::env::set_var("CC_SWITCH_TEST_HOME", home);
+            let previous = std::env::var_os("AGENT_SWITCH_TEST_HOME");
+            std::env::set_var("AGENT_SWITCH_TEST_HOME", home);
             Self {
                 previous,
                 _lock: lock,
@@ -961,8 +961,8 @@ mod tests {
     impl Drop for HomeGuard {
         fn drop(&mut self) {
             match self.previous.take() {
-                Some(v) => std::env::set_var("CC_SWITCH_TEST_HOME", v),
-                None => std::env::remove_var("CC_SWITCH_TEST_HOME"),
+                Some(v) => std::env::set_var("AGENT_SWITCH_TEST_HOME", v),
+                None => std::env::remove_var("AGENT_SWITCH_TEST_HOME"),
             }
         }
     }

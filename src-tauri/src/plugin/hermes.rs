@@ -30,7 +30,7 @@ const PROVIDER_SOURCE_CUSTOM_LIST: &str = "custom_providers";
 const PROVIDER_SOURCE_DICT: &str = "providers_dict";
 
 fn home_dir() -> PathBuf {
-    if let Ok(dir) = std::env::var("CC_SWITCH_TEST_HOME") {
+    if let Ok(dir) = std::env::var("AGENT_SWITCH_TEST_HOME") {
         if !dir.is_empty() {
             return PathBuf::from(dir);
         }
@@ -413,7 +413,7 @@ fn get_providers() -> Result<serde_json::Map<String, Value>, PluginError> {
     Ok(map)
 }
 
-/// dict-only 条目不可经 CC Switch 写/删（需走 Hermes Web UI）。
+/// dict-only 条目不可经 AgentSwitch 写/删（需走 Hermes Web UI）。
 fn ensure_provider_writable(config: &serde_yaml::Value, name: &str, verb: &str) -> Result<(), PluginError> {
     let list_has = config
         .get("custom_providers")
@@ -1267,11 +1267,11 @@ mod tests {
         fn set(home: &Path) -> Self {
             let lock = env_lock().lock().unwrap();
             let previous = (
-                std::env::var_os("CC_SWITCH_TEST_HOME"),
+                std::env::var_os("AGENT_SWITCH_TEST_HOME"),
                 std::env::var_os("HERMES_HOME"),
                 std::env::var_os("LOCALAPPDATA"),
             );
-            std::env::set_var("CC_SWITCH_TEST_HOME", home);
+            std::env::set_var("AGENT_SWITCH_TEST_HOME", home);
             // 中和环境变量，避免测试逃逸到真实 Hermes 安装目录。
             std::env::remove_var("HERMES_HOME");
             std::env::remove_var("LOCALAPPDATA");
@@ -1284,8 +1284,8 @@ mod tests {
     impl Drop for HermesGuard {
         fn drop(&mut self) {
             match self.previous.0.take() {
-                Some(v) => std::env::set_var("CC_SWITCH_TEST_HOME", v),
-                None => std::env::remove_var("CC_SWITCH_TEST_HOME"),
+                Some(v) => std::env::set_var("AGENT_SWITCH_TEST_HOME", v),
+                None => std::env::remove_var("AGENT_SWITCH_TEST_HOME"),
             }
             match self.previous.1.take() {
                 Some(v) => std::env::set_var("HERMES_HOME", v),

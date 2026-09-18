@@ -393,7 +393,7 @@ export default function SettingsPanel() {
               <div className="inline-flex gap-1 rounded-md border border-border-default bg-background p-1">
                 {(
                   [
-                    ["cc_switch", t("settings.skillStorageCcSwitch")],
+                    ["agent_switch", t("settings.skillStorageAgentSwitch")],
                     ["unified", t("settings.skillStorageUnified")],
                   ] as const
                 ).map(([value, label]) => (
@@ -410,7 +410,7 @@ export default function SettingsPanel() {
               <p className="text-xs text-muted-foreground">
                 {settings.storageLocation === "unified"
                   ? t("settings.skillStorageUnifiedHint")
-                  : t("settings.skillStorageCcSwitchHint")}
+                  : t("settings.skillStorageAgentSwitchHint")}
               </p>
             </section>
 
@@ -485,7 +485,7 @@ export default function SettingsPanel() {
                           className="flex-1"
                           value={appDataDir}
                           onChange={(e) => setAppDataDir(e.target.value)}
-                          placeholder="~/.cc-switch"
+                          placeholder="~/.agentswitch"
                           disabled={pending}
                         />
                         <Button

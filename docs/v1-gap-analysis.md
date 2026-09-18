@@ -10,7 +10,7 @@
 |--------|----|---------|------|
 | Provider 配置与切换 | ✅ 8 工具、50+ 预设、一键切换、托盘 | ✅ 插件化 read_live/apply/import；native 六插件（opencode/openclaw/claudecode/codex/grokbuild/hermes）；托盘/重投影全后端 | 通用供应商缺失；预设**不做**（§3.7，用户决定）；gemini/claude-desktop 未插件化 |
 | MCP | ✅ 统一面板、双向同步、Deep Link 导入 | ✅ mcp_servers + 插件同步 + 编辑/校验/预设/wizard(http)/智能粘贴/批量开关/搜索/删除确认；导入合并语义 + 取消勾选清理 + 安装守卫 + 切换后重投影 | 缺 Deep Link 导入（随 §3.5 一并做）|
-| Skill | ✅ GitHub 仓库 / ZIP 安装、skills.sh 公共注册表、SHA-256 更新检测、备份恢复、软链/复制 | ✅ 已对齐（仓库/ZIP 安装、skills.sh 搜索、更新检测、卸载备份+恢复、未管理导入、软链/复制、存储迁移；SSOT 默认 `~/.cc-switch/skills`） | 已补齐（见 §3.9） |
+| Skill | ✅ GitHub 仓库 / ZIP 安装、skills.sh 公共注册表、SHA-256 更新检测、备份恢复、软链/复制 | ✅ 已对齐（仓库/ZIP 安装、skills.sh 搜索、更新检测、卸载备份+恢复、未管理导入、软链/复制、存储迁移；SSOT 默认 `~/.agentswitch/skills`） | 已补齐（见 §3.9） |
 | Prompt | ✅ Markdown 编辑、单应用互斥启用、回填保护 | ✅ 已对齐（互斥启用 + 回填保护 + 清空/删除保护 + 首启自动导入） | 已补齐（见 §3.11） |
 | 用量 | ✅ 用量仪表盘、趋势、请求日志、自定义定价 | ✅ 趋势图 + 请求日志 + 日汇总 + codex/grokbuild 用量同步（§3.20） | hermes 用量（v1 也没有）；定价功能不做（§3.3） |
 | 会话 | ✅ 浏览/搜索/恢复，SQLite 会话 | ✅ sessions/load/delete（claude/opencode） | 缺搜索、更多 Agent 会话源 |
@@ -30,7 +30,7 @@
 
 - **Provider 配置与切换**：`read_live/apply/remove_provider/import` 全链路（`opencode` additive、`claudecode` 非 additive），支持 `sync_all_providers_to_live`（全量投影）与 `import_providers_from_live`（回填）。
 - **MCP 统一管理**：`mcp_servers` + `mcp_server_apps` 统一面板，写操作经 `McpPlugin` 同步到启用插件；支持从插件导入。
-- **Skill**：SSOT（`~/.cc-switch/skills` 或 `~/.agents/skills`）+ 仓库/ZIP 安装 + skills.sh 搜索 + SHA-256 更新检测 + 卸载备份/恢复 + 未管理导入 + 软链/复制分发 + 存储位置迁移（`skills_dir()` 由插件声明）。
+- **Skill**：SSOT（`~/.agentswitch/skills` 或 `~/.agents/skills`）+ 仓库/ZIP 安装 + skills.sh 搜索 + SHA-256 更新检测 + 卸载备份/恢复 + 未管理导入 + 软链/复制分发 + 存储位置迁移（`skills_dir()` 由插件声明）。
 - **Prompt 基础**：prompts 表 CRUD + 启用时写入 `prompt_file_path()`。
 - **用量基础**：`request_logs`（`INSERT OR IGNORE` 去重）+ 按日汇总；native 插件实现 `sync_usage`。
 - **会话基础**：claudecode（`~/.claude/projects/*.jsonl`）、opencode（SQLite + 旧 JSON）的扫描/加载/删除。
@@ -139,7 +139,7 @@
 
 **共享设施**：`plugin/session_utils.rs`（v1 会话工具移植：head/tail 读取、时间戳解析、文本提取、截断）；Cargo 新增 toml/toml_edit/serde_yaml/regex。
 
-**目录覆盖**：三插件 `config_dir()` 接入 `overrideDir.<id>`（优先）→ 环境变量（`CC_SWITCH_CODEX_CONFIG_DIR` / `CC_SWITCH_GROK_CONFIG_DIR` / `HERMES_HOME`）→ 平台默认（hermes Windows 为 `%LOCALAPPDATA%\hermes`，对齐 Hermes 自身）。
+**目录覆盖**：三插件 `config_dir()` 接入 `overrideDir.<id>`（优先）→ 环境变量（`AGENT_SWITCH_CODEX_CONFIG_DIR` / `AGENT_SWITCH_GROK_CONFIG_DIR` / `HERMES_HOME`）→ 平台默认（hermes Windows 为 `%LOCALAPPDATA%\hermes`，对齐 Hermes 自身）。
 
 **已知差距（后续补）**：
 - ~~**Usage 同步**~~：✅ codex/grokbuild 已实现（2026-08-24，简化口径：codex 取最后一次 `total_token_usage` 会话累计快照 + `usage_upsert` 刷新语义；grokbuild 解析 `updates.jsonl` 的 `turn_completed` 逐轮事件，`usage_snapshot` 剔除防双算）。**hermes 无独立用量源（v1 也没有），明确不做**。v1 的 turn 级增量/fork 解析（session_usage_codex 3086 行）未照搬——如遇口径偏差再按需补。
@@ -157,12 +157,12 @@
 ### 3.9 Skill：仓库安装 / skills.sh / 更新检测 / 备份恢复 / 软链 —— ✅ **已实现（2026-08-15）**
 
 **v1（完整能力，见 `docs/user-manual/zh/3-extensions/3.3-skills.md`）**：
-- **SSOT 存储**：技能源存在 `~/.cc-switch/skills/`，分发到各应用 `~/.claude/skills/`、`~/.codex/skills/`、`~/.gemini/skills/`、`~/.config/opencode/skills/`、`~/.hermes/skills/`。
+- **SSOT 存储**：技能源存在 `~/.agentswitch/skills/`，分发到各应用 `~/.claude/skills/`、`~/.codex/skills/`、`~/.gemini/skills/`、`~/.config/opencode/skills/`、`~/.hermes/skills/`。
 - **预配置仓库**：Anthropic 官方、ComposioHQ、社区精选等 GitHub 仓库。
 - **仓库管理**：添加/删除自定义 GitHub 仓库（owner/name/branch/subdirectory）。
 - **skills.sh 公共注册表搜索**：输入关键词搜索社区 skill，点击安装。
 - **SHA-256 更新检测**：比对本地与远端内容哈希，自动标记「有新版本」，支持单项/全部更新。
-- **卸载自动备份 + 从备份恢复**：卸载前备份到 `~/.cc-switch/skill-backups/`，可恢复。
+- **卸载自动备份 + 从备份恢复**：卸载前备份到 `~/.agentswitch/skill-backups/`，可恢复。
 - **软链 / 复制两种分发方式**（个性化设置）。
 
 **v2 现状**：✅ 已对齐（`src-tauri/src/services/skills.rs` + `src/components/skills/`）。插件化差异：v1 的「应用」→ v2 的「插件」（`skill_apps` 表按插件 id），分发目标 = `AgentPlugin::skills_dir()`。
@@ -173,13 +173,13 @@
 3. `skills_list_repos` / `skills_add_repo` / `skills_remove_repo`：仓库 CRUD；启动种子 4 个默认仓库。
 4. `skills_search_skillsh(query, limit, offset)`：skills.sh `/api/search`。
 5. 更新检测：`skills_check_updates`（按仓库分组一次下载比对）+ `skills_update_skill`（备份→替换→重算→重同步）。
-6. 卸载自动备份到 `~/.cc-switch/skill-backups/` + `skills_list_backups` / `skills_restore_backup` / `skills_delete_backup`（保留 20 份）。
+6. 卸载自动备份到 `~/.agentswitch/skill-backups/` + `skills_list_backups` / `skills_restore_backup` / `skills_delete_backup`（保留 20 份）。
 7. 分发：`skills_set_sync_method`（auto 优先软链回退复制 / symlink / copy）。
-8. 存储位置：`skills_migrate_storage`（`~/.cc-switch/skills` ↔ `~/.agents/skills`，先移文件后改设置）。
+8. 存储位置：`skills_migrate_storage`（`~/.agentswitch/skills` ↔ `~/.agents/skills`，先移文件后改设置）。
 9. 未管理导入：`skills_scan_unmanaged` + `skills_import`（honor 用户勾选插件）。
 10. 安全：`validate_repo_ref` + 出口 URL 断言 + 60s 超时 + 128MiB 下载上限 + 解压预算（10k 条目/512MiB/4KiB symlink/目录计费）+ `require_valid_directory` 脏值拦截 + 结构化错误。
 
-> 说明：SSOT 默认路径为 `~/.cc-switch/skills/`（与 v1 完全一致），UI 文案沿用「CC Switch」；`~/.agents/skills` 为可切换存储位置。`~` 解析走 `CC_SWITCH_TEST_HOME`（测试可隔离）。
+> 说明：SSOT 默认路径为 `~/.agentswitch/skills/`（与 v1 完全一致），UI 文案沿用「AgentSwitch」；`~/.agents/skills` 为可切换存储位置。`~` 解析走 `AGENT_SWITCH_TEST_HOME`（测试可隔离）。
 
 ### 3.10 Profile（配置方案）：对齐 v1「项目快照」语义 —— ✅ **已实现（2026-08-24）**
 
@@ -267,20 +267,20 @@
 
 ### 3.17 系统设置：配置目录覆盖 —— ✅ **已实现（2026-08-16）**
 
-**v1**：`settings.rs` 的 `*_config_dir` 字段（claude/codex/gemini/grok/opencode/openclaw/hermes）+ `app_store.rs` 的 CC Switch 数据目录覆盖（`app_paths.json`）。
+**v1**：`settings.rs` 的 `*_config_dir` 字段（claude/codex/gemini/grok/opencode/openclaw/hermes）+ `app_store.rs` 的 AgentSwitch 数据目录覆盖（`app_paths.json`）。
 
 **v2 现状**：✅ 已对齐（`src-tauri/src/services/overrides.rs` + `SettingsPanel`）：
 
 **工具配置目录覆盖**：
 1. settings 表键 `overrideDir.<plugin_id>` 存原始路径（`~` 读取时展开），静态注册表 `overrides::get(id)` 供 native 插件 `config_dir()` 读取（优先于 env，回退默认）。
-2. opencode/claudecode/codex/grokbuild/hermes 的 `config_dir()` 已接入（codex/grokbuild 另支持 `CC_SWITCH_*_CONFIG_DIR` 环境变量、hermes 支持 `HERMES_HOME`，对齐 v1 解析顺序）；`config_path/skills_dir/prompt_file_path` 自动跟随；claudecode `mcp_path` 特殊处理（自定义目录 → `<dir>/.claude.json`，对齐 v1）。
+2. opencode/claudecode/codex/grokbuild/hermes 的 `config_dir()` 已接入（codex/grokbuild 另支持 `AGENT_SWITCH_*_CONFIG_DIR` 环境变量、hermes 支持 `HERMES_HOME`，对齐 v1 解析顺序）；`config_path/skills_dir/prompt_file_path` 自动跟随；claudecode `mcp_path` 特殊处理（自定义目录 → `<dir>/.claude.json`，对齐 v1）。
 3. 命令 `settings_get_overrides` / `settings_set_override`；设置后前端调用 `syncAllProvidersToLive` 重写当前 provider 到新 live。
 4. TS 插件（manifest 声明路径）暂不支持 override，文档注明。
 
-**CC Switch 数据目录覆盖**：
+**AgentSwitch 数据目录覆盖**：
 1. 指针文件 `{app_config_dir}/app_paths.json` 存 `appDataDirOverride`（`app_config_dir` 独立于数据目录，避免鸡生蛋）；`init_db` 在打开数据库前读取，目录不存在时回退默认。
 2. 命令 `get/set_app_data_dir_override`（set 返回需重启）；前端显示重启对话框（`@tauri-apps/plugin-process` `relaunch`）。
-3. DB 与数据库备份走 `AppPaths.data_dir`（自动跟随数据目录覆盖）；**skills SSOT 固定 `~/.cc-switch/skills`、备份固定 `~/.cc-switch/skill-backups`，不随数据目录覆盖移动**（对齐 v1）。
+3. DB 与数据库备份走 `AppPaths.data_dir`（自动跟随数据目录覆盖）；**skills SSOT 固定 `~/.agentswitch/skills`、备份固定 `~/.agentswitch/skill-backups`，不随数据目录覆盖移动**（对齐 v1）。
 
 ## 4. TS 插件沙箱演进（架构差距，非 v1 对齐）
 

@@ -278,7 +278,7 @@ fn scan_sources(
 ) -> Vec<(String, PathBuf)> {
     let mut sources = registry_skills_dirs(registry);
     if let Ok(settings) = SkillService::get_sync_settings(db) {
-        sources.push(("cc-switch".to_string(), ssot_dir(&paths.data_dir, settings.storage_location)));
+        sources.push(("agentswitch".to_string(), ssot_dir(&paths.data_dir, settings.storage_location)));
     }
     sources
 }

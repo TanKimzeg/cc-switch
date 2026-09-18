@@ -86,7 +86,7 @@ fn create_menu<R: Runtime>(
     db: &Database,
     registry: &PluginRegistry,
 ) -> tauri::Result<Menu<R>> {
-    let show = MenuItem::with_id(app, "show", "Show CC Switch", true, None::<&str>)?;
+    let show = MenuItem::with_id(app, "show", "Show AgentSwitch", true, None::<&str>)?;
     let quit = MenuItem::with_id(app, "quit", "Quit", true, None::<&str>)?;
     let mut owned: Vec<Box<dyn tauri::menu::IsMenuItem<R>>> = vec![Box::new(show)];
 
@@ -159,7 +159,7 @@ pub fn create<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<()> {
 
     TrayIconBuilder::with_id(TRAY_ID)
         .icon(icon)
-        .tooltip("CC Switch v2")
+        .tooltip("AgentSwitch v0.1.0")
         .menu(&menu)
         .show_menu_on_left_click(false)
         .on_menu_event(|app, event| handle_menu_event(app, event.id.as_ref()))

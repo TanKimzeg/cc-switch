@@ -1,9 +1,9 @@
 //! MCP 服务器管理协议（可选能力）。
 //!
 //! 支持 MCP 的插件（如 opencode）实现 [`McpPlugin`]，通过统一
-//! CC Switch MCP 格式与各 Agent 原生格式之间的转换来同步服务器：
+//! AgentSwitch MCP 格式与各 Agent 原生格式之间的转换来同步服务器：
 //!
-//! | CC Switch 统一格式 | OpenCode 格式   |
+//! | AgentSwitch 统一格式 | OpenCode 格式   |
 //! |--------------------|-----------------|
 //! | `type: "stdio"`    | `type: "local"` |
 //! | `command` + `args` | `command: [cmd, ...]` |
@@ -16,7 +16,7 @@ use serde_json::Value;
 
 use crate::plugin::error::PluginError;
 
-/// MCP 服务器描述（CC Switch 统一格式）。
+/// MCP 服务器描述（AgentSwitch 统一格式）。
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct McpServerSpec {

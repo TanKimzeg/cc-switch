@@ -1,12 +1,14 @@
 {
-  "name": "cc-switch-v2",
+  "name": "agentswitch",
   "version": "0.1.0",
-  "description": "cc-switch v2 — plugin-based agent switcher",
+  "description": "AgentSwitch — plugin-based AI agent configuration switcher",
   "type": "module",
   "private": true,
   "scripts": {
     "dev": "pnpm tauri dev",
     "dev:renderer": "vite",
+    "build": "tauri build",
+    "build:debug": "tauri build --debug",
     "build:renderer": "vite build",
     "tauri": "tauri",
     "typecheck": "tsc --noEmit",

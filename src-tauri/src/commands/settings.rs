@@ -92,7 +92,7 @@ pub fn settings_set_override(
     overrides::set(&db, &plugin_id, path.as_deref())
 }
 
-/// 读取 CC Switch 数据目录覆盖（指针文件）。
+/// 读取 AgentSwitch 数据目录覆盖（指针文件）。
 #[tauri::command]
 pub fn get_app_data_dir_override(app: tauri::AppHandle) -> Result<Option<String>, String> {
     let config_dir = app.path().app_config_dir().map_err(|e| e.to_string())?;
@@ -100,7 +100,7 @@ pub fn get_app_data_dir_override(app: tauri::AppHandle) -> Result<Option<String>
         .map(|p| p.to_string_lossy().to_string()))
 }
 
-/// 设置/清除 CC Switch 数据目录覆盖（返回 true = 需要重启生效）。
+/// 设置/清除 AgentSwitch 数据目录覆盖（返回 true = 需要重启生效）。
 #[tauri::command]
 pub fn set_app_data_dir_override(
     app: tauri::AppHandle,

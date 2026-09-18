@@ -417,7 +417,7 @@ function BackupPanel() {
   const handleExport = async () => {
     try {
       const filePath = await save({
-        defaultPath: "cc-switch-export.json",
+        defaultPath: "agentswitch-export.json",
       });
       if (typeof filePath !== "string") return;
       await exportConfigToFile(filePath);

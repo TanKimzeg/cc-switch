@@ -9,6 +9,39 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "320119579fcad9c21884f5c4861d16174d0e06250625266f50fe6898340abefa"
 
 [[package]]
+name = "agentswitch"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "dirs 5.0.1",
+ "futures",
+ "json5",
+ "log",
+ "regex",
+ "reqwest 0.12.28",
+ "rusqlite",
+ "serde",
+ "serde_json",
+ "serde_yaml",
+ "sha2",
+ "tauri",
+ "tauri-build",
+ "tauri-plugin-autostart",
+ "tauri-plugin-dialog",
+ "tauri-plugin-log",
+ "tauri-plugin-process",
+ "tauri-plugin-single-instance",
+ "tempfile",
+ "thiserror 2.0.20",
+ "tokio",
+ "toml 0.8.2",
+ "toml_edit 0.22.27",
+ "url",
+ "uuid",
+ "zip",
+]
+
+[[package]]
 name = "ahash"
 version = "0.8.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -485,39 +518,6 @@ checksum = "5d262e149917187838d5b42777c8253bcb64500067342904e7d429499a6f277e"
 dependencies = [
  "find-msvc-tools",
  "shlex",
-]
-
-[[package]]
-name = "cc-switch-v2"
-version = "0.1.0"
-dependencies = [
- "chrono",
- "dirs 5.0.1",
- "futures",
- "json5",
- "log",
- "regex",
- "reqwest 0.12.28",
- "rusqlite",
- "serde",
- "serde_json",
- "serde_yaml",
- "sha2",
- "tauri",
- "tauri-build",
- "tauri-plugin-autostart",
- "tauri-plugin-dialog",
- "tauri-plugin-log",
- "tauri-plugin-process",
- "tauri-plugin-single-instance",
- "tempfile",
- "thiserror 2.0.20",
- "tokio",
- "toml 0.8.2",
- "toml_edit 0.22.27",
- "url",
- "uuid",
- "zip",
 ]
 
 [[package]]

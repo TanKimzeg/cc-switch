@@ -61,7 +61,7 @@ pub trait McpPlugin: Send + Sync {
 }
 ```
 
-`McpServerSpec` 使用 **CC Switch 统一格式**：
+`McpServerSpec` 使用 **AgentSwitch 统一格式**：
 
 | 字段 | 类型 |
 |------|------|
@@ -110,7 +110,7 @@ pub struct PluginCapabilities {
   "name": "Claude Code",       // 必填，显示名
   "version": "0.1.0",          // 必填
   "apiVersion": "1",           // 必填，当前支持 "1"
-  "author": "cc-switch",       // 可选
+  "author": "agentswitch",       // 可选
   "description": "...",        // 可选
   "icon": "opencode",          // 可选
   "capabilities": {            // 可选，能力声明
@@ -171,6 +171,6 @@ pub struct PluginCapabilities {
 | `grokbuild` | native | `~/.grok/config.toml`（非 additive，settings_config 形状 `{"config":"<toml>"}`；官方条目允许空文档）+ `~/.grok/sessions`（summary.json + chat_history.jsonl） | Provider/MCP/Sessions/Prompt/Skills（Usage 暂缺） |
 | `hermes` | native | `~/.hermes/config.yaml`（additive `custom_providers`，Windows 默认 `%LOCALAPPDATA%\hermes`）+ `state.db` + `sessions/*.jsonl` | Provider/MCP/Sessions（含 remove）/Prompt/Skills（Usage 暂缺） |
 | `claudecode-ts`（示例，需手动安装） | ts | 同 claudecode（经 manifest `resources` 白名单，由前端脚本宿主执行） | Provider/MCP/Sessions/Usage/Prompt/Skills |
-| `ts-demo`（示例） | ts | 插件目录内 `state.json` + `~/.cc-switch-demo`（资源白名单） | Provider（readLive/apply） |
+| `ts-demo`（示例） | ts | 插件目录内 `state.json` + `~/.agentswitch-demo`（资源白名单） | Provider（readLive/apply） |
 
 > 三个 TOML/YAML 配置型插件的目录覆盖：`overrideDir.<id>`（设置页）优先，其次环境变量（codex/grokbuild：`CC_SWITCH_<NAME>_CONFIG_DIR`；hermes：`HERMES_HOME`），最后平台默认。

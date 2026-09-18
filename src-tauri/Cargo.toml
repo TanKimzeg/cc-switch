@@ -1,14 +1,14 @@
 [package]
-name = "cc-switch-v2"
+name = "agentswitch"
 version = "0.1.0"
-description = "cc-switch v2 — plugin-based agent switcher"
-authors = ["cc-switch team"]
+description = "AgentSwitch — plugin-based AI agent configuration switcher"
+authors = ["AgentSwitch team"]
 license = "MIT"
 edition = "2021"
 rust-version = "1.85.0"
 
 [lib]
-name = "cc_switch_v2_lib"
+name = "agentswitch_lib"
 crate-type = ["rlib"]
 doctest = false
 

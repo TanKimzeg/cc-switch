@@ -2,5 +2,5 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 fn main() {
-    cc_switch_v2_lib::run();
+    agentswitch_lib::run();
 }

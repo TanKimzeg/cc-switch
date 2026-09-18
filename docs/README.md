@@ -1,6 +1,6 @@
-# CC Switch v2 文档
+# AgentSwitch v2 文档
 
-CC Switch v2 是基于插件协议（Plugin Protocol）重写的 Agent 配置切换器。本目录记录 v2 的架构、接口、数据模型、TS 插件机制，以及与 v1 的能力差距和演进方向。
+AgentSwitch v2 是基于插件协议（Plugin Protocol）重写的 Agent 配置切换器。本目录记录 v2 的架构、接口、数据模型、TS 插件机制，以及与 v1 的能力差距和演进方向。
 
 > 本文档仅覆盖 `v2/`（当前在仓库根目录下独立维护的新版本）。旧版（v1）见仓库根目录的 `docs/` 与 `README_ZH.md`。
 

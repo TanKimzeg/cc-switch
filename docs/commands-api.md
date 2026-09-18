@@ -63,7 +63,7 @@
 
 ## 5. Skills（skills）
 
-能力对齐 v1 `services/skill.rs`：仓库/ZIP 安装、skills.sh 搜索、SHA-256 更新检测、卸载自动备份 + 恢复、未管理导入、软链/复制分发、存储位置迁移。SSOT 目录由设置 `skills.storageLocation` 决定：`cc_switch` → **`~/.cc-switch/skills/`**（对齐 v1），`unified` → `~/.agents/skills/`。
+能力对齐 v1 `services/skill.rs`：仓库/ZIP 安装、skills.sh 搜索、SHA-256 更新检测、卸载自动备份 + 恢复、未管理导入、软链/复制分发、存储位置迁移。SSOT 目录由设置 `skills.storageLocation` 决定：`agent_switch` → **`~/.agentswitch/skills/`**（对齐 v1），`unified` → `~/.agents/skills/`。
 
 | 命令 | 参数 | 返回 | 说明 |
 |------|------|------|------|
@@ -71,7 +71,7 @@
 | `skills_install_local_dir` | `source: string` | `SkillRecord` | 从本地目录安装技能到 SSOT（兼容旧入口） |
 | `skills_install_skill` | `skill: DiscoverableSkill`, `current_plugin` | `SkillRecord` | 从仓库下载安装并启用当前插件 |
 | `skills_install_from_zip` | `file_path`, `current_plugin` | `SkillRecord[]` | 从本地 ZIP 安装（扫描含 `SKILL.md` 的目录，id=`local:*`） |
-| `skills_uninstall` | `id` | `string \| null` | 卸载并自动备份到 `~/.cc-switch/skill-backups/`（对齐 v1），返回备份路径 |
+| `skills_uninstall` | `id` | `string \| null` | 卸载并自动备份到 `~/.agentswitch/skill-backups/`（对齐 v1），返回备份路径 |
 | `skills_toggle_plugin` | `id`, `plugin_id`, `enabled` | `()` | 启用/停用并同步/移除 `plugin.skills_dir()`（按同步方式软链或复制） |
 | `skills_discover` | — | `DiscoverableSkill[]` | 并发拉取全部启用仓库，扫描 `SKILL.md` 去重排序 |
 | `skills_list_repos` | — | `SkillRepo[]` | 列出技能仓库（启动时种子 4 个默认仓库） |
@@ -160,7 +160,7 @@
 | `settings_set_show_in_tray` | `enabled` | `()` | 托盘图标显隐（动态创建/移除，无需重启） |
 | `settings_get_overrides` | — | `OverrideDir[]` | 列出已配置的工具配置目录覆盖 |
 | `settings_set_override` | `plugin_id`, `path?` | `()` | 设置/清除工具配置目录覆盖（native 插件 `config_dir` 消费） |
-| `get_app_data_dir_override` | — | `string \| null` | 读取 CC Switch 数据目录覆盖（指针文件 `app_paths.json`） |
+| `get_app_data_dir_override` | — | `string \| null` | 读取 AgentSwitch 数据目录覆盖（指针文件 `app_paths.json`） |
 | `set_app_data_dir_override` | `path?` | `bool` | 设置/清除数据目录覆盖（返回 true = 需重启生效） |
 | `update_tray_menu` | — | `()` | 重建系统托盘菜单（provider 变更后调用） |
 

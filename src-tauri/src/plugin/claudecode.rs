@@ -19,7 +19,7 @@ use crate::types::Provider;
 const PLUGIN_ID: &str = "claudecode";
 
 fn home_dir() -> PathBuf {
-    if let Ok(dir) = std::env::var("CC_SWITCH_TEST_HOME") {
+    if let Ok(dir) = std::env::var("AGENT_SWITCH_TEST_HOME") {
         if !dir.is_empty() {
             return PathBuf::from(dir);
         }
@@ -38,7 +38,7 @@ fn override_dir(name: &str) -> Option<PathBuf> {
 /// Claude Code 配置目录（`~/.claude`；可经设置 overrideDir.claudecode 覆盖）。
 fn config_dir() -> PathBuf {
     crate::services::overrides::get(PLUGIN_ID)
-        .or_else(|| override_dir("CC_SWITCH_CLAUDE_CONFIG_DIR"))
+        .or_else(|| override_dir("AGENT_SWITCH_CLAUDE_CONFIG_DIR"))
         .unwrap_or_else(|| home_dir().join(".claude"))
 }
 
@@ -67,7 +67,7 @@ fn mcp_path() -> PathBuf {
             return dir.join(".claude.json");
         }
     }
-    override_dir("CC_SWITCH_CLAUDE_MCP_PATH").unwrap_or_else(|| home_dir().join(".claude.json"))
+    override_dir("AGENT_SWITCH_CLAUDE_MCP_PATH").unwrap_or_else(|| home_dir().join(".claude.json"))
 }
 
 /// 会话目录（`~/.claude/projects`）。
@@ -80,8 +80,8 @@ fn projects_dir() -> PathBuf {
 /// 用户显式设置目录覆盖时视为已安装。
 fn mcp_target_installed() -> bool {
     if crate::services::overrides::get(PLUGIN_ID).is_some()
-        || override_dir("CC_SWITCH_CLAUDE_CONFIG_DIR").is_some()
-        || override_dir("CC_SWITCH_CLAUDE_MCP_PATH").is_some()
+        || override_dir("AGENT_SWITCH_CLAUDE_CONFIG_DIR").is_some()
+        || override_dir("AGENT_SWITCH_CLAUDE_MCP_PATH").is_some()
     {
         return true;
     }
@@ -278,7 +278,7 @@ impl AgentPlugin for ClaudeCodePlugin {
     }
 }
 
-/// 去掉只属于 cc-switch 的内部字段（与 v1 语义一致）。
+/// 去掉只属于 agentswitch 的内部字段（与 v1 语义一致）。
 fn sanitize(settings: &Value) -> Value {
     let mut v = settings.clone();
     if let Some(obj) = v.as_object_mut() {
@@ -647,8 +647,8 @@ mod tests {
     impl HomeGuard {
         fn set(home: &Path) -> Self {
             let lock = env_lock().lock().unwrap();
-            let previous = std::env::var_os("CC_SWITCH_TEST_HOME");
-            std::env::set_var("CC_SWITCH_TEST_HOME", home);
+            let previous = std::env::var_os("AGENT_SWITCH_TEST_HOME");
+            std::env::set_var("AGENT_SWITCH_TEST_HOME", home);
             Self {
                 previous,
                 _lock: lock,
@@ -658,8 +658,8 @@ mod tests {
     impl Drop for HomeGuard {
         fn drop(&mut self) {
             match self.previous.take() {
-                Some(v) => std::env::set_var("CC_SWITCH_TEST_HOME", v),
-                None => std::env::remove_var("CC_SWITCH_TEST_HOME"),
+                Some(v) => std::env::set_var("AGENT_SWITCH_TEST_HOME", v),
+                None => std::env::remove_var("AGENT_SWITCH_TEST_HOME"),
             }
         }
     }

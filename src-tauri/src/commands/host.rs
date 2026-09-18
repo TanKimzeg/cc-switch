@@ -156,29 +156,10 @@ pub fn host_write_file(
     path: String,
     content: String,
 ) -> Result<(), String> {
-    let plugin_dir = registry.plugins_dir().join(&id);
-    if !plugin_dir.is_dir() {
-        return Err(format!("插件目录不存在: {}", plugin_dir.display()));
-    }
-    let base = plugin_dir
-        .canonicalize()
-        .map_err(|e| format!("无法解析插件目录: {e}"))?;
-    let target = plugin_dir.join(&path);
-    if let Some(parent) = target.parent() {
+    // 先校验路径越权（canonicalize + starts_with），再创建目录。
+    let canonical = resolve_plugin_path(&registry.plugins_dir().join(&id), &path)?;
+    if let Some(parent) = canonical.parent() {
         std::fs::create_dir_all(parent).map_err(|e| format!("创建目录失败: {e}"))?;
-    }
-    let canonical = target
-        .canonicalize()
-        .or_else(|_| {
-            // 文件尚不存在：规范化为父目录 + 文件名。
-            let parent = target.parent().unwrap_or(&plugin_dir);
-            parent
-                .canonicalize()
-                .map(|p| p.join(target.file_name().unwrap_or_default()))
-        })
-        .map_err(|e| format!("无法解析目标路径: {e}"))?;
-    if !canonical.starts_with(&base) {
-        return Err("路径越出插件目录范围".to_string());
     }
     std::fs::write(&canonical, content).map_err(|e| format!("写入文件失败: {e}"))
 }
@@ -190,10 +171,9 @@ pub fn host_list_files(
     id: String,
     dir: Option<String>,
 ) -> Result<Vec<String>, String> {
-    let plugin_dir = registry.plugins_dir().join(&id);
     let target = match dir {
-        Some(d) => plugin_dir.join(&d),
-        None => plugin_dir,
+        Some(d) => resolve_plugin_path(&registry.plugins_dir().join(&id), &d)?,
+        None => registry.plugins_dir().join(&id),
     };
     let entries = std::fs::read_dir(&target).map_err(|e| format!("读取目录失败: {e}"))?;
     let mut names = Vec::new();

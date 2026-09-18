@@ -21,7 +21,7 @@ const PLUGIN_ID: &str = "opencode";
 const SCHEMA_URL: &str = "https://opencode.ai/config.json";
 
 fn home_dir() -> PathBuf {
-    if let Ok(dir) = std::env::var("CC_SWITCH_TEST_HOME") {
+    if let Ok(dir) = std::env::var("AGENT_SWITCH_TEST_HOME") {
         if !dir.is_empty() {
             return PathBuf::from(dir);
         }
@@ -40,13 +40,13 @@ fn override_dir(name: &str) -> Option<PathBuf> {
 /// OpenCode 配置目录（`~/.config/opencode`；可经设置 overrideDir.opencode 覆盖）。
 fn config_dir() -> PathBuf {
     crate::services::overrides::get(PLUGIN_ID)
-        .or_else(|| override_dir("CC_SWITCH_OPENCODE_CONFIG_DIR"))
+        .or_else(|| override_dir("AGENT_SWITCH_OPENCODE_CONFIG_DIR"))
         .unwrap_or_else(|| home_dir().join(".config").join("opencode"))
 }
 
 /// OpenCode 数据目录（会话等；遵循 XDG_DATA_HOME，兜底 `~/.local/share/opencode`）。
 fn data_dir() -> PathBuf {
-    override_dir("CC_SWITCH_OPENCODE_DATA_DIR").unwrap_or_else(|| {
+    override_dir("AGENT_SWITCH_OPENCODE_DATA_DIR").unwrap_or_else(|| {
         if let Ok(xdg) = std::env::var("XDG_DATA_HOME") {
             if !xdg.is_empty() {
                 return PathBuf::from(xdg).join("opencode");
@@ -66,7 +66,7 @@ fn config_path() -> PathBuf {
 /// 用户显式设置目录覆盖时视为已安装。
 fn mcp_target_installed() -> bool {
     if crate::services::overrides::get(PLUGIN_ID).is_some()
-        || override_dir("CC_SWITCH_OPENCODE_CONFIG_DIR").is_some()
+        || override_dir("AGENT_SWITCH_OPENCODE_CONFIG_DIR").is_some()
     {
         return true;
     }
@@ -992,8 +992,8 @@ mod tests {
     impl HomeGuard {
         fn set(home: &Path) -> Self {
             let lock = env_lock().lock().unwrap();
-            let previous = std::env::var_os("CC_SWITCH_TEST_HOME");
-            std::env::set_var("CC_SWITCH_TEST_HOME", home);
+            let previous = std::env::var_os("AGENT_SWITCH_TEST_HOME");
+            std::env::set_var("AGENT_SWITCH_TEST_HOME", home);
             Self {
                 previous,
                 _lock: lock,
@@ -1003,8 +1003,8 @@ mod tests {
     impl Drop for HomeGuard {
         fn drop(&mut self) {
             match self.previous.take() {
-                Some(v) => std::env::set_var("CC_SWITCH_TEST_HOME", v),
-                None => std::env::remove_var("CC_SWITCH_TEST_HOME"),
+                Some(v) => std::env::set_var("AGENT_SWITCH_TEST_HOME", v),
+                None => std::env::remove_var("AGENT_SWITCH_TEST_HOME"),
             }
         }
     }
@@ -1438,9 +1438,9 @@ mod tests {
     fn sync_usage_parses_assistant_messages() {
         let _guard = env_lock().lock().unwrap();
         let temp = tempfile::tempdir().unwrap();
-        let original = std::env::var_os("CC_SWITCH_OPENCODE_DATA_DIR");
+        let original = std::env::var_os("AGENT_SWITCH_OPENCODE_DATA_DIR");
         // override 指向数据目录本身（data_dir() 返回它，再 join opencode.db）。
-        std::env::set_var("CC_SWITCH_OPENCODE_DATA_DIR", temp.path().join("opencode"));
+        std::env::set_var("AGENT_SWITCH_OPENCODE_DATA_DIR", temp.path().join("opencode"));
 
         let base = temp.path().join("opencode");
         std::fs::create_dir_all(&base).unwrap();
@@ -1488,9 +1488,9 @@ mod tests {
         assert!(records[0].source_id.contains("msg_1"));
 
         if let Some(v) = original {
-            std::env::set_var("CC_SWITCH_OPENCODE_DATA_DIR", v);
+            std::env::set_var("AGENT_SWITCH_OPENCODE_DATA_DIR", v);
         } else {
-            std::env::remove_var("CC_SWITCH_OPENCODE_DATA_DIR");
+            std::env::remove_var("AGENT_SWITCH_OPENCODE_DATA_DIR");
         }
     }
 }

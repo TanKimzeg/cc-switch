@@ -569,8 +569,8 @@ mod tests {
     impl Drop for EnvGuard {
         fn drop(&mut self) {
             match self.previous.take() {
-                Some(v) => std::env::set_var("CC_SWITCH_TEST_HOME", v),
-                None => std::env::remove_var("CC_SWITCH_TEST_HOME"),
+                Some(v) => std::env::set_var("AGENT_SWITCH_TEST_HOME", v),
+                None => std::env::remove_var("AGENT_SWITCH_TEST_HOME"),
             }
         }
     }
@@ -584,8 +584,8 @@ mod tests {
     ) {
         let lock = crate::test_support::env_lock().lock().unwrap();
         let temp = tempfile::tempdir().unwrap();
-        let previous = std::env::var_os("CC_SWITCH_TEST_HOME");
-        std::env::set_var("CC_SWITCH_TEST_HOME", temp.path());
+        let previous = std::env::var_os("AGENT_SWITCH_TEST_HOME");
+        std::env::set_var("AGENT_SWITCH_TEST_HOME", temp.path());
         let guard = EnvGuard {
             previous,
             _lock: lock,

@@ -1,7 +1,7 @@
 //! 进程插件：通过 manifest 的 `entry.shell` 声明的外部命令实现协议。
 //!
 //! 第三方插件不内嵌 Rust 代码，而是声明一个命令（`command` + `args`）。
-//! cc-switch 按约定调用该命令的子命令来读写配置：
+//! agentswitch 按约定调用该命令的子命令来读写配置：
 //!
 //! - `read-live`：stdout 输出 JSON `{ "providers": [...], "current": "id" }`
 //! - `apply <provider-id>`：stdin 输入 provider 的 settings_config JSON

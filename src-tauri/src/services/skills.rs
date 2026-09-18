@@ -1,6 +1,6 @@
 //! Skills 服务。
 //!
-//! SSOT：技能存储在 `~/.cc-switch/skills/`（或 `~/.agents/skills/`，设置可切换），
+//! SSOT：技能存储在 `~/.agentswitch/skills/`（或 `~/.agents/skills/`，设置可切换），
 //! 对齐 v1；`skills` 表记录清单，`skill_apps` 记录各插件启用状态，`skill_repos` 记录
 //! GitHub 技能仓库。启用时把技能复制/软链到插件的 skills 目录（路径由插件协议
 //! `AgentPlugin::skills_dir` 提供）。
@@ -69,9 +69,9 @@ pub enum SyncMethod {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "snake_case")]
 pub enum SkillStorageLocation {
-    /// CC Switch 管理目录 `~/.cc-switch/skills/`（对齐 v1）。
+    /// AgentSwitch 管理目录 `~/.agentswitch/skills/`（对齐 v1）。
     #[default]
-    CcSwitch,
+    AgentSwitch,
     /// Agent Skills 统一标准目录 `~/.agents/skills/`。
     Unified,
 }
@@ -164,7 +164,7 @@ pub struct UnmanagedSkill {
     pub directory: String,
     pub name: String,
     pub description: Option<String>,
-    /// 在哪些插件/来源中发现（插件 id 或 "cc-switch"）。
+    /// 在哪些插件/来源中发现（插件 id 或 "agentswitch"）。
     pub found_in: Vec<String>,
     pub path: String,
 }
@@ -252,32 +252,32 @@ pub fn skill_error(code: &str, context: &[(&str, &str)], suggestion: Option<&str
 
 // ========== 路径与校验 ==========
 
-/// 测试/真实用户主目录（`CC_SWITCH_TEST_HOME` 优先，对齐 native 插件测试约定）。
+/// 测试/真实用户主目录（`AGENT_SWITCH_TEST_HOME` 优先，对齐 native 插件测试约定）。
 fn home_dir() -> PathBuf {
-    std::env::var("CC_SWITCH_TEST_HOME")
+    std::env::var("AGENT_SWITCH_TEST_HOME")
         .map(PathBuf::from)
         .unwrap_or_else(|_| dirs::home_dir().unwrap_or_else(|| PathBuf::from(".")))
 }
 
-/// CC Switch 数据根目录：对齐 v1 的 `~/.cc-switch/`。
-fn cc_switch_home() -> PathBuf {
-    home_dir().join(".cc-switch")
+/// AgentSwitch 数据根目录：对齐 v1 的 `~/.agentswitch/`。
+fn agentswitch_home() -> PathBuf {
+    home_dir().join(".agentswitch")
 }
 
-/// SSOT 目录。默认（`CcSwitch`）对齐 v1：`~/.cc-switch/skills/`；
+/// SSOT 目录。默认（`AgentSwitch`）对齐 v1：`~/.agentswitch/skills/`；
 /// `Unified` 为 `~/.agents/skills/`。
 pub fn ssot_dir(data_dir: &Path, location: SkillStorageLocation) -> PathBuf {
     let _ = data_dir;
     match location {
-        SkillStorageLocation::CcSwitch => cc_switch_home().join("skills"),
+        SkillStorageLocation::AgentSwitch => agentswitch_home().join("skills"),
         SkillStorageLocation::Unified => home_dir().join(".agents").join("skills"),
     }
 }
 
-/// 技能卸载/更新备份目录（对齐 v1：`~/.cc-switch/skill-backups/`）。
+/// 技能卸载/更新备份目录（对齐 v1：`~/.agentswitch/skill-backups/`）。
 fn backup_dir(data_dir: &Path) -> PathBuf {
     let _ = data_dir;
-    cc_switch_home().join("skill-backups")
+    agentswitch_home().join("skill-backups")
 }
 
 /// 技能名允许的字符白名单。只放行 ASCII 字母数字与 `-` `_` `.`。
@@ -2568,9 +2568,9 @@ mod tests {
         std::fs::write(dir.join("SKILL.md"), format!("---\nname: {name}\n---\n{body}")).unwrap();
     }
 
-    /// 把 SSOT/备份目录隔离到临时主目录（对齐 v1 的 `~/.cc-switch`）。
+    /// 把 SSOT/备份目录隔离到临时主目录（对齐 v1 的 `~/.agentswitch`）。
     ///
-    /// 持有全局 env 锁，避免并行测试互相污染 `CC_SWITCH_TEST_HOME`。
+    /// 持有全局 env 锁，避免并行测试互相污染 `AGENT_SWITCH_TEST_HOME`。
     struct TestHome {
         _lock: std::sync::MutexGuard<'static, ()>,
         home: tempfile::TempDir,
@@ -2581,8 +2581,8 @@ mod tests {
         fn new() -> Self {
             let lock = crate::test_support::env_lock().lock().unwrap();
             let home = tempfile::tempdir().unwrap();
-            let previous = std::env::var_os("CC_SWITCH_TEST_HOME");
-            std::env::set_var("CC_SWITCH_TEST_HOME", home.path());
+            let previous = std::env::var_os("AGENT_SWITCH_TEST_HOME");
+            std::env::set_var("AGENT_SWITCH_TEST_HOME", home.path());
             Self {
                 _lock: lock,
                 home,
@@ -2594,12 +2594,12 @@ mod tests {
             self.home.path()
         }
 
-        fn cc_switch_skills(&self) -> PathBuf {
-            self.path().join(".cc-switch").join("skills")
+        fn agentswitch_skills(&self) -> PathBuf {
+            self.path().join(".agentswitch").join("skills")
         }
 
-        fn cc_switch_backups(&self) -> PathBuf {
-            self.path().join(".cc-switch").join("skill-backups")
+        fn agentswitch_backups(&self) -> PathBuf {
+            self.path().join(".agentswitch").join("skill-backups")
         }
 
         fn agents_skills(&self) -> PathBuf {
@@ -2610,8 +2610,8 @@ mod tests {
     impl Drop for TestHome {
         fn drop(&mut self) {
             match self.previous.take() {
-                Some(v) => std::env::set_var("CC_SWITCH_TEST_HOME", v),
-                None => std::env::remove_var("CC_SWITCH_TEST_HOME"),
+                Some(v) => std::env::set_var("AGENT_SWITCH_TEST_HOME", v),
+                None => std::env::remove_var("AGENT_SWITCH_TEST_HOME"),
             }
         }
     }
@@ -2778,8 +2778,8 @@ mod tests {
         let record = SkillService::install_local_dir(&db, dir.path(), &src, "test-skill").unwrap();
         assert_eq!(record.name, "Test Skill");
         assert!(db.get_skill("test-skill").unwrap().is_some());
-        // SSOT 位于 ~/.cc-switch/skills（对齐 v1）
-        assert!(th.cc_switch_skills().join("test-skill/SKILL.md").is_file());
+        // SSOT 位于 ~/.agentswitch/skills（对齐 v1）
+        assert!(th.agentswitch_skills().join("test-skill/SKILL.md").is_file());
 
         db.set_skill_plugin_enabled("test-skill", "opencode", true)
             .unwrap();
@@ -2791,8 +2791,8 @@ mod tests {
         let backup = SkillService::uninstall(&db, dir.path(), &skills_dirs, "test-skill").unwrap();
         assert!(backup.is_some());
         assert!(db.get_skill("test-skill").unwrap().is_none());
-        // 备份位于 ~/.cc-switch/skill-backups（对齐 v1）
-        assert!(th.cc_switch_backups().read_dir().unwrap().next().is_some());
+        // 备份位于 ~/.agentswitch/skill-backups（对齐 v1）
+        assert!(th.agentswitch_backups().read_dir().unwrap().next().is_some());
     }
 
     #[test]
@@ -2818,7 +2818,7 @@ mod tests {
         let restored = SkillService::restore_backup(&db, dir.path(), &backup_id, "opencode").unwrap();
         assert_eq!(restored.name, "My Skill");
         assert!(db.get_skill(&restored.id).unwrap().is_some());
-        assert!(th.cc_switch_skills().join("my-skill/SKILL.md").is_file());
+        assert!(th.agentswitch_skills().join("my-skill/SKILL.md").is_file());
 
         // 删除备份后列表为空
         SkillService::delete_backup(dir.path(), &backup_id).unwrap();
@@ -2856,7 +2856,7 @@ mod tests {
         .unwrap();
         assert_eq!(imported.len(), 1);
         assert_eq!(imported[0].enabled_plugins, vec!["opencode".to_string()]);
-        assert!(th.cc_switch_skills().join("find-skill/SKILL.md").is_file());
+        assert!(th.agentswitch_skills().join("find-skill/SKILL.md").is_file());
     }
 
     #[test]
@@ -2869,14 +2869,14 @@ mod tests {
         write_skill(&src, "Migrate", "body");
         SkillService::install_local_dir(&db, dir.path(), &src, "migrate").unwrap();
 
-        // 默认 SSOT 在 ~/.cc-switch/skills（对齐 v1）
-        assert!(th.cc_switch_skills().join("migrate/SKILL.md").is_file());
+        // 默认 SSOT 在 ~/.agentswitch/skills（对齐 v1）
+        assert!(th.agentswitch_skills().join("migrate/SKILL.md").is_file());
 
         let result = SkillService::migrate_storage(&db, dir.path(), SkillStorageLocation::Unified).unwrap();
         assert_eq!(result.migrated_count, 1);
         // 文件移到 ~/.agents/skills/（测试主目录）
         assert!(th.agents_skills().join("migrate/SKILL.md").is_file());
-        assert!(!th.cc_switch_skills().join("migrate").exists());
+        assert!(!th.agentswitch_skills().join("migrate").exists());
         let settings = SkillService::get_sync_settings(&db).unwrap();
         assert_eq!(settings.storage_location, SkillStorageLocation::Unified);
     }
@@ -2890,8 +2890,8 @@ mod tests {
         write_skill(&src, "Sync", "body");
         SkillService::install_local_dir(&db, dir.path(), &src, "sync-skill").unwrap();
 
-        let ssot = ssot_dir(dir.path(), SkillStorageLocation::CcSwitch);
-        assert_eq!(ssot, th.cc_switch_skills());
+        let ssot = ssot_dir(dir.path(), SkillStorageLocation::AgentSwitch);
+        assert_eq!(ssot, th.agentswitch_skills());
         let dest_root = dir.path().join("app-skills");
         let record = db.get_skill("sync-skill").unwrap().unwrap();
 
@@ -2932,7 +2932,7 @@ mod tests {
         assert_eq!(installed.len(), 2);
         assert!(db.get_skill(&installed[0].id).unwrap().is_some());
         assert_eq!(installed[0].enabled_plugins, vec!["opencode".to_string()]);
-        assert!(th.cc_switch_skills().join("skill-a/SKILL.md").is_file());
+        assert!(th.agentswitch_skills().join("skill-a/SKILL.md").is_file());
     }
 
     #[test]
@@ -2943,7 +2943,7 @@ mod tests {
         let src = dir.path().join("src-skill");
         write_skill(&src, "Conflict", "body");
         SkillService::install_local_dir(&db, dir.path(), &src, "same-dir").unwrap();
-        assert!(th.cc_switch_skills().join("same-dir/SKILL.md").is_file());
+        assert!(th.agentswitch_skills().join("same-dir/SKILL.md").is_file());
 
         // 同一目录名来自不同仓库 → 先写入另一条同目录记录，模拟冲突来源。
         let record = SkillRecord {
@@ -3004,7 +3004,7 @@ mod tests {
         let src = dir.path().join("src-skill");
         write_skill(&src, "Hash", "body");
         SkillService::install_local_dir(&db, dir.path(), &src, "hash-skill").unwrap();
-        assert!(th.cc_switch_skills().join("hash-skill/SKILL.md").is_file());
+        assert!(th.agentswitch_skills().join("hash-skill/SKILL.md").is_file());
         // 手动清空哈希
         db.lock()
             .execute("UPDATE skills SET content_hash = NULL", [])

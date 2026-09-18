@@ -1,6 +1,6 @@
 {
   "app": {
-    "name": "CC Switch v2",
+    "name": "AgentSwitch",
     "tagline": "基于插件的 Agent 切换器"
   },
   "nav": {
@@ -261,7 +261,7 @@
     "uninstallInMainPanel": "请在主面板中卸载技能",
     "uninstalled": "技能 {{name}} 已卸载",
     "backupLocation": "备份位置: {{path}}",
-    "noUnmanagedFound": "未发现需要导入的技能。所有技能已在 CC Switch 统一管理中。",
+    "noUnmanagedFound": "未发现需要导入的技能。所有技能已在 AgentSwitch 统一管理中。",
     "importSelected": "导入已选 ({{count}})",
     "importedCount": "成功导入 {{count}} 个技能",
     "restoreSuccess": "技能 {{name}} 已从备份恢复",
@@ -279,7 +279,7 @@
     "backupTime": "备份时间: {{time}}",
     "backupPath": "备份路径: {{path}}",
     "importTitle": "导入已有",
-    "importDescription": "选择要导入到 CC Switch 统一管理的技能",
+    "importDescription": "选择要导入到 AgentSwitch 统一管理的技能",
     "repoTitle": "管理技能仓库",
     "repoUrl": "仓库 URL",
     "repoUrlPlaceholder": "owner/name 或 https://github.com/owner/name",
@@ -411,7 +411,7 @@
     "languageOptionEnglish": "English",
     "windowBehavior": "窗口行为",
     "launchOnStartup": "开机自启",
-    "launchOnStartupDescription": "随系统启动自动运行 CC Switch",
+    "launchOnStartupDescription": "随系统启动自动运行 AgentSwitch",
     "silentStartup": "静默启动",
     "silentStartupDescription": "程序启动时不显示主窗口，仅在系统托盘运行",
     "minimizeToTray": "关闭时最小化到托盘",
@@ -452,7 +452,7 @@
     "advanced": {
       "configDir": {
         "title": "配置文件目录",
-        "description": "管理 CC Switch 数据目录与各工具的配置存储路径"
+        "description": "管理 AgentSwitch 数据目录与各工具的配置存储路径"
       },
       "proxy": {
         "title": "全局出站代理",
@@ -463,10 +463,10 @@
       }
     },
     "skillStorageTitle": "Skills 存储位置",
-    "skillStorageDescription": "选择 CC Switch 存放 Skills 主副本的目录",
-    "skillStorageCcSwitch": "CC Switch",
+    "skillStorageDescription": "选择 AgentSwitch 存放 Skills 主副本的目录",
+    "skillStorageAgentSwitch": "AgentSwitch",
     "skillStorageUnified": "~/.agents/skills",
-    "skillStorageCcSwitchHint": "技能存储在 ~/.cc-switch/skills/，由 CC Switch 统一管理并同步到各应用。",
+    "skillStorageAgentSwitchHint": "技能存储在 ~/.agentswitch/skills/，由 AgentSwitch 统一管理并同步到各应用。",
     "skillStorageUnifiedHint": "技能存储在 ~/.agents/skills/，遵循 Agent Skills 开放标准。兼容的工具（Claude Code、Codex、Gemini CLI 等）可直接发现此目录中的技能。",
     "skillStorageMigrateTitle": "迁移技能存储",
     "skillStorageMigrateMessage": "将移动 {{count}} 个技能到新位置，是否继续？",
@@ -477,14 +477,14 @@
     "skillSyncSymlink": "软连接",
     "skillSyncCopy": "文件复制",
     "skillSyncSymlinkHint": "软连接节省磁盘空间并支持实时同步。注意：Windows 可能需要管理员权限或开启开发者模式",
-    "appDataDir": "CC Switch 配置目录",
-    "appDataDirDescription": "自定义 CC Switch 的配置存储位置（指定到云同步文件夹即可云同步配置）",
+    "appDataDir": "AgentSwitch 配置目录",
+    "appDataDirDescription": "自定义 AgentSwitch 的配置存储位置（指定到云同步文件夹即可云同步配置）",
     "configDirOverride": "配置目录覆盖（高级）",
     "configDirOverrideDescription": "为各工具指定不同的配置目录（如在 WSL 中使用 Claude Code 或 Codex 时指向 WSL 内的目录），供应商数据与主环境保持一致。",
     "browseDirectory": "浏览目录",
     "resetDefault": "恢复默认目录",
     "restartRequired": "需要重启应用",
-    "restartRequiredMessage": "修改 CC Switch 配置目录后需要重启应用才能生效，是否立即重启？",
+    "restartRequiredMessage": "修改 AgentSwitch 配置目录后需要重启应用才能生效，是否立即重启？",
     "restartNow": "立即重启",
     "restartLater": "稍后重启",
     "restartFailed": "应用重启失败，请手动关闭后重新打开。"

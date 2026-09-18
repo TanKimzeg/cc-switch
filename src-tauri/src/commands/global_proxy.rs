@@ -33,7 +33,7 @@ pub async fn set_global_proxy_url(
     Ok(())
 }
 
-/// 测试代理连通性（向 models.dev 发请求，返回延迟）。
+/// 测试代理连通性（用指定代理 URL 构建临时客户端测试，不修改全局状态）。
 #[tauri::command]
 pub async fn test_global_proxy_url(
     url: String,
@@ -43,12 +43,21 @@ pub async fn test_global_proxy_url(
     let effective = if trimmed.is_empty() { None } else { Some(trimmed) };
     http_client::validate_proxy(effective)?;
 
-    let client = http_client::get();
+    // 用指定代理构建临时客户端（不改全局客户端）。
+    let mut builder = reqwest::Client::builder()
+        .connect_timeout(std::time::Duration::from_secs(10));
+    if let Some(proxy_url) = effective {
+        let proxy = reqwest::Proxy::all(proxy_url)
+            .map_err(|e| format!("代理 URL '{}': {e}", http_client::mask_url(proxy_url)))?;
+        builder = builder.proxy(proxy);
+    }
+    let client = builder.build().map_err(|e| format!("构建测试客户端失败: {e}"))?;
+
     let test_url = "https://models.dev/api.json";
     let start = std::time::Instant::now();
     let result = client
         .get(test_url)
-        .header("User-Agent", "CC-Switch/2.0")
+        .header("User-Agent", "AgentSwitch/0.1.0")
         .timeout(std::time::Duration::from_secs(15))
         .send()
         .await;

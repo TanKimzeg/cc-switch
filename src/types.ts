@@ -151,7 +151,7 @@ export interface SkillRecord {
 export type SyncMethod = "auto" | "symlink" | "copy";
 
 /** 技能存储位置。 */
-export type SkillStorageLocation = "cc_switch" | "unified";
+export type SkillStorageLocation = "agent_switch" | "unified";
 
 /** 仓库配置。 */
 export interface SkillRepo {

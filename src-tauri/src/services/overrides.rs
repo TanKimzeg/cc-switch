@@ -3,7 +3,7 @@
 //! 两类覆盖：
 //! - **各工具（插件）配置目录**：settings 表键 `overrideDir.<plugin_id>` 存原始路径
 //!   （`~` 读取时展开）。native 插件在 `config_dir()` 中优先读取本注册表。
-//! - **CC Switch 自身数据目录**：指针文件 `{app_config_dir}/app_paths.json`
+//! - **AgentSwitch 自身数据目录**：指针文件 `{app_config_dir}/app_paths.json`
 //!   存 `appDataDirOverride`（须在打开数据库前读取；目录不存在时回退默认）。
 
 use std::collections::HashMap;
@@ -18,9 +18,9 @@ fn registry() -> &'static RwLock<HashMap<String, String>> {
     OVERRIDES.get_or_init(|| RwLock::new(HashMap::new()))
 }
 
-/// 测试/真实用户主目录（`CC_SWITCH_TEST_HOME` 优先，对齐 native 插件测试约定）。
+/// 测试/真实用户主目录（`AGENT_SWITCH_TEST_HOME` 优先，对齐 native 插件测试约定）。
 fn home_dir() -> PathBuf {
-    std::env::var("CC_SWITCH_TEST_HOME")
+    std::env::var("AGENT_SWITCH_TEST_HOME")
         .map(PathBuf::from)
         .unwrap_or_else(|_| dirs::home_dir().unwrap_or_else(|| PathBuf::from(".")))
 }
@@ -119,7 +119,7 @@ pub fn list(db: &Database) -> Result<Vec<OverrideDir>, String> {
     Ok(items)
 }
 
-// ========== CC Switch 数据目录覆盖 ==========
+// ========== AgentSwitch 数据目录覆盖 ==========
 
 const APP_PATHS_FILE: &str = "app_paths.json";
 const APP_DATA_DIR_KEY: &str = "appDataDirOverride";
@@ -132,7 +132,7 @@ fn read_app_paths(config_dir: &Path) -> serde_json::Value {
     }
 }
 
-/// 读取 CC Switch 数据目录覆盖：设置且目录存在时返回，否则 None（回退默认）。
+/// 读取 AgentSwitch 数据目录覆盖：设置且目录存在时返回，否则 None（回退默认）。
 ///
 /// 须在打开数据库/初始化路径**之前**调用。
 pub fn get_app_data_dir_override(config_dir: &Path) -> Option<PathBuf> {
@@ -149,7 +149,7 @@ pub fn get_app_data_dir_override(config_dir: &Path) -> Option<PathBuf> {
     Some(path)
 }
 
-/// 设置/清除 CC Switch 数据目录覆盖（写指针文件，不移动任何数据）。
+/// 设置/清除 AgentSwitch 数据目录覆盖（写指针文件，不移动任何数据）。
 pub fn set_app_data_dir_override(config_dir: &Path, path: Option<&str>) -> Result<bool, String> {
     std::fs::create_dir_all(config_dir).map_err(|e| e.to_string())?;
     let mut value = read_app_paths(config_dir);

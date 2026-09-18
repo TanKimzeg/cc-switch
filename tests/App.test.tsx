@@ -38,7 +38,7 @@ it("renders the shell title", async () => {
     return null;
   });
   renderApp();
-  expect(await screen.findByText(/CC Switch v2/i)).toBeInTheDocument();
+  expect(await screen.findByText(/AgentSwitch/i)).toBeInTheDocument();
 });
 
 it("shows the empty plugin state when nothing is installed", async () => {

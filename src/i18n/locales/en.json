@@ -1,6 +1,6 @@
 {
   "app": {
-    "name": "CC Switch v2",
+    "name": "AgentSwitch",
     "tagline": "Plugin-based agent switcher"
   },
   "nav": {
@@ -261,7 +261,7 @@
     "uninstallInMainPanel": "Please uninstall skills in the main panel",
     "uninstalled": "Skill {{name}} uninstalled",
     "backupLocation": "Backup location: {{path}}",
-    "noUnmanagedFound": "No skills to import. All skills are already managed by CC Switch.",
+    "noUnmanagedFound": "No skills to import. All skills are already managed by AgentSwitch.",
     "importSelected": "Import selected ({{count}})",
     "importedCount": "Successfully imported {{count}} skills",
     "restoreSuccess": "Skill {{name}} restored from backup",
@@ -279,7 +279,7 @@
     "backupTime": "Backup time: {{time}}",
     "backupPath": "Backup path: {{path}}",
     "importTitle": "Import existing",
-    "importDescription": "Select skills to import into CC Switch unified management",
+    "importDescription": "Select skills to import into AgentSwitch unified management",
     "repoTitle": "Manage skill repos",
     "repoUrl": "Repo URL",
     "repoUrlPlaceholder": "owner/name or https://github.com/owner/name",
@@ -411,7 +411,7 @@
     "languageOptionEnglish": "English",
     "windowBehavior": "Window Behavior",
     "launchOnStartup": "Launch on Startup",
-    "launchOnStartupDescription": "Automatically run CC Switch when system starts",
+    "launchOnStartupDescription": "Automatically run AgentSwitch when system starts",
     "silentStartup": "Silent Startup",
     "silentStartupDescription": "Start in background mode without showing main window",
     "minimizeToTray": "Minimize to tray on close",
@@ -452,7 +452,7 @@
     "advanced": {
       "configDir": {
         "title": "Configuration Directory",
-        "description": "Manage CC Switch data directory and config storage paths for each tool"
+        "description": "Manage AgentSwitch data directory and config storage paths for each tool"
       },
       "proxy": {
         "title": "Outbound Proxy",
@@ -463,10 +463,10 @@
       }
     },
     "skillStorageTitle": "Skills storage location",
-    "skillStorageDescription": "Choose the directory where CC Switch stores the master copy of Skills",
-    "skillStorageCcSwitch": "CC Switch",
+    "skillStorageDescription": "Choose the directory where AgentSwitch stores the master copy of Skills",
+    "skillStorageAgentSwitch": "AgentSwitch",
     "skillStorageUnified": "~/.agents/skills",
-    "skillStorageCcSwitchHint": "Skills are stored in ~/.cc-switch/skills/ and synced to each app by CC Switch.",
+    "skillStorageAgentSwitchHint": "Skills are stored in ~/.agentswitch/skills/ and synced to each app by AgentSwitch.",
     "skillStorageUnifiedHint": "Skills are stored in ~/.agents/skills/ following the Agent Skills open standard. Compatible tools (Claude Code, Codex, Gemini CLI, etc.) can discover skills in this directory directly.",
     "skillStorageMigrateTitle": "Migrate skills storage",
     "skillStorageMigrateMessage": "Move {{count}} skills to the new location?",
@@ -477,14 +477,14 @@
     "skillSyncSymlink": "Symlink",
     "skillSyncCopy": "Copy",
     "skillSyncSymlinkHint": "Symlinks save disk space and sync in real time. Note: Windows may require admin privileges or developer mode",
-    "appDataDir": "CC Switch Configuration Directory",
-    "appDataDirDescription": "Customize the storage location for CC Switch configuration (point to a cloud sync folder to enable config sync)",
+    "appDataDir": "AgentSwitch Configuration Directory",
+    "appDataDirDescription": "Customize the storage location for AgentSwitch configuration (point to a cloud sync folder to enable config sync)",
     "configDirOverride": "Configuration Directory Override (Advanced)",
     "configDirOverrideDescription": "Specify different config directories per tool (e.g. point to the directory inside WSL when using Claude Code or Codex in WSL), keeping provider data consistent with the main environment.",
     "browseDirectory": "Browse",
     "resetDefault": "Reset to default directory",
     "restartRequired": "Restart Required",
-    "restartRequiredMessage": "The CC Switch config directory change requires a restart to take effect. Restart now?",
+    "restartRequiredMessage": "The AgentSwitch config directory change requires a restart to take effect. Restart now?",
     "restartNow": "Restart Now",
     "restartLater": "Later",
     "restartFailed": "Failed to restart the app. Please close and reopen it manually."

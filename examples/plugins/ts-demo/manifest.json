@@ -3,7 +3,7 @@
   "name": "TS Demo",
   "version": "0.1.0",
   "apiVersion": "1",
-  "author": "cc-switch",
+  "author": "agentswitch",
   "description": "TypeScript 插件示例：演示前端宿主加载与宿主命令读写。",
   "capabilities": {
     "readLive": true,
@@ -11,7 +11,7 @@
     "sessions": true
   },
   "resources": {
-    "demo": "~/.cc-switch-demo"
+    "demo": "~/.agentswitch-demo"
   },
   "entry": {
     "type": "ts",

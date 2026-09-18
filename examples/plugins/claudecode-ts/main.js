@@ -41,7 +41,7 @@ async function writeMcpRoot(root) {
   await host.writeResource(RES_MCP, JSON.stringify(root, null, 2));
 }
 
-/** 去掉只属于 cc-switch 的内部字段（与 v1 语义一致）。 */
+/** 去掉只属于 agentswitch 的内部字段（与 v1 语义一致）。 */
 function sanitizeSettings(settings) {
   const out = { ...settings };
   delete out.api_format;

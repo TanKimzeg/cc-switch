@@ -1,6 +1,6 @@
-# AGENTS.md — CC Switch v2 开发指引
+# AGENTS.md — AgentSwitch 开发指引
 
-> 本项目是 **CC Switch v2**：基于**插件协议（Plugin Protocol）**重构的 Agent 配置切换器。
+> 本项目是 **AgentSwitch**：基于**插件协议（Plugin Protocol）**重构的 Agent 配置切换器。
 > 原版（v1，仓库根 `src/` + `src-tauri/`）的功能、UI、交互、成熟实践是**事实标准**。
 > **v2 唯一允许的架构差异是「插件模式」；除此之外，逻辑、UI、交互、文案都要看齐 v1。**
 

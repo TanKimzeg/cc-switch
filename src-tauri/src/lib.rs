@@ -20,11 +20,11 @@ pub struct AppPaths {
 }
 
 fn init_db(app: &tauri::App<Wry>) -> Result<(), Box<dyn std::error::Error>> {
-    // CC Switch 数据目录覆盖（指针文件在 app_config_dir，独立于数据目录）。
+    // AgentSwitch 数据目录覆盖（指针文件在 app_config_dir，独立于数据目录）。
     let config_dir = app.path().app_config_dir()?;
     let dir = services::overrides::get_app_data_dir_override(&config_dir)
         .unwrap_or(app.path().app_data_dir()?);
-    let db = Database::new(&dir.join("cc-switch-v2.db"))?;
+    let db = Database::new(&dir.join("agentswitch.db"))?;
     // 载入工具目录覆盖注册表（native 插件 config_dir 消费）。
     services::overrides::init(&db)?;
 

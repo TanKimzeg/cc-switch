@@ -1,6 +1,6 @@
 # 数据模型（Data Model）
 
-v2 使用 SQLite，单一数据库文件 `{app_data_dir}/cc-switch-v2.db`。Schema 定义在 `v2/src-tauri/src/db.rs` 的 `SCHEMA` 常量（无历史包袱、无迁移史）。
+v2 使用 SQLite，单一数据库文件 `{app_data_dir}/agentswitch.db`。Schema 定义在 `v2/src-tauri/src/db.rs` 的 `SCHEMA` 常量（无历史包袱、无迁移史）。
 
 ## 表总览
 
@@ -113,7 +113,7 @@ v2 使用 SQLite，单一数据库文件 `{app_data_dir}/cc-switch-v2.db`。Sche
 | `content_hash` | TEXT | 内容哈希（SHA-256，更新检测用） |
 | `updated_at` | INTEGER | 更新时间 |
 
-> SSOT 目录由设置 `skills.storageLocation` 决定：`cc_switch` → **`~/.cc-switch/skills/`**（对齐 v1）；`unified` → `~/.agents/skills/`。技能目录名必须是**单段合法名**（`require_valid_directory` 校验，含前导点拒绝），DB 脏值在删除/复制前会被拦截。
+> SSOT 目录由设置 `skills.storageLocation` 决定：`agent_switch` → **`~/.agentswitch/skills/`**（对齐 v1）；`unified` → `~/.agents/skills/`。技能目录名必须是**单段合法名**（`require_valid_directory` 校验，含前导点拒绝），DB 脏值在删除/复制前会被拦截。
 
 ## 9. skill_apps
 
@@ -138,7 +138,7 @@ v2 使用 SQLite，单一数据库文件 `{app_data_dir}/cc-switch-v2.db`。Sche
 
 启动时一次性种子 4 个默认仓库（anthropics/skills、ComposioHQ/awesome-claude-skills、cexll/myclaude、JimLiu/baoyu-skills），由设置键 `skills.defaultReposInitialized` 守护（幂等）。
 
-> 卸载/更新自动备份到 `~/.cc-switch/skill-backups/{ts}_{slug}`（`skill/` 目录 + `meta.json`），保留最近 20 份。
+> 卸载/更新自动备份到 `~/.agentswitch/skill-backups/{ts}_{slug}`（`skill/` 目录 + `meta.json`），保留最近 20 份。
 
 ## 11. request_logs
 
