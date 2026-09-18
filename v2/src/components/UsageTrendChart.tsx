@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
-import { fmtInt, fmtUsd, getLocaleFromLanguage } from "@/lib/formatters";
+import { fmtInt, getLocaleFromLanguage } from "@/lib/formatters";
 
 export interface TrendPoint {
   day: string;
@@ -9,14 +9,11 @@ export interface TrendPoint {
   output: number;
   cacheRead: number;
   cacheWrite: number;
-  cost: number;
 }
 
 const W = 600;
 const H = 260;
 const PAD = { top: 24, right: 48, bottom: 22, left: 44 };
-
-const COST_COLOR = "#f43f5e";
 
 function dayLabel(key: string, locale: string): string {
   if (key.includes(":")) {
@@ -126,24 +123,17 @@ export default function UsageTrendChart({
     1,
     ...dayPoints.flatMap((p) => series.map((s) => p[s.key] as number)),
   );
-  const maxCost = Math.max(1e-9, ...dayPoints.map((p) => p.cost));
 
   const x = (i: number) =>
     PAD.left + (n === 1 ? plotW / 2 : (i / (n - 1)) * plotW);
   const yToken = (v: number) => PAD.top + (1 - v / maxTokens) * plotH;
-  const yCost = (v: number) => PAD.top + (1 - v / maxCost) * plotH;
 
   const tokenTicks = niceTicks(maxTokens);
-  const costTicks = niceTicks(maxCost);
 
   const labelEvery = Math.ceil(n / 8);
   const labels = dayPoints
     .map((p, i) => ({ p, i }))
     .filter(({ i }) => i === 0 || i === n - 1 || i % labelEvery === 0);
-
-  const costPath = smoothPath(
-    dayPoints.map((p, i) => [x(i), yCost(p.cost)] as [number, number]),
-  );
 
   const [hoverIdx, setHoverIdx] = useState<number | null>(null);
   const hoverPoint = hoverIdx != null ? dayPoints[hoverIdx] : null;
@@ -177,13 +167,6 @@ export default function UsageTrendChart({
             {s.label}
           </span>
         ))}
-        <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
-          <span
-            className="h-0 w-3 border-t-2 border-dashed"
-            style={{ borderColor: COST_COLOR }}
-          />
-          {t("features.cost")}
-        </span>
       </div>
 
       <svg
@@ -234,19 +217,6 @@ export default function UsageTrendChart({
           );
         })}
 
-        {costTicks.map((v) => (
-          <text
-            key={v}
-            x={W - PAD.right + 6}
-            y={yCost(v) + 3}
-            textAnchor="start"
-            fontSize={10}
-            fill="hsl(var(--muted-foreground))"
-          >
-            {fmtUsd(v, v < 0.01 ? 4 : 2)}
-          </text>
-        ))}
-
         <line
           x1={PAD.left}
           y1={baseline}
@@ -277,16 +247,6 @@ export default function UsageTrendChart({
           );
         })}
 
-        <path
-          d={costPath}
-          fill="none"
-          stroke={COST_COLOR}
-          strokeWidth={2}
-          strokeDasharray="4 4"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        />
-
         {hoverIdx != null && hoverPoint && (
           <>
             <line
@@ -310,14 +270,6 @@ export default function UsageTrendChart({
                 strokeWidth={1.5}
               />
             ))}
-            <circle
-              cx={x(hoverIdx)}
-              cy={yCost(hoverPoint.cost)}
-              r={3}
-              fill={COST_COLOR}
-              stroke="hsl(var(--card))"
-              strokeWidth={1.5}
-            />
           </>
         )}
       </svg>
@@ -347,18 +299,6 @@ export default function UsageTrendChart({
               </span>
             </div>
           ))}
-          <div className="mt-1 flex items-center justify-between gap-4 border-t border-border pt-1">
-            <span className="flex items-center gap-1.5 text-muted-foreground">
-              <span
-                className="h-0 w-3 border-t-2 border-dashed"
-                style={{ borderColor: COST_COLOR }}
-              />
-              {t("features.cost")}
-            </span>
-            <span className="font-medium tabular-nums">
-              {fmtUsd(hoverPoint.cost, 4)}
-            </span>
-          </div>
         </div>
       )}
 

@@ -8,7 +8,6 @@ import {
   BarChart3,
   ChevronLeft,
   ChevronRight,
-  Coins,
   Database,
   ListFilter,
   Loader2,
@@ -21,9 +20,7 @@ import { pluginSyncUsage, usageListRequestLogs } from "@/lib/api";
 import {
   formatTokensShort,
   fmtInt,
-  fmtUsd,
   getLocaleFromLanguage,
-  parseFiniteNumber,
 } from "@/lib/formatters";
 import { Button } from "@/components/ui/button";
 import {
@@ -66,7 +63,6 @@ interface ModelStat {
   outputTokens: number;
   cacheReadTokens: number;
   cacheCreationTokens: number;
-  costUsd: number;
 }
 
 function zeroPoint(day: string): TrendPoint {
@@ -77,7 +73,6 @@ function zeroPoint(day: string): TrendPoint {
     output: 0,
     cacheRead: 0,
     cacheWrite: 0,
-    cost: 0,
   };
 }
 
@@ -171,16 +166,14 @@ export default function UsagePanel({ pluginId }: { pluginId: string }) {
     let output = 0;
     let cacheRead = 0;
     let cacheWrite = 0;
-    let cost = 0;
     for (const l of rangeLogs) {
       requests += 1;
       input += l.inputTokens;
       output += l.outputTokens;
       cacheRead += l.cacheReadTokens;
       cacheWrite += l.cacheCreationTokens;
-      cost += parseFiniteNumber(l.totalCostUsd) ?? 0;
     }
-    return { requests, input, output, cacheRead, cacheWrite, cost };
+    return { requests, input, output, cacheRead, cacheWrite };
   }, [rangeLogs]);
 
   const dayPoints = useMemo<TrendPoint[]>(() => {
@@ -193,7 +186,6 @@ export default function UsagePanel({ pluginId }: { pluginId: string }) {
       p.output += l.outputTokens;
       p.cacheRead += l.cacheReadTokens;
       p.cacheWrite += l.cacheCreationTokens;
-      p.cost += parseFiniteNumber(l.totalCostUsd) ?? 0;
       map.set(key, p);
     }
     return rangeKeys.map((key) => map.get(key) ?? zeroPoint(key));
@@ -211,17 +203,15 @@ export default function UsagePanel({ pluginId }: { pluginId: string }) {
           outputTokens: 0,
           cacheReadTokens: 0,
           cacheCreationTokens: 0,
-          costUsd: 0,
         } as ModelStat);
       m.requests += 1;
       m.inputTokens += l.inputTokens;
       m.outputTokens += l.outputTokens;
       m.cacheReadTokens += l.cacheReadTokens;
       m.cacheCreationTokens += l.cacheCreationTokens;
-      m.costUsd += parseFiniteNumber(l.totalCostUsd) ?? 0;
       map.set(l.model, m);
     }
-    return Array.from(map.values()).sort((a, b) => b.costUsd - a.costUsd);
+    return Array.from(map.values()).sort((a, b) => b.requests - a.requests);
   }, [rangeLogs]);
 
   const [page, setPage] = useState(0);
@@ -330,15 +320,6 @@ export default function UsagePanel({ pluginId }: { pluginId: string }) {
                       </span>
                     </div>
                     <div className="h-8 w-px bg-border/60" />
-                    <div className="flex flex-col">
-                      <span className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
-                        {t("features.usageTotalCost")}
-                      </span>
-                      <span className="flex items-center gap-1.5 text-sm font-semibold tabular-nums text-green-500">
-                        <Coins className="h-3.5 w-3.5" />
-                        {fmtUsd(totals.cost, 4)}
-                      </span>
-                    </div>
                   </div>
                 </div>
 
@@ -452,9 +433,6 @@ export default function UsagePanel({ pluginId }: { pluginId: string }) {
                               <TableHead className="text-right">
                                 {t("features.usageCache")}
                               </TableHead>
-                              <TableHead className="text-right">
-                                {t("features.cost")}
-                              </TableHead>
                               <TableHead>
                                 {t("features.usageSession")}
                               </TableHead>
@@ -493,9 +471,6 @@ export default function UsagePanel({ pluginId }: { pluginId: string }) {
                                     {cacheParts.length > 0
                                       ? cacheParts.join("·")
                                       : "—"}
-                                  </TableCell>
-                                  <TableCell className="text-right tabular-nums">
-                                    {fmtUsd(log.totalCostUsd, 4)}
                                   </TableCell>
                                   <TableCell className="max-w-[160px] truncate text-xs text-muted-foreground">
                                     {log.sessionId ?? "—"}
@@ -586,9 +561,6 @@ export default function UsagePanel({ pluginId }: { pluginId: string }) {
                         <TableHead className="text-right">
                           {t("features.usageCache")}
                         </TableHead>
-                        <TableHead className="text-right">
-                          {t("features.cost")}
-                        </TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -612,9 +584,6 @@ export default function UsagePanel({ pluginId }: { pluginId: string }) {
                               lang,
                             )}
                           </TableCell>
-                          <TableCell className="text-right tabular-nums">
-                            {fmtUsd(m.costUsd, 4)}
-                          </TableCell>
                         </TableRow>
                       ))}
                     </TableBody>
@@ -635,9 +604,6 @@ export default function UsagePanel({ pluginId }: { pluginId: string }) {
                             totals.cacheRead + totals.cacheWrite,
                             lang,
                           )}
-                        </TableCell>
-                        <TableCell className="text-right tabular-nums">
-                          {fmtUsd(totals.cost, 4)}
                         </TableCell>
                       </TableRow>
                     </TableFooter>
