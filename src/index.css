@@ -60,6 +60,46 @@
   }
 }
 
+* {
+  box-sizing: border-box;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+html {
+  @apply font-sans antialiased;
+  line-height: 1.5;
+  color-scheme: light;
+  overscroll-behavior: none;
+}
+
+body {
+  @apply m-0 p-0 text-sm;
+  background-color: hsl(var(--background));
+  color: hsl(var(--foreground));
+}
+
+html.dark {
+  color-scheme: dark;
+}
+
+::-webkit-scrollbar {
+  display: none;
+}
+
+*:focus-visible {
+  @apply outline-2 outline-blue-500 outline-offset-2;
+}
+
+[data-tauri-drag-region] {
+  -webkit-app-region: drag;
+}
+
+[data-tauri-no-drag],
+[data-tauri-drag-region] .no-drag {
+  -webkit-app-region: no-drag;
+}
+
 .glass {
   background: rgba(255, 255, 255, 0.7);
   backdrop-filter: blur(10px);
@@ -113,38 +153,6 @@
   border-top: 2px solid hsl(var(--border));
 }
 
-[data-tauri-drag-region] {
-  -webkit-app-region: drag;
-}
-
-[data-tauri-no-drag],
-[data-tauri-drag-region] .no-drag {
-  -webkit-app-region: no-drag;
-}
-
-* {
-  box-sizing: border-box;
-  scrollbar-width: none;
-  -ms-overflow-style: none;
-}
-
-html {
-  @apply font-sans antialiased;
-  line-height: 1.5;
-  color-scheme: light;
-  overscroll-behavior: none;
-}
-
-body {
-  @apply m-0 p-0 text-sm;
-  background-color: hsl(var(--background));
-  color: hsl(var(--foreground));
-}
-
-html.dark {
-  color-scheme: dark;
-}
-
 .status-heartbeat {
   opacity: 1;
   transition-property: color, opacity;
@@ -172,14 +180,6 @@ html[data-window-active="false"] .status-heartbeat {
     .status-heartbeat {
     opacity: 1;
   }
-}
-
-::-webkit-scrollbar {
-  display: none;
-}
-
-*:focus-visible {
-  @apply outline-2 outline-blue-500 outline-offset-2;
 }
 
 @layer utilities {
@@ -219,37 +219,4 @@ html[data-window-active="false"] .status-heartbeat {
 input[type="password"]::-ms-reveal,
 input[type="password"]::-ms-clear {
   display: none;
-}
-
-/*
- * Usage date-range picker popover.
- *
- * The two-column layout (date fields | calendar) must depend on how much
- * width the popover itself actually has — not on the viewport. The popover is
- * clamped to `100vw - 2rem` and anchored to its trigger, so a viewport-based
- * breakpoint (e.g. Tailwind `sm:`) could enable the wide layout while the
- * popover only had room for one column, pushing the calendar off-screen.
- *
- * A container query keys the layout to the popover's own inline size. The base
- * (stacked) layout is the safe fallback when container queries are
- * unsupported, keeping the calendar fully visible at any width.
- */
-.usage-range-popover {
-  container-type: inline-size;
-}
-
-@container (min-width: 500px) {
-  .usage-range-layout {
-    flex-direction: row;
-  }
-
-  .usage-range-fields {
-    width: 250px;
-    flex: none;
-  }
-
-  .usage-range-calendar {
-    min-width: 0;
-    flex: 1 1 0%;
-  }
 }

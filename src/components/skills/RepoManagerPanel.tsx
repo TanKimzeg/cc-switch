@@ -1,196 +1,248 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { toast } from "sonner";
+import { ArrowLeft, ExternalLink, Loader2, Plus, Trash2 } from "lucide-react";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Trash2, ExternalLink, Plus } from "lucide-react";
-import { settingsApi } from "@/lib/api";
-import { FullScreenPanel } from "@/components/common/FullScreenPanel";
-import type { DiscoverableSkill, SkillRepo } from "@/lib/api/skills";
+import { Badge } from "@/components/ui/badge";
+import { skillErrorText, parseRepoUrl } from "@/lib/skillsUtils";
+import {
+  skillsAddRepo,
+  skillsDiscover,
+  skillsListRepos,
+  skillsRemoveRepo,
+} from "@/lib/api";
+import type { SkillRepo } from "@/types";
 
 interface RepoManagerPanelProps {
-  repos: SkillRepo[];
-  skills: DiscoverableSkill[];
-  onAdd: (repo: SkillRepo) => Promise<void>;
-  onRemove: (owner: string, name: string) => Promise<void>;
+  open: boolean;
   onClose: () => void;
+  onChanged: () => void;
 }
 
 export function RepoManagerPanel({
-  repos,
-  skills,
-  onAdd,
-  onRemove,
+  open,
   onClose,
+  onChanged,
 }: RepoManagerPanelProps) {
   const { t } = useTranslation();
-  const [repoUrl, setRepoUrl] = useState("");
+  const [repos, setRepos] = useState<SkillRepo[]>([]);
+  const [counts, setCounts] = useState<Record<string, number>>({});
+  const [url, setUrl] = useState("");
   const [branch, setBranch] = useState("");
-  const [error, setError] = useState("");
+  const [urlError, setUrlError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [scanning, setScanning] = useState(false);
 
-  const getSkillCount = (repo: SkillRepo) =>
-    skills.filter(
-      (skill) =>
-        skill.repoOwner === repo.owner &&
-        skill.repoName === repo.name &&
-        (skill.repoBranch || "main") === (repo.branch || "main"),
-    ).length;
-
-  const parseRepoUrl = (
-    url: string,
-  ): { owner: string; name: string } | null => {
-    let cleaned = url.trim();
-    cleaned = cleaned.replace(/^https?:\/\/github\.com\//, "");
-    cleaned = cleaned.replace(/\.git$/, "");
-
-    const parts = cleaned.split("/");
-    if (parts.length === 2 && parts[0] && parts[1]) {
-      return { owner: parts[0], name: parts[1] };
+  const load = async () => {
+    setLoading(true);
+    try {
+      const [list, discovered] = await Promise.all([
+        skillsListRepos(),
+        skillsDiscover().catch(() => []),
+      ]);
+      setRepos(list);
+      const c: Record<string, number> = {};
+      for (const d of discovered) {
+        const key = `${d.repoOwner}/${d.repoName}`;
+        c[key] = (c[key] ?? 0) + 1;
+      }
+      setCounts(c);
+    } catch (e) {
+      toast.error(skillErrorText(t, e));
+    } finally {
+      setLoading(false);
     }
-
-    return null;
   };
+
+  useEffect(() => {
+    if (open) void load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
 
   const handleAdd = async () => {
-    setError("");
-
-    const parsed = parseRepoUrl(repoUrl);
+    const parsed = parseRepoUrl(url);
     if (!parsed) {
-      setError(t("skills.repo.invalidUrl"));
+      setUrlError(t("skills.repoInvalidUrl"));
       return;
     }
-
+    setUrlError(null);
+    setScanning(true);
     try {
-      await onAdd({
-        owner: parsed.owner,
-        name: parsed.name,
-        branch: branch || "main",
-        enabled: true,
-      });
-
-      setRepoUrl("");
+      const repo = await skillsAddRepo(
+        parsed.owner,
+        parsed.name,
+        branch.trim() || "main",
+      );
+      await load();
+      const count = counts[`${repo.owner}/${repo.name}`] ?? 0;
+      toast.success(
+        t("skills.repoAdded", {
+          owner: repo.owner,
+          name: repo.name,
+          count,
+        }),
+      );
+      setUrl("");
       setBranch("");
+      onChanged();
     } catch (e) {
-      setError(e instanceof Error ? e.message : t("skills.repo.addFailed"));
+      toast.error(skillErrorText(t, e) || t("skills.repoAddFailed"));
+    } finally {
+      setScanning(false);
     }
   };
 
-  const handleOpenRepo = async (owner: string, name: string) => {
+  const handleRemove = async (repo: SkillRepo) => {
     try {
-      await settingsApi.openExternal(`https://github.com/${owner}/${name}`);
-    } catch (error) {
-      console.error("Failed to open URL:", error);
+      await skillsRemoveRepo(repo.owner, repo.name);
+      toast.success(
+        t("skills.repoRemoved", { owner: repo.owner, name: repo.name }),
+      );
+      setRepos((prev) => prev.filter((r) => r !== repo));
+      onChanged();
+    } catch (e) {
+      toast.error(skillErrorText(t, e));
     }
   };
 
   return (
-    <FullScreenPanel
-      isOpen={true}
-      title={t("skills.repo.title")}
-      onClose={onClose}
-    >
-      {/* 添加仓库表单 */}
-      <div className="space-y-4 glass-card rounded-xl p-6">
-        <h3 className="text-base font-semibold text-foreground">
-          {t("skills.addRepo")}
-        </h3>
-        <div className="space-y-4">
-          <div>
-            <Label htmlFor="repo-url" className="text-foreground">
-              {t("skills.repo.url")}
-            </Label>
-            <Input
-              id="repo-url"
-              placeholder={t("skills.repo.urlPlaceholder")}
-              value={repoUrl}
-              onChange={(e) => setRepoUrl(e.target.value)}
-              className="mt-2"
-            />
+    <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
+      <DialogContent variant="fullscreen" className="overflow-y-auto">
+        <DialogHeader className="flex-row items-center justify-between border-b border-border-default px-6 py-4">
+          <div className="flex items-center gap-3">
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={onClose}
+              title={t("common.close")}
+            >
+              <ArrowLeft className="h-4 w-4" />
+            </Button>
+            <DialogTitle>{t("skills.repoTitle")}</DialogTitle>
           </div>
-          <div>
-            <Label htmlFor="branch" className="text-foreground">
-              {t("skills.repo.branch")}
-            </Label>
-            <Input
-              id="branch"
-              placeholder={t("skills.repo.branchPlaceholder")}
-              value={branch}
-              onChange={(e) => setBranch(e.target.value)}
-              className="mt-2"
-            />
-          </div>
-          {error && (
-            <p className="text-sm text-red-600 dark:text-red-400">{error}</p>
-          )}
-          <Button
-            onClick={handleAdd}
-            className="bg-primary text-primary-foreground hover:bg-primary/90"
-            type="button"
-          >
-            <Plus className="h-4 w-4 mr-2" />
-            {t("skills.repo.add")}
-          </Button>
-        </div>
-      </div>
+        </DialogHeader>
 
-      {/* 仓库列表 */}
-      <div className="space-y-4">
-        <h3 className="text-base font-semibold text-foreground">
-          {t("skills.repo.list")}
-        </h3>
-        {repos.length === 0 ? (
-          <div className="text-center py-12 glass-card rounded-xl">
-            <p className="text-sm text-muted-foreground">
-              {t("skills.repo.empty")}
-            </p>
-          </div>
-        ) : (
-          <div className="space-y-3">
-            {repos.map((repo) => (
-              <div
-                key={`${repo.owner}/${repo.name}`}
-                className="flex items-center justify-between glass-card rounded-xl px-4 py-3"
-              >
-                <div>
-                  <div className="text-sm font-medium text-foreground">
-                    {repo.owner}/{repo.name}
-                  </div>
-                  <div className="mt-1 text-xs text-muted-foreground">
-                    {t("skills.repo.branch")}: {repo.branch || "main"}
-                    <span className="ml-3 inline-flex items-center rounded-full border border-border-default px-2 py-0.5 text-[11px]">
-                      {t("skills.repo.skillCount", {
-                        count: getSkillCount(repo),
-                      })}
-                    </span>
-                  </div>
-                </div>
-                <div className="flex gap-2">
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    type="button"
-                    onClick={() => handleOpenRepo(repo.owner, repo.name)}
-                    title={t("common.view", { defaultValue: "查看" })}
-                    className="hover:bg-black/5 dark:hover:bg-white/5"
-                  >
-                    <ExternalLink className="h-4 w-4" />
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    type="button"
-                    onClick={() => onRemove(repo.owner, repo.name)}
-                    title={t("common.delete")}
-                    className="hover:text-red-500 hover:bg-red-100 dark:hover:text-red-400 dark:hover:bg-red-500/10"
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
-                </div>
+        <div className="mx-auto w-full max-w-3xl flex-1 space-y-6 px-6 py-6">
+          {/* 添加仓库表单 */}
+          <div className="rounded-xl border border-border-default p-6">
+            <h3 className="text-sm font-semibold">{t("skills.addRepo")}</h3>
+            <div className="mt-4 space-y-3">
+              <div>
+                <label className="mb-1 block text-xs text-muted-foreground">
+                  {t("skills.repoUrl")}
+                </label>
+                <Input
+                  value={url}
+                  onChange={(e) => {
+                    setUrl(e.target.value);
+                    setUrlError(null);
+                  }}
+                  placeholder={t("skills.repoUrlPlaceholder")}
+                  onKeyDown={(e) => e.key === "Enter" && handleAdd()}
+                />
+                {urlError && (
+                  <p className="mt-1 text-xs text-red-500">{urlError}</p>
+                )}
               </div>
-            ))}
+              <div>
+                <label className="mb-1 block text-xs text-muted-foreground">
+                  {t("skills.repoBranch")}
+                </label>
+                <Input
+                  value={branch}
+                  onChange={(e) => setBranch(e.target.value)}
+                  placeholder={t("skills.repoBranchPlaceholder")}
+                  onKeyDown={(e) => e.key === "Enter" && handleAdd()}
+                />
+              </div>
+              <Button onClick={handleAdd} disabled={scanning}>
+                {scanning ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Plus className="h-4 w-4" />
+                )}
+                {t("skills.repoAdd")}
+              </Button>
+            </div>
           </div>
-        )}
-      </div>
-    </FullScreenPanel>
+
+          {/* 仓库列表 */}
+          <div>
+            <h3 className="text-sm font-semibold">{t("skills.repoList")}</h3>
+            {loading ? (
+              <div className="flex items-center gap-2 py-6 text-xs text-muted-foreground">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                {t("skills.loading")}
+              </div>
+            ) : repos.length === 0 ? (
+              <div className="py-6 text-center text-xs text-muted-foreground">
+                {t("skills.repoEmpty")}
+              </div>
+            ) : (
+              <div className="mt-3 space-y-2">
+                {repos.map((repo) => {
+                  const key = `${repo.owner}/${repo.name}`;
+                  const count = counts[key];
+                  return (
+                    <div
+                      key={key}
+                      className="flex items-center justify-between gap-3 rounded-lg border border-border-default p-3"
+                    >
+                      <div className="min-w-0 flex-1">
+                        <div className="truncate text-sm font-medium">
+                          {repo.owner}/{repo.name}
+                        </div>
+                        <div className="mt-0.5 text-xs text-muted-foreground">
+                          {t("skills.repoBranch")}: {repo.branch || "main"}
+                          {typeof count === "number" && (
+                            <Badge
+                              variant="secondary"
+                              className="ml-2 text-[10px]"
+                            >
+                              {t("skills.repoSkillCount", { count })}
+                            </Badge>
+                          )}
+                        </div>
+                      </div>
+                      <div className="flex shrink-0 gap-1.5">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          title={t("common.view")}
+                          onClick={() =>
+                            window.open(
+                              `https://github.com/${repo.owner}/${repo.name}`,
+                              "_blank",
+                            )
+                          }
+                        >
+                          <ExternalLink className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="text-red-500 hover:text-red-600"
+                          title={t("common.delete")}
+                          onClick={() => handleRemove(repo)}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
   );
 }

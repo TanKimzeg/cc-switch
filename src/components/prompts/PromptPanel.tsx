@@ -1,360 +1,253 @@
-import React, { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { FileText, Search } from "lucide-react";
-import { type AppId } from "@/lib/api";
-import { usePromptActions } from "@/hooks/usePromptActions";
-import { useTauriEvent } from "@/hooks/useTauriEvent";
-import { ManagementListSearch } from "@/components/common/ManagementListSearch";
-import { ScrollArea } from "@/components/ui/scroll-area";
-import PromptListItem from "./PromptListItem";
-import PromptFormPanel from "./PromptFormPanel";
-import { ConfirmDialog } from "../ConfirmDialog";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
+import { Edit3, FileText, Plus, Search, Trash2, X } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Switch } from "@/components/ui/switch";
+import { Card, CardContent } from "@/components/ui/card";
+import { PanelHeader, EmptyState } from "@/components/PanelHeader";
+import { ConfirmDialog } from "@/components/ConfirmDialog";
+import { PromptFormDialog } from "./PromptFormDialog";
+import {
+  getPlugins,
+  promptsDelete,
+  promptsList,
+  promptsToggle,
+} from "@/lib/api";
+import type { PromptRecord } from "@/types";
+
+const DEFAULT_FILENAMES: Record<string, string> = {
+  claudecode: "CLAUDE.md",
+  opencode: "AGENTS.md",
+  openclaw: "AGENTS.md",
+};
 
 interface PromptPanelProps {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-  appId: AppId;
-  onInteractionBlockedChange?: (blocked: boolean) => void;
-  onNavigationBlockedChange?: (blocked: boolean) => void;
+  pluginId: string;
 }
 
-export interface PromptPanelHandle {
-  openAdd: () => void;
-}
+export default function PromptPanel({ pluginId }: PromptPanelProps) {
+  const { t } = useTranslation();
+  const queryClient = useQueryClient();
+  const [search, setSearch] = useState("");
+  const [form, setForm] = useState<{
+    open: boolean;
+    prompt: PromptRecord | null;
+  }>({ open: false, prompt: null });
+  const [deleteTarget, setDeleteTarget] = useState<PromptRecord | null>(null);
+  const [pending, setPending] = useState(false);
 
-const PromptPanel = React.forwardRef<PromptPanelHandle, PromptPanelProps>(
-  (
-    { open, appId, onInteractionBlockedChange, onNavigationBlockedChange },
-    ref,
-  ) => {
-    const { t } = useTranslation();
-    const [isFormOpen, setIsFormOpen] = useState(false);
-    const [editingId, setEditingId] = useState<string | null>(null);
-    const [searchQuery, setSearchQuery] = useState("");
-    const [confirmDialog, setConfirmDialog] = useState<{
-      isOpen: boolean;
-      titleKey: string;
-      messageKey: string;
-      messageParams?: Record<string, unknown>;
-      onConfirm: () => void;
-    } | null>(null);
-    const [writePending, setWritePending] = useState(false);
-    const [reloadPending, setReloadPending] = useState(false);
-    const writeLockRef = React.useRef(false);
-    const reloadLockRef = React.useRef(false);
-    const reloadRunGenerationRef = React.useRef(0);
-    const overlayOpenRef = React.useRef(false);
-    const externalReloadQueuedRef = React.useRef(false);
+  const query = useQuery({
+    queryKey: ["prompts", pluginId],
+    queryFn: () => promptsList(pluginId),
+  });
+  const prompts = query.data ?? [];
+  const enabled = prompts.find((p) => p.enabled);
 
-    const {
-      prompts,
-      loading,
-      reload,
-      savePrompt,
-      deletePrompt,
-      toggleEnabled,
-    } = usePromptActions(appId);
-    const reloadRef = React.useRef(reload);
-    reloadRef.current = reload;
+  const pluginsQuery = useQuery({ queryKey: ["plugins"], queryFn: getPlugins });
+  const plugin = (pluginsQuery.data ?? []).find((p) => p.id === pluginId);
+  const pluginName = plugin?.name ?? pluginId;
+  const filename = plugin?.promptFile
+    ? plugin.promptFile.split(/[\\/]/).pop() ||
+      DEFAULT_FILENAMES[pluginId] ||
+      "AGENTS.md"
+    : DEFAULT_FILENAMES[pluginId] || "AGENTS.md";
 
-    const dialogOpen = confirmDialog !== null;
-    const interactionBlocked =
-      loading || reloadPending || writePending || isFormOpen || dialogOpen;
-    const navigationBlocked = writePending || isFormOpen || dialogOpen;
-
-    useEffect(() => {
-      onInteractionBlockedChange?.(interactionBlocked);
-    }, [interactionBlocked, onInteractionBlockedChange]);
-
-    useEffect(() => {
-      onNavigationBlockedChange?.(navigationBlocked);
-    }, [navigationBlocked, onNavigationBlockedChange]);
-
-    useEffect(
-      () => () => {
-        onInteractionBlockedChange?.(false);
-        onNavigationBlockedChange?.(false);
-      },
-      [onInteractionBlockedChange, onNavigationBlockedChange],
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return prompts;
+    return prompts.filter((p) =>
+      [p.name, p.id, p.description, p.content]
+        .join(" ")
+        .toLowerCase()
+        .includes(q),
     );
+  }, [prompts, search]);
 
-    const runExternalReload = React.useCallback(async () => {
-      if (writeLockRef.current || overlayOpenRef.current) {
-        externalReloadQueuedRef.current = true;
-        return;
-      }
+  const invalidate = () =>
+    queryClient.invalidateQueries({ queryKey: ["prompts", pluginId] });
 
-      const runGeneration = ++reloadRunGenerationRef.current;
-      externalReloadQueuedRef.current = false;
-      reloadLockRef.current = true;
-      setReloadPending(true);
-      try {
-        await reloadRef.current();
-      } finally {
-        if (reloadRunGenerationRef.current === runGeneration) {
-          reloadLockRef.current = false;
-          setReloadPending(false);
-        }
-      }
-    }, []);
-
-    const beginWrite = () => {
-      if (loading || reloadLockRef.current || writeLockRef.current)
-        return false;
-      writeLockRef.current = true;
-      setWritePending(true);
-      return true;
-    };
-
-    const endWrite = () => {
-      writeLockRef.current = false;
-      setWritePending(false);
-      if (externalReloadQueuedRef.current) {
-        void runExternalReload();
-      }
-    };
-
-    useEffect(() => {
-      if (open) void runExternalReload();
-    }, [appId, open, runExternalReload]);
-
-    useEffect(() => {
-      setSearchQuery("");
-      overlayOpenRef.current = false;
-      setIsFormOpen(false);
-      setEditingId(null);
-      setConfirmDialog(null);
-      if (externalReloadQueuedRef.current) {
-        void runExternalReload();
-      }
-    }, [appId, runExternalReload]);
-
-    // Listen for prompt import events from deep link
-    useEffect(() => {
-      const handlePromptImported = (event: Event) => {
-        const customEvent = event as CustomEvent;
-        // Reload if the import is for this app
-        if (customEvent.detail?.app === appId) {
-          void runExternalReload();
-        }
-      };
-
-      window.addEventListener("prompt-imported", handlePromptImported);
-      return () => {
-        window.removeEventListener("prompt-imported", handlePromptImported);
-      };
-    }, [appId, runExternalReload]);
-
-    // 应用项目 Profile 会切换激活的 prompt（prompts 非 react-query，需主动 reload）
-    useTauriEvent("profile-applied", runExternalReload);
-
-    const handleAdd = () => {
-      if (reloadLockRef.current || writeLockRef.current || interactionBlocked) {
-        return;
-      }
-      overlayOpenRef.current = true;
-      setEditingId(null);
-      setIsFormOpen(true);
-    };
-
-    React.useImperativeHandle(ref, () => ({
-      openAdd: handleAdd,
-    }));
-
-    const handleEdit = (id: string) => {
-      if (reloadLockRef.current || writeLockRef.current || interactionBlocked) {
-        return;
-      }
-      overlayOpenRef.current = true;
-      setEditingId(id);
-      setIsFormOpen(true);
-    };
-
-    const handleDelete = (id: string) => {
-      if (reloadLockRef.current || writeLockRef.current || interactionBlocked) {
-        return;
-      }
-      const prompt = prompts[id];
-      overlayOpenRef.current = true;
-      setConfirmDialog({
-        isOpen: true,
-        titleKey: "prompts.confirm.deleteTitle",
-        messageKey: "prompts.confirm.deleteMessage",
-        messageParams: { name: prompt?.name },
-        onConfirm: async () => {
-          if (!beginWrite()) return;
-          try {
-            const refreshed = await deletePrompt(id);
-            if (refreshed === false) {
-              externalReloadQueuedRef.current = true;
-            }
-            overlayOpenRef.current = false;
-            setConfirmDialog(null);
-          } catch (e) {
-            // Error handled by hook
-          } finally {
-            endWrite();
-          }
-        },
-      });
-    };
-
-    const handleToggle = async (id: string, enabled: boolean) => {
-      if (!beginWrite()) return;
-      try {
-        const refreshed = await toggleEnabled(id, enabled);
-        if (refreshed === false) {
-          externalReloadQueuedRef.current = true;
-        }
-      } catch (error) {
-        // Error handled by hook
-      } finally {
-        endWrite();
-      }
-    };
-
-    const handleSave = async (
-      id: string,
-      prompt: Parameters<typeof savePrompt>[1],
-    ) => {
-      if (!beginWrite()) return false;
-      try {
-        const refreshed = await savePrompt(id, prompt);
-        if (refreshed === false) {
-          externalReloadQueuedRef.current = true;
-        }
-        return true;
-      } catch (error) {
-        // Error handled by hook
-        return false;
-      } finally {
-        endWrite();
-      }
-    };
-
-    const handleCloseForm = () => {
-      if (writeLockRef.current) return;
-      overlayOpenRef.current = false;
-      setIsFormOpen(false);
-      setEditingId(null);
-      if (externalReloadQueuedRef.current) {
-        void runExternalReload();
-      }
-    };
-
-    const promptEntries = useMemo(() => Object.entries(prompts), [prompts]);
-    const normalizedSearchQuery = searchQuery.trim().toLocaleLowerCase();
-    const filteredPromptEntries = useMemo(() => {
-      if (!normalizedSearchQuery) return promptEntries;
-
-      return promptEntries.filter(([recordId, prompt]) =>
-        [
-          recordId,
-          prompt.id,
-          prompt.name,
-          prompt.description,
-          prompt.content,
-        ].some((value) =>
-          value?.toLocaleLowerCase().includes(normalizedSearchQuery),
-        ),
+  const handleToggle = async (p: PromptRecord) => {
+    setPending(true);
+    try {
+      await promptsToggle(p.id, !p.enabled);
+      await invalidate();
+      toast.success(
+        t(p.enabled ? "prompts.disableSuccess" : "prompts.enableSuccess"),
       );
-    }, [normalizedSearchQuery, promptEntries]);
+    } catch (e) {
+      toast.error(
+        String(e) ||
+          t(p.enabled ? "prompts.disableFailed" : "prompts.enableFailed"),
+      );
+    } finally {
+      setPending(false);
+    }
+  };
 
-    const enabledPrompt = promptEntries.find(([_, p]) => p.enabled);
+  const handleDelete = async () => {
+    if (!deleteTarget) return;
+    setPending(true);
+    try {
+      await promptsDelete(deleteTarget.id);
+      toast.success(t("prompts.deleteSuccess"));
+      await invalidate();
+    } catch (e) {
+      toast.error(String(e) || t("prompts.deleteFailed"));
+    } finally {
+      setPending(false);
+      setDeleteTarget(null);
+    }
+  };
 
-    return (
-      <div className="flex flex-col flex-1 min-h-0 px-6">
-        <div className="flex-shrink-0 py-4 glass rounded-xl border border-white/10 mb-4 px-6">
-          <div className="text-sm text-muted-foreground">
-            {t("prompts.count", { count: promptEntries.length })} ·{" "}
-            {enabledPrompt
-              ? t("prompts.enabledName", { name: enabledPrompt[1].name })
-              : t("prompts.noneEnabled")}
+  return (
+    <div className="space-y-4">
+      <PanelHeader
+        icon={<FileText className="h-5 w-5" />}
+        title={t("features.promptsTitle")}
+        subtitle={t("features.promptsSubtitle")}
+      >
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => setForm({ open: true, prompt: null })}
+          disabled={pending}
+        >
+          <Plus className="h-3.5 w-3.5" />
+          {t("prompts.add")}
+        </Button>
+      </PanelHeader>
+
+      {query.isLoading ? (
+        <Card>
+          <CardContent className="py-10 text-center text-xs text-muted-foreground">
+            {t("prompts.loading")}
+          </CardContent>
+        </Card>
+      ) : prompts.length === 0 ? (
+        <EmptyState
+          icon={<FileText className="h-8 w-8" />}
+          message={t("prompts.empty")}
+        >
+          <p className="text-xs text-muted-foreground">
+            {t("prompts.emptyDescription")}
+          </p>
+        </EmptyState>
+      ) : (
+        <Card>
+          {/* 计数条 + 当前启用 */}
+          <div className="flex flex-wrap items-center gap-2 border-b border-border-default px-4 py-3 text-xs text-muted-foreground">
+            <span className="font-medium text-foreground">
+              {t("prompts.count", { count: prompts.length })}
+            </span>
+            <span>·</span>
+            <span>
+              {enabled
+                ? t("prompts.enabledName", { name: enabled.name })
+                : t("prompts.noneEnabled")}
+            </span>
           </div>
-        </div>
 
-        <ManagementListSearch
-          value={searchQuery}
-          onValueChange={setSearchQuery}
-          placeholder={t("prompts.searchPlaceholder")}
-          ariaLabel={t("prompts.searchAriaLabel")}
-          clearLabel={t("common.clear")}
-        />
-
-        <ScrollArea className="-mr-3 flex-1 min-h-0" type="auto">
-          <div className="pb-16 pr-3">
-            {loading ? (
-              <div className="text-center py-12 text-muted-foreground">
-                {t("prompts.loading")}
-              </div>
-            ) : promptEntries.length === 0 ? (
-              <div className="text-center py-12">
-                <div className="w-16 h-16 mx-auto mb-4 bg-muted rounded-full flex items-center justify-center">
-                  <FileText size={24} className="text-muted-foreground" />
-                </div>
-                <h3 className="text-lg font-medium text-foreground mb-2">
-                  {t("prompts.empty")}
-                </h3>
-                <p className="text-muted-foreground text-sm">
-                  {t("prompts.emptyDescription")}
-                </p>
-              </div>
-            ) : filteredPromptEntries.length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-12 text-center text-muted-foreground">
-                <Search className="mb-4 h-10 w-10 opacity-40" />
-                <p className="text-sm">{t("prompts.noSearchResults")}</p>
-              </div>
-            ) : (
-              <div className="space-y-3">
-                {filteredPromptEntries.map(([id, prompt]) => (
-                  <PromptListItem
-                    key={id}
-                    id={id}
-                    prompt={prompt}
-                    onToggle={handleToggle}
-                    onEdit={handleEdit}
-                    onDelete={handleDelete}
-                    disabled={interactionBlocked}
-                  />
-                ))}
-              </div>
+          {/* 搜索 */}
+          <div className="relative px-4 pt-3">
+            <Search className="absolute left-7 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              className="pl-8"
+              placeholder={t("prompts.searchPlaceholder")}
+              aria-label={t("prompts.searchAriaLabel")}
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+            />
+            {search && (
+              <button
+                type="button"
+                onClick={() => setSearch("")}
+                className="absolute right-8 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                title={t("common.clear")}
+                aria-label={t("common.clear")}
+              >
+                <X className="h-3.5 w-3.5" />
+              </button>
             )}
           </div>
-        </ScrollArea>
 
-        {isFormOpen && (
-          <PromptFormPanel
-            appId={appId}
-            editingId={editingId || undefined}
-            initialData={editingId ? prompts[editingId] : undefined}
-            onSave={handleSave}
-            onClose={handleCloseForm}
-          />
-        )}
+          {filtered.length === 0 ? (
+            <div className="py-10 text-center text-xs text-muted-foreground">
+              {t("prompts.noSearchResults")}
+            </div>
+          ) : (
+            <ul className="divide-y divide-border">
+              {filtered.map((p) => (
+                <li
+                  key={p.id}
+                  className="flex items-center gap-3 px-4 py-3 transition-colors hover:bg-muted/40"
+                >
+                  <Switch
+                    checked={p.enabled}
+                    disabled={pending}
+                    onCheckedChange={() => void handleToggle(p)}
+                    title={t(
+                      p.enabled
+                        ? "prompts.disableSuccess"
+                        : "prompts.enableSuccess",
+                    )}
+                  />
+                  <div className="min-w-0 flex-1">
+                    <div className="truncate text-sm font-medium">{p.name}</div>
+                    {p.description && (
+                      <div className="truncate text-xs text-muted-foreground">
+                        {p.description}
+                      </div>
+                    )}
+                  </div>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    title={t("common.edit")}
+                    disabled={pending}
+                    onClick={() => setForm({ open: true, prompt: p })}
+                  >
+                    <Edit3 className="h-4 w-4" />
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+                    title={t("common.delete")}
+                    disabled={pending}
+                    onClick={() => setDeleteTarget(p)}
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </Card>
+      )}
 
-        {confirmDialog && (
-          <ConfirmDialog
-            isOpen={confirmDialog.isOpen}
-            title={t(confirmDialog.titleKey)}
-            message={t(confirmDialog.messageKey, confirmDialog.messageParams)}
-            pending={writePending}
-            onConfirm={confirmDialog.onConfirm}
-            onCancel={() => {
-              if (!writeLockRef.current) {
-                overlayOpenRef.current = false;
-                setConfirmDialog(null);
-                if (externalReloadQueuedRef.current) {
-                  void runExternalReload();
-                }
-              }
-            }}
-          />
-        )}
-      </div>
-    );
-  },
-);
-
-PromptPanel.displayName = "PromptPanel";
-
-export default PromptPanel;
+      <PromptFormDialog
+        open={form.open}
+        pluginId={pluginId}
+        pluginName={pluginName}
+        filename={filename}
+        prompt={form.prompt}
+        onClose={() => setForm({ open: false, prompt: null })}
+        onChanged={() => void invalidate()}
+      />
+      <ConfirmDialog
+        isOpen={deleteTarget !== null}
+        title={t("prompts.confirm.deleteTitle")}
+        message={t("prompts.confirm.deleteMessage", {
+          name: deleteTarget?.name,
+        })}
+        confirmText={t("common.delete")}
+        pending={pending}
+        onConfirm={() => void handleDelete()}
+        onCancel={() => setDeleteTarget(null)}
+      />
+    </div>
+  );
+}
