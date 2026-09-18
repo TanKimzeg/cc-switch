@@ -17,7 +17,6 @@ v2 使用 SQLite，单一数据库文件 `{app_data_dir}/cc-switch-v2.db`。Sche
 | `skill_apps` | Skill × 插件 启用状态 |
 | `skill_repos` | Skill 仓库订阅（预留） |
 | `request_logs` | 请求日志（用量明细） |
-| `model_pricing` | 模型价格表（预留） |
 | `usage_daily_rollups` | 按日用量汇总 |
 | `session_log_sync` | 会话日志增量同步游标 |
 | `profiles` | 配置方案（Profile） |
@@ -161,18 +160,7 @@ v2 使用 SQLite，单一数据库文件 `{app_data_dir}/cc-switch-v2.db`。Sche
 
 索引：`(provider_id, plugin_id)`、`(created_at)`。
 
-## 12. model_pricing
-
-| 字段 | 类型 | 说明 |
-|------|------|------|
-| `model_id` | TEXT PK | 模型 |
-| `display_name` | TEXT | 显示名 |
-| `input_cost_per_million` / `output_cost_per_million` | TEXT | 每百万 token 成本 |
-| `cache_read_cost_per_million` / `cache_creation_cost_per_million` | TEXT default `0` | 缓存成本 |
-
-> 预留：v1 用它按 token 算成本；v2 当前 `sync_usage` 由插件返回 `cost`，未接线价格表。
-
-## 13. usage_daily_rollups
+## 12. usage_daily_rollups
 
 | 字段 | 类型 | 说明 |
 |------|------|------|
@@ -185,7 +173,7 @@ v2 使用 SQLite，单一数据库文件 `{app_data_dir}/cc-switch-v2.db`。Sche
 | `total_cost_usd` | TEXT | 成本汇总 |
 | PK | (date, plugin_id, provider_id, model) | — |
 
-## 14. session_log_sync
+## 13. session_log_sync
 
 | 字段 | 类型 | 说明 |
 |------|------|------|
@@ -196,7 +184,7 @@ v2 使用 SQLite，单一数据库文件 `{app_data_dir}/cc-switch-v2.db`。Sche
 
 > 预留：v1 的会话用量增量同步游标；v2 当前由插件全量 `sync_usage`。
 
-## 15. profiles
+## 14. profiles
 
 | 字段 | 类型 | 说明 |
 |------|------|------|
@@ -210,7 +198,7 @@ v2 使用 SQLite，单一数据库文件 `{app_data_dir}/cc-switch-v2.db`。Sche
 
 > Profile 是「项目快照」（对齐 v1）：payload 为 `{<plugin_id>: {provider, mcpEnabledIds, skillEnabledIds, activePromptId}}`（槽位可空 = 未拍摄）；`profiles_apply` 真正恢复现场（provider 切 live、MCP/Skills 最小 toggle、Prompt 启用），各插件 current 指针存于 settings `profile.current.<plugin_id>`。
 
-## 16. db_backups
+## 15. db_backups
 
 | 字段 | 类型 | 说明 |
 |------|------|------|
@@ -224,4 +212,4 @@ v2 使用 SQLite，单一数据库文件 `{app_data_dir}/cc-switch-v2.db`。Sche
 
 - **SSOT**：`providers` 是权威，live 配置是投影；`import()` 回填 live → DB。
 - **用量**：插件 `sync_usage()` → `request_logs`（`INSERT OR IGNORE` 去重）→ 查询时按日汇总（`usage_daily_summary`）。
-- **未接线预留表**：`model_pricing`、`skill_repos`、`session_log_sync` 目前有 schema 但业务未使用（见 [v1-gap-analysis.md](v1-gap-analysis.md)）。
+- **未接线预留表**：`skill_repos`、`session_log_sync` 目前有 schema 但业务未使用（见 [v1-gap-analysis.md](v1-gap-analysis.md)）。

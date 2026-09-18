@@ -3,7 +3,6 @@ pub mod global_proxy;
 pub mod host;
 pub mod mcp;
 pub mod plugins;
-pub mod pricing;
 pub mod profiles;
 pub mod prompts;
 pub mod providers;

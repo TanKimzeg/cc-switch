@@ -110,7 +110,6 @@ CREATE TABLE IF NOT EXISTS request_logs (
   plugin_id          TEXT NOT NULL,
   model              TEXT NOT NULL,
   request_model      TEXT,
-  pricing_model      TEXT,
   active_provider_id TEXT,
   input_tokens       INTEGER NOT NULL DEFAULT 0,
   output_tokens      INTEGER NOT NULL DEFAULT 0,
@@ -129,28 +128,6 @@ CREATE TABLE IF NOT EXISTS request_logs (
 );
 CREATE INDEX IF NOT EXISTS idx_request_logs_provider ON request_logs(provider_id, plugin_id);
 CREATE INDEX IF NOT EXISTS idx_request_logs_created ON request_logs(created_at);
-
--- 模型定价（PricingService 唯一消费方；成本计算集中于此，对齐 v1 四档口径并扩展峰谷/供应商覆盖）。
--- model_match 支持精确名与前缀匹配；provider_scope 非空时仅对「请求时活跃供应商」匹配的请求生效
--- （中转站差价场景）；off_peak_* 为 UTC 窗口内的整档折扣（DeepSeek 峰谷场景）。
-CREATE TABLE IF NOT EXISTS model_pricing (
-  id                          TEXT PRIMARY KEY,
-  model_match                 TEXT NOT NULL,
-  provider_scope              TEXT,
-  display_name                TEXT NOT NULL,
-  input_cost_per_million      TEXT NOT NULL,
-  output_cost_per_million     TEXT NOT NULL,
-  cache_read_cost_per_million TEXT NOT NULL DEFAULT '0',
-  cache_creation_cost_per_million TEXT NOT NULL DEFAULT '0',
-  off_peak_discount_percent   INTEGER,
-  off_peak_start              TEXT,
-  off_peak_end                TEXT,
-  source                      TEXT NOT NULL DEFAULT 'user',
-  created_at                  INTEGER NOT NULL,
-  updated_at                  INTEGER NOT NULL
-);
-CREATE UNIQUE INDEX IF NOT EXISTS idx_model_pricing_match
-  ON model_pricing(model_match, IFNULL(provider_scope, ''));
 
 CREATE TABLE IF NOT EXISTS usage_daily_rollups (
   date          TEXT NOT NULL,
@@ -207,28 +184,8 @@ impl Database {
             "PRAGMA journal_mode = WAL; PRAGMA foreign_keys = ON; PRAGMA busy_timeout = 5000;",
         )?;
         {
-            // model_pricing 旧结构（model_id 主键、从未被读写）迁移为新结构：直接重建。
-            let old_pricing = conn
-                .query_row(
-                    "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='model_pricing'",
-                    [],
-                    |r| r.get::<_, i64>(0),
-                )
-                .unwrap_or(0)
-                > 0;
-            let has_id_col: bool = conn
-                .prepare("PRAGMA table_info(model_pricing)")
-                .and_then(|mut stmt| {
-                    stmt.query_map([], |row| row.get::<_, String>(1))
-                        .map(|rows| {
-                            rows.filter_map(|r| r.ok())
-                                .any(|col| col == "id")
-                        })
-                })
-                .unwrap_or(false);
-            if old_pricing && !has_id_col {
-                conn.execute("DROP TABLE model_pricing", [])?;
-            }
+            // v2 已移除 model_pricing 表（定价功能已砍掉），旧库可能有该表，直接删除。
+            let _ = conn.execute("DROP TABLE IF EXISTS model_pricing", []);
         }
         let db = Self {
             conn: Arc::new(Mutex::new(conn)),
@@ -245,7 +202,7 @@ impl Database {
             "ALTER TABLE providers ADD COLUMN live_config_managed INTEGER NOT NULL DEFAULT 1",
             [],
         );
-        // 兼容旧库：request_logs 补充 active_provider_id（供应商维度定价的归属列）。
+        // 兼容旧库：request_logs 补充 active_provider_id（记录请求时活跃供应商）。
         let _ = db.conn.lock().unwrap().execute(
             "ALTER TABLE request_logs ADD COLUMN active_provider_id TEXT",
             [],
@@ -412,7 +369,6 @@ mod tests {
             "db_backups",
             "mcp_server_apps",
             "mcp_servers",
-            "model_pricing",
             "plugin_installs",
             "profiles",
             "prompts",

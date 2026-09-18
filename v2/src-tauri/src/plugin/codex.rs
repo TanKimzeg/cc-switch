@@ -788,7 +788,7 @@ fn load_session_messages(path: &Path) -> Result<Vec<crate::plugin::SessionMessag
 /// 会话级用量聚合（简化口径，对齐 v1 数据源但去掉 turn 级增量/ fork 解析的
 /// 复杂度）：取每个 rollout 文件最后一次 `token_count` 的 `total_token_usage`
 /// 会话累计快照作为整条记录；模型取最后一个 `turn_context` 声明的值；
-/// 子代理会话跳过。成本不在此计算（PricingService 统一补算）。
+/// 子代理会话跳过。成本由插件 sync_usage 返回。
 fn sync_usage_impl() -> Result<Vec<crate::plugin::UsageRecord>, PluginError> {
     let mut files = Vec::new();
     for root in session_roots() {
@@ -1195,7 +1195,7 @@ mod tests {
             .unwrap()
             .timestamp_millis();
         assert_eq!(r.timestamp_ms, expected_ts);
-        assert_eq!(r.cost, 0.0, "成本交由 PricingService 计算");
+        assert_eq!(r.cost, 0.0, "成本由插件 sync_usage 返回");
     }
 
     #[test]

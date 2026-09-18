@@ -12,7 +12,7 @@
 | MCP | ✅ 统一面板、双向同步、Deep Link 导入 | ✅ mcp_servers + 插件同步 + 编辑/校验/预设/wizard(http)/智能粘贴/批量开关/搜索/删除确认；导入合并语义 + 取消勾选清理 + 安装守卫 + 切换后重投影 | 缺 Deep Link 导入（随 §3.5 一并做）|
 | Skill | ✅ GitHub 仓库 / ZIP 安装、skills.sh 公共注册表、SHA-256 更新检测、备份恢复、软链/复制 | ✅ 已对齐（仓库/ZIP 安装、skills.sh 搜索、更新检测、卸载备份+恢复、未管理导入、软链/复制、存储迁移；SSOT 默认 `~/.cc-switch/skills`） | 已补齐（见 §3.9） |
 | Prompt | ✅ Markdown 编辑、单应用互斥启用、回填保护 | ✅ 已对齐（互斥启用 + 回填保护 + 清空/删除保护 + 首启自动导入） | 已补齐（见 §3.11） |
-| 用量 | ✅ 用量仪表盘、趋势、请求日志、自定义定价 | ✅ 趋势图 + 请求日志 + 日汇总 + **PricingService 定价核心（§3.3）** + codex/grokbuild 用量同步（§3.20） | hermes 用量（v1 也没有） |
+| 用量 | ✅ 用量仪表盘、趋势、请求日志、自定义定价 | ✅ 趋势图 + 请求日志 + 日汇总 + codex/grokbuild 用量同步（§3.20） | hermes 用量（v1 也没有）；定价功能不做（§3.3） |
 | 会话 | ✅ 浏览/搜索/恢复，SQLite 会话 | ✅ sessions/load/delete（claude/opencode） | 缺搜索、更多 Agent 会话源 |
 | **代理（proxy）** | ✅ 本地代理热切换、故障转移、熔断器 | ❌ **无** | **暂不考虑实现** |
 | 余额/订阅 | ✅ balance、subscription、grok 订阅 | ❌ 无 | P1 |
@@ -62,19 +62,17 @@
 2. 后端命令 `balance_query(plugin_id)` 执行脚本（或按 provider 约定请求余额接口）。
 3. 前端「用量」面板展示余额卡片。
 
-### 3.3 模型定价接线（PricingService）—— ✅ **已实现（2026-08-24，超越 v1）**
+### 3.3 模型定价 —— **不做**
 
-**v1**：`services/model_pricing.rs` 四档平价表 + models.dev 同步；定价计算在四个 `session_usage_*` 模块各抄一遍（改动需同步四处，是 v1 bug 温床）。
+**v1**：`services/model_pricing.rs` 维护 ~200 条硬编码常用模型价格 + 可选 models.dev 同步（默认关闭）。
 
-**v2 现状**：✅ 已对齐并**超越 v1**（`services/pricing.rs`，全项目唯一成本计算方）：
-- **schema**：`model_pricing` 重建为 `model_match`（精确+前缀匹配）/`provider_scope`（供应商限定覆盖行）/四档单价（十进制字符串）/`off_peak_discount_percent` + UTC 窗口（可跨午夜）/`source`。
-- **匹配链**：供应商限定精确 > 供应商限定最长前缀 > 通用精确 > 通用最长前缀。
-- **峰谷**（v1 没有）：DeepSeek 错峰场景——折扣百分比 + UTC HH:MM 窗口，按请求时间判断。
-- **中转站差价**（v1 没有）：为该 provider 建限定行直接填实际单价。
-- **精度**：整数微美元运算，无浮点误差（沿用 v1 十进制字符串存储的做法）。
-- **接线**：用量写入时零成本记录自动补算；`usage_recompute_costs` 回填历史（不覆盖插件自带成本如 opencode）。
-- **UI**：用量面板「模型定价」管理（列表/编辑含峰谷/删除/models.dev 同步/回填）。
-- **测试**：DeepSeek 全场景钉死（分档/跨午夜/覆盖行/前缀回退/迁移）。
+**v2 决策**：砍掉定价功能。原因：
+- models.dev 返回 7,838 条（含 221 个供应商/转售商），全量导入导致 UI 卡顿且难以筛选
+- 定价数据质量不可控（转售商加价、缺失缓存折扣、模型匹配错误导致成本虚高）
+- v1 的硬编码种子方案需要持续人工维护，投入产出比低
+- 用量面板仍展示 token 数（input/output/cache），用户可自行判断消费
+
+**v2 现状**：用量记录保留 `total_cost_usd`（插件 sync_usage 返回），不做自动补算。model_pricing 表已删除。
 
 ### 3.4 云端同步（WebDAV / S3 / 目录）—— P1
 
@@ -144,7 +142,7 @@
 **目录覆盖**：三插件 `config_dir()` 接入 `overrideDir.<id>`（优先）→ 环境变量（`CC_SWITCH_CODEX_CONFIG_DIR` / `CC_SWITCH_GROK_CONFIG_DIR` / `HERMES_HOME`）→ 平台默认（hermes Windows 为 `%LOCALAPPDATA%\hermes`，对齐 Hermes 自身）。
 
 **已知差距（后续补）**：
-- ~~**Usage 同步**~~：✅ codex/grokbuild 已实现（2026-08-24，简化口径：codex 取最后一次 `total_token_usage` 会话累计快照 + `usage_upsert` 刷新语义；grokbuild 解析 `updates.jsonl` 的 `turn_completed` 逐轮事件，`usage_snapshot` 剔除防双算；成本统一由 PricingService 补算，input 口径 = 总输入 − 缓存命中）。**hermes 无独立用量源（v1 也没有），明确不做**。v1 的 turn 级增量/fork 解析（session_usage_codex 3086 行）未照搬——如遇口径偏差再按需补。
+- ~~**Usage 同步**~~：✅ codex/grokbuild 已实现（2026-08-24，简化口径：codex 取最后一次 `total_token_usage` 会话累计快照 + `usage_upsert` 刷新语义；grokbuild 解析 `updates.jsonl` 的 `turn_completed` 逐轮事件，`usage_snapshot` 剔除防双算）。**hermes 无独立用量源（v1 也没有），明确不做**。v1 的 turn 级增量/fork 解析（session_usage_codex 3086 行）未照搬——如遇口径偏差再按需补。
 - codex 会话标题的 state DB 增强源（`~/.codex` 下 SQLite threads 表）未接，仅 session_index.jsonl。
 - codex 切换的 model catalog 生成与 OAuth 模型目录（v1 为 proxy 服务，随 proxy 一并评估）。
 
@@ -223,7 +221,7 @@
 
 **v1**：趋势图表、详细请求日志、自定义模型定价。
 
-**v2 现状**：✅ `UsagePanel`（日汇总 + 请求日志）内置 `UsageTrendChart`（多系列 token 面积图 + 成本虚线 + 悬停 tooltip + 刻度）；**自定义模型定价（model_pricing 接线）仍缺**，见 §3.3。
+**v2 现状**：✅ `UsagePanel`（日汇总 + 请求日志）内置 `UsageTrendChart`（多系列 token 面积图 + 成本虚线 + 悬停 tooltip + 刻度）；定价功能不做（§3.3），仅展示 token 数。
 
 ### 3.13 会话搜索与更多会话源 —— P2
 
@@ -293,7 +291,7 @@
 ## 5. 建议实施顺序
 
 1. ~~**P0**：本地代理（3.1）~~ —— **暂不考虑实现**（用户决定）。
-2. ~~**P1 快速项**：模型定价接线（3.3）~~ —— ✅ 已完成（§3.3，超越 v1）；~~**供应商预设（3.7）~~ —— **不做**（用户决定）。**用量图表（3.12）、托盘切换（3.6）、设置 Tab 化/主题语言/窗口行为/MCP 对齐/备份增强（§3.14、§3.18）、codex/grokbuild 用量同步（§3.20）已完成**。
+2. ~~**P1 快速项**：模型定价（3.3）~~ —— **不做**（用户决定）；~~**供应商预设（3.7）~~ —— **不做**（用户决定）。**用量图表（3.12）、托盘切换（3.6）、设置 Tab 化/主题语言/窗口行为/MCP 对齐/备份增强（§3.14、§3.18）、codex/grokbuild 用量同步（§3.20）已完成**。
 3. **P1 中型项**：余额/订阅（3.2）、Deep Link（3.5，含 MCP Deep Link 导入，**到时重新设计解析层不照抄 v1**）、通用供应商（3.8）、云端同步（3.4）、**外壳重构（v1 header + 保留侧栏）**、gemini/claude-desktop 插件化。（**Skill 仓库/skills.sh（3.9）、Prompt 互斥+回填（3.11）、Profile 项目快照（3.10）、Claude Code 原生内置 + 统一能力视图（§3.19）、Codex/Grok Build/Hermes 原生内置（§3.20）已完成**）
 4. **P2**：会话搜索（3.13）、工作区（3.15）、速度测试（3.16）。
 5. **TS 沙箱**：方案 A → B，作为贯穿性的架构演进。

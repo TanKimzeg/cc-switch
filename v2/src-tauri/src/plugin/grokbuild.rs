@@ -577,7 +577,7 @@ fn load_session_messages(
 
 /// 会话用量聚合（简化口径）：解析各会话 `updates.jsonl` 的 `turn_completed`
 /// 事件（逐轮独立值），每轮一条记录，request_id 锚定 `prompt_id`。
-/// 成本不在此计算（PricingService 统一补算）。
+/// 成本由插件 sync_usage 返回。
 fn sync_usage_impl() -> Result<Vec<crate::plugin::UsageRecord>, PluginError> {
     let mut files = Vec::new();
     for root in session_roots() {
