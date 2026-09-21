@@ -202,7 +202,7 @@ impl AgentPlugin for ClaudeCodePlugin {
                 sessions.push(meta);
             }
         }
-        sessions.sort_by(|a, b| b.last_active_at.cmp(&a.last_active_at));
+        sessions.sort_by_key(|s| std::cmp::Reverse(s.last_active_at));
         Ok(sessions)
     }
 
@@ -333,18 +333,20 @@ fn extract_text(content: &Value) -> String {
         Value::Array(items) => items
             .iter()
             .filter_map(|item| {
-                item.get("type").and_then(Value::as_str).and_then(|t| match t {
-                    "text" => item.get("text").and_then(Value::as_str).map(str::to_string),
-                    "tool_use" => item
-                        .get("name")
-                        .and_then(Value::as_str)
-                        .map(|n| format!("[Tool: {n}]")),
-                    "tool_result" => item
-                        .get("content")
-                        .map(extract_tool_result_text)
-                        .filter(|s| !s.is_empty()),
-                    _ => None,
-                })
+                item.get("type")
+                    .and_then(Value::as_str)
+                    .and_then(|t| match t {
+                        "text" => item.get("text").and_then(Value::as_str).map(str::to_string),
+                        "tool_use" => item
+                            .get("name")
+                            .and_then(Value::as_str)
+                            .map(|n| format!("[Tool: {n}]")),
+                        "tool_result" => item
+                            .get("content")
+                            .map(extract_tool_result_text)
+                            .filter(|s| !s.is_empty()),
+                        _ => None,
+                    })
             })
             .collect::<Vec<_>>()
             .join("\n"),
@@ -392,10 +394,7 @@ fn parse_session(path: &Path) -> Option<SessionMeta> {
                 .map(str::to_string);
         }
         if project_dir.is_none() {
-            project_dir = value
-                .get("cwd")
-                .and_then(Value::as_str)
-                .map(str::to_string);
+            project_dir = value.get("cwd").and_then(Value::as_str).map(str::to_string);
         }
         let ts = value.get("timestamp").and_then(parse_timestamp_ms);
         if ts.is_some() {
@@ -426,8 +425,11 @@ fn parse_session(path: &Path) -> Option<SessionMeta> {
         }
     }
 
-    let session_id = session_id
-        .or_else(|| path.file_stem().and_then(|s| s.to_str()).map(str::to_string))?;
+    let session_id = session_id.or_else(|| {
+        path.file_stem()
+            .and_then(|s| s.to_str())
+            .map(str::to_string)
+    })?;
 
     Some(SessionMeta {
         session_id: session_id.clone(),
@@ -486,11 +488,7 @@ fn load_messages_jsonl(path: &Path) -> Result<Vec<SessionMessage>, PluginError> 
             continue;
         }
         let ts = value.get("timestamp").and_then(parse_timestamp_ms);
-        messages.push(SessionMessage {
-            role,
-            content,
-            ts,
-        });
+        messages.push(SessionMessage { role, content, ts });
     }
     Ok(messages)
 }
@@ -564,7 +562,11 @@ fn parse_usage(path: &Path) -> Result<Option<UsageRecord>, PluginError> {
     }
 
     let session_id = session_id
-        .or_else(|| path.file_stem().and_then(|s| s.to_str()).map(str::to_string))
+        .or_else(|| {
+            path.file_stem()
+                .and_then(|s| s.to_str())
+                .map(str::to_string)
+        })
         .unwrap_or_else(|| "unknown".into());
 
     Ok(Some(UsageRecord {
@@ -728,7 +730,10 @@ mod tests {
         assert_eq!(sessions.len(), 1);
         assert_eq!(sessions[0].session_id, "session-1");
         assert_eq!(sessions[0].title.as_deref(), Some("How do I deploy?"));
-        assert_eq!(sessions[0].resume_command.as_deref(), Some("claude --resume session-1"));
+        assert_eq!(
+            sessions[0].resume_command.as_deref(),
+            Some("claude --resume session-1")
+        );
     }
 
     #[test]
@@ -794,7 +799,9 @@ mod tests {
                 icon: None,
                 website: None,
                 api_key: None,
-                settings_config: Some(r#"{"env":{"ANTHROPIC_BASE_URL":"https://api.example.com"}}"#.into()),
+                settings_config: Some(
+                    r#"{"env":{"ANTHROPIC_BASE_URL":"https://api.example.com"}}"#.into(),
+                ),
                 meta: None,
                 sort_order: 0,
                 live_config_managed: true,

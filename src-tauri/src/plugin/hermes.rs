@@ -159,8 +159,9 @@ fn replace_yaml_section(
         serde_yaml::Value::String(section_key.to_string()),
         value.clone(),
     );
-    let serialized = serde_yaml::to_string(&serde_yaml::Value::Mapping(section))
-        .map_err(|e| PluginError::Config(format!("序列化 YAML section '{section_key}' 失败: {e}")))?;
+    let serialized = serde_yaml::to_string(&serde_yaml::Value::Mapping(section)).map_err(|e| {
+        PluginError::Config(format!("序列化 YAML section '{section_key}' 失败: {e}"))
+    })?;
 
     if let Some((start, end)) = find_yaml_section_range(raw, section_key) {
         let mut result = String::with_capacity(raw.len());
@@ -255,8 +256,8 @@ fn yaml_to_json(yaml: &serde_yaml::Value) -> Result<Value, PluginError> {
 }
 
 fn json_to_yaml(json: &Value) -> Result<serde_yaml::Value, PluginError> {
-    let json_str =
-        serde_json::to_string(json).map_err(|e| PluginError::Config(format!("JSON 序列化失败: {e}")))?;
+    let json_str = serde_json::to_string(json)
+        .map_err(|e| PluginError::Config(format!("JSON 序列化失败: {e}")))?;
     serde_yaml::from_str(&json_str)
         .map_err(|e| PluginError::Config(format!("JSON → YAML 转换失败: {e}")))
 }
@@ -404,7 +405,10 @@ fn get_providers() -> Result<serde_json::Map<String, Value>, PluginError> {
                 continue;
             }
             obj.insert("name".to_string(), json!(resolved_name));
-            obj.insert(PROVIDER_SOURCE_FIELD.to_string(), json!(PROVIDER_SOURCE_DICT));
+            obj.insert(
+                PROVIDER_SOURCE_FIELD.to_string(),
+                json!(PROVIDER_SOURCE_DICT),
+            );
             denormalize_models_for_read(&mut json_val);
             map.insert(resolved_name, json_val);
         }
@@ -414,7 +418,11 @@ fn get_providers() -> Result<serde_json::Map<String, Value>, PluginError> {
 }
 
 /// dict-only 条目不可经 AgentSwitch 写/删（需走 Hermes Web UI）。
-fn ensure_provider_writable(config: &serde_yaml::Value, name: &str, verb: &str) -> Result<(), PluginError> {
+fn ensure_provider_writable(
+    config: &serde_yaml::Value,
+    name: &str,
+    verb: &str,
+) -> Result<(), PluginError> {
     let list_has = config
         .get("custom_providers")
         .and_then(|v| v.as_sequence())
@@ -494,10 +502,7 @@ impl AgentPlugin for HermesPlugin {
             .and_then(|p| p.as_str())
             .map(String::from);
 
-        Ok(LiveConfig {
-            providers,
-            current,
-        })
+        Ok(LiveConfig { providers, current })
     }
 
     fn apply(&self, provider: &Provider, current: bool) -> Result<(), PluginError> {
@@ -659,7 +664,8 @@ impl AgentPlugin for HermesPlugin {
         if let Some(rest) = source.strip_prefix("sqlite:") {
             return delete_session_sqlite(session_id, rest);
         }
-        std::fs::remove_file(Path::new(source)).map_err(|e| PluginError::io(Path::new(source), e))?;
+        std::fs::remove_file(Path::new(source))
+            .map_err(|e| PluginError::io(Path::new(source), e))?;
         Ok(true)
     }
 
@@ -971,7 +977,10 @@ fn scan_sessions_sqlite() -> Vec<crate::plugin::SessionMeta> {
             project_dir,
             created_at: started_at,
             last_active_at: ended_at.or(started_at),
-            source_path: Some(format!("{db_source}#{}", obj.get("id").and_then(Value::as_str).unwrap_or(""))),
+            source_path: Some(format!(
+                "{db_source}#{}",
+                obj.get("id").and_then(Value::as_str).unwrap_or("")
+            )),
             resume_command: None,
         });
     }
@@ -1072,8 +1081,7 @@ fn parse_jsonl_session(path: &Path) -> Option<crate::plugin::SessionMeta> {
                 if let Some(c) = content {
                     let text = extract_text(c);
                     if !text.trim().is_empty() {
-                        first_user_msg =
-                            Some(truncate_summary(&text, TITLE_MAX_CHARS));
+                        first_user_msg = Some(truncate_summary(&text, TITLE_MAX_CHARS));
                     }
                 }
             }
@@ -1260,7 +1268,11 @@ mod tests {
     }
 
     struct HermesGuard {
-        previous: (Option<std::ffi::OsString>, Option<std::ffi::OsString>, Option<std::ffi::OsString>),
+        previous: (
+            Option<std::ffi::OsString>,
+            Option<std::ffi::OsString>,
+            Option<std::ffi::OsString>,
+        ),
         _lock: std::sync::MutexGuard<'static, ()>,
     }
     impl HermesGuard {
@@ -1470,7 +1482,10 @@ mod tests {
         assert_eq!(sessions.len(), 1);
         assert_eq!(sessions[0].session_id, "s1");
         assert_eq!(sessions[0].title.as_deref(), Some("My Session"));
-        assert_eq!(sessions[0].project_dir.as_deref(), Some("/home/user/project"));
+        assert_eq!(
+            sessions[0].project_dir.as_deref(),
+            Some("/home/user/project")
+        );
 
         let msgs = p
             .load_messages(sessions[0].source_path.as_deref().unwrap())

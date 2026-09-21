@@ -643,7 +643,8 @@ mod tests {
 
         {
             let conn = db.lock();
-            conn.execute("DELETE FROM providers WHERE id='a'", []).unwrap();
+            conn.execute("DELETE FROM providers WHERE id='a'", [])
+                .unwrap();
             conn.execute(
                 "INSERT INTO providers (id, plugin_id, name) VALUES ('b', 'opencode', 'B')",
                 [],

@@ -17,9 +17,7 @@ use uuid::Uuid;
 
 use crate::db::Database;
 use crate::registry::PluginRegistry;
-use crate::services::skills::{
-    remove_skill_from_dir, ssot_dir, sync_skill_to_dir, SkillService,
-};
+use crate::services::skills::{remove_skill_from_dir, ssot_dir, sync_skill_to_dir, SkillService};
 use crate::AppPaths;
 
 /// 当前 profile 的 settings 键前缀（`profile.current.<plugin_id>`）。
@@ -120,10 +118,9 @@ impl Database {
 
     /// 删除 profile；同时清除所有指向它的插件 current 指针。
     pub fn delete_profile(&self, id: &str) -> rusqlite::Result<bool> {
-        let changed = self.lock().execute(
-            "DELETE FROM profiles WHERE id = ?1",
-            params![id],
-        )?;
+        let changed = self
+            .lock()
+            .execute("DELETE FROM profiles WHERE id = ?1", params![id])?;
         if changed > 0 {
             self.clear_current_profile_if_matches(id)?;
         }
@@ -176,8 +173,7 @@ fn plan_toggles(
 ) -> (Vec<(String, bool)>, Vec<String>) {
     let existing: std::collections::HashSet<&str> =
         current.iter().map(|(id, _)| id.as_str()).collect();
-    let target: std::collections::HashSet<&str> =
-        target_ids.iter().map(|s| s.as_str()).collect();
+    let target: std::collections::HashSet<&str> = target_ids.iter().map(|s| s.as_str()).collect();
 
     let toggles = current
         .iter()
@@ -330,7 +326,10 @@ impl ProfileService {
         let mut warnings = Vec::new();
 
         // 自动保存旧项目当前状态（仅本插件槽位），失败不阻塞切换。
-        if let Some(current_id) = db.current_profile_for_plugin(plugin_id).map_err(|e| e.to_string())? {
+        if let Some(current_id) = db
+            .current_profile_for_plugin(plugin_id)
+            .map_err(|e| e.to_string())?
+        {
             if current_id != profile_id {
                 if let Err(e) = Self::update(db, registry, &current_id, None, Some(plugin_id)) {
                     warnings.push(format!("自动保存旧项目 '{current_id}' 失败: {e}"));
@@ -367,7 +366,9 @@ impl ProfileService {
                 .unwrap_or(false)
             };
             if !exists {
-                warnings.push(format!("[{plugin_id}] 供应商 '{target_pid}' 已不存在，跳过"));
+                warnings.push(format!(
+                    "[{plugin_id}] 供应商 '{target_pid}' 已不存在，跳过"
+                ));
             } else {
                 let current: Option<String> = db
                     .lock()
@@ -381,9 +382,7 @@ impl ProfileService {
                     if let Err(e) =
                         crate::commands::providers::switch_provider_core(registry, db, target_pid)
                     {
-                        warnings.push(format!(
-                            "[{plugin_id}] 切换供应商 '{target_pid}' 失败: {e}"
-                        ));
+                        warnings.push(format!("[{plugin_id}] 切换供应商 '{target_pid}' 失败: {e}"));
                     }
                 }
             }
@@ -406,9 +405,7 @@ impl ProfileService {
                 warnings.push(format!("[{plugin_id}] MCP '{id}' 已不存在，跳过"));
             }
             for (id, enabled) in toggles {
-                if let Err(e) =
-                    toggle_mcp_server(db, registry, &id, plugin_id, enabled)
-                {
+                if let Err(e) = toggle_mcp_server(db, registry, &id, plugin_id, enabled) {
                     warnings.push(format!(
                         "[{plugin_id}] 切换 MCP '{id}' → {enabled} 失败: {e}"
                     ));
@@ -540,11 +537,7 @@ fn toggle_skill(
 }
 
 /// 启用 prompt（互斥 + 写记忆文件，与 commands/prompts.rs 同语义）。
-fn enable_prompt(
-    db: &Database,
-    registry: &PluginRegistry,
-    id: &str,
-) -> Result<(), String> {
+fn enable_prompt(db: &Database, registry: &PluginRegistry, id: &str) -> Result<(), String> {
     let prompt = db
         .get_prompt(id)
         .map_err(|e| e.to_string())?
@@ -552,9 +545,9 @@ fn enable_prompt(
     let plugin = registry
         .resolve_plugin(&prompt.plugin_id)
         .map_err(|e| e.to_string())?;
-    let file = plugin.prompt_file_path().ok_or_else(|| {
-        format!("插件 '{}' 不支持 prompt 文件", prompt.plugin_id)
-    })?;
+    let file = plugin
+        .prompt_file_path()
+        .ok_or_else(|| format!("插件 '{}' 不支持 prompt 文件", prompt.plugin_id))?;
     crate::services::prompts::PromptService::enable(db, &file, &prompt.plugin_id, id)
 }
 
@@ -592,8 +585,7 @@ mod tests {
         };
 
         let db = Database::new(&temp.path().join("cc.db")).unwrap();
-        let registry =
-            PluginRegistry::new(temp.path().join("plugins"), db.clone());
+        let registry = PluginRegistry::new(temp.path().join("plugins"), db.clone());
         let _ = registry.seed_builtin();
         let paths = AppPaths {
             data_dir: temp.path().to_path_buf(),
@@ -646,22 +638,27 @@ mod tests {
         seed_provider(&db, "p2", "opencode");
         set_current(&db, "opencode", Some("p1"));
         seed_mcp(&db, "fs");
-        db.set_mcp_server_app_enabled("fs", "opencode", true).unwrap();
+        db.set_mcp_server_app_enabled("fs", "opencode", true)
+            .unwrap();
 
         let profile = ProfileService::create(&db, &registry, "项目A", "opencode").unwrap();
 
-        let payload: ProfilePayloadMap =
-            serde_json::from_value(profile.payload).unwrap();
+        let payload: ProfilePayloadMap = serde_json::from_value(profile.payload).unwrap();
         let snap = payload.get("opencode").unwrap();
         assert_eq!(snap.provider.as_deref(), Some("p1"));
-        assert_eq!(snap.mcp_enabled_ids.as_deref(), Some(["fs".to_string()].as_slice()));
+        assert_eq!(
+            snap.mcp_enabled_ids.as_deref(),
+            Some(["fs".to_string()].as_slice())
+        );
         assert_eq!(snap.skill_enabled_ids.as_deref(), Some([].as_slice()));
         // 其它插件未拍快照
         assert!(!payload.contains_key("claudecode"));
 
         // per-plugin current 指针
         assert_eq!(
-            db.current_profile_for_plugin("opencode").unwrap().as_deref(),
+            db.current_profile_for_plugin("opencode")
+                .unwrap()
+                .as_deref(),
             None,
             "create 不改变 current 指针（apply 才标记）"
         );
@@ -688,29 +685,36 @@ mod tests {
         let proj_b = ProfileService::create(&db, &registry, "项目B", "opencode").unwrap();
 
         // 应用项目A → 供应商切回 p1，A 标记 current
-        let warnings = ProfileService::apply(&db, &registry, &paths, &proj_a.id, "opencode")
-            .unwrap();
+        let warnings =
+            ProfileService::apply(&db, &registry, &paths, &proj_a.id, "opencode").unwrap();
         assert!(warnings.is_empty(), "warnings: {warnings:?}");
         assert_eq!(current(&db, "opencode").as_deref(), Some("p1"));
         assert_eq!(
-            db.current_profile_for_plugin("opencode").unwrap().as_deref(),
+            db.current_profile_for_plugin("opencode")
+                .unwrap()
+                .as_deref(),
             Some(proj_a.id.as_str())
         );
 
         // 应用项目B：自动保存旧项目 A（重拍为离开时的 p1 状态），再切到 p2
-        let warnings = ProfileService::apply(&db, &registry, &paths, &proj_b.id, "opencode")
-            .unwrap();
+        let warnings =
+            ProfileService::apply(&db, &registry, &paths, &proj_b.id, "opencode").unwrap();
         assert!(warnings.is_empty());
         assert_eq!(current(&db, "opencode").as_deref(), Some("p2"));
         assert_eq!(
-            db.current_profile_for_plugin("opencode").unwrap().as_deref(),
+            db.current_profile_for_plugin("opencode")
+                .unwrap()
+                .as_deref(),
             Some(proj_b.id.as_str())
         );
 
         // 项目 A 的快照已被自动保存为 p1（离开时状态）
         let a = db.get_profile(&proj_a.id).unwrap().unwrap();
         let payload: ProfilePayloadMap = serde_json::from_value(a.payload).unwrap();
-        assert_eq!(payload.get("opencode").unwrap().provider.as_deref(), Some("p1"));
+        assert_eq!(
+            payload.get("opencode").unwrap().provider.as_deref(),
+            Some("p1")
+        );
     }
 
     #[test]
@@ -728,7 +732,9 @@ mod tests {
         assert_eq!(warnings.len(), 1);
         assert!(warnings[0].contains("尚未在该项目中保存过配置"));
         assert_eq!(
-            db.current_profile_for_plugin("claudecode").unwrap().as_deref(),
+            db.current_profile_for_plugin("claudecode")
+                .unwrap()
+                .as_deref(),
             Some(profile.id.as_str())
         );
         assert_eq!(
@@ -745,12 +751,15 @@ mod tests {
         set_current(&db, "opencode", Some("p1"));
         seed_mcp(&db, "fs");
         seed_mcp(&db, "git");
-        db.set_mcp_server_app_enabled("fs", "opencode", true).unwrap();
+        db.set_mcp_server_app_enabled("fs", "opencode", true)
+            .unwrap();
         let profile = ProfileService::create(&db, &registry, "MCP项目", "opencode").unwrap();
 
         // 当前态改为：fs 关、git 开 → 应用后应恢复 fs 开（git 关）
-        db.set_mcp_server_app_enabled("fs", "opencode", false).unwrap();
-        db.set_mcp_server_app_enabled("git", "opencode", true).unwrap();
+        db.set_mcp_server_app_enabled("fs", "opencode", false)
+            .unwrap();
+        db.set_mcp_server_app_enabled("git", "opencode", true)
+            .unwrap();
         let warnings =
             ProfileService::apply(&db, &registry, &paths, &profile.id, "opencode").unwrap();
 
@@ -760,7 +769,11 @@ mod tests {
             .filter(|s| s.apps.iter().any(|(pid, en)| pid == "opencode" && *en))
             .map(|s| s.id.as_str())
             .collect();
-        assert_eq!(enabled, vec!["fs"], "最小 toggle 恢复目标集，实际: {warnings:?}");
+        assert_eq!(
+            enabled,
+            vec!["fs"],
+            "最小 toggle 恢复目标集，实际: {warnings:?}"
+        );
         assert!(warnings.is_empty());
     }
 
@@ -786,10 +799,13 @@ mod tests {
         };
         db.upsert_profile(&profile).unwrap();
 
-        let warnings = ProfileService::apply(&db, &registry, &paths, "proj-x", "opencode")
-            .unwrap();
-        assert!(warnings.iter().any(|w| w.contains("供应商 'gone' 已不存在")));
-        assert!(warnings.iter().any(|w| w.contains("MCP 'gone-mcp' 已不存在")));
+        let warnings = ProfileService::apply(&db, &registry, &paths, "proj-x", "opencode").unwrap();
+        assert!(warnings
+            .iter()
+            .any(|w| w.contains("供应商 'gone' 已不存在")));
+        assert!(warnings
+            .iter()
+            .any(|w| w.contains("MCP 'gone-mcp' 已不存在")));
     }
 
     #[test]

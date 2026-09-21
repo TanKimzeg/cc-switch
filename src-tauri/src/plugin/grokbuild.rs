@@ -116,9 +116,7 @@ fn validate_model_config(config_toml: &str) -> Result<(), PluginError> {
         .get("context_window")
         .and_then(toml::Value::as_integer)
         .filter(|v| *v > 0)
-        .ok_or_else(|| {
-            PluginError::Config("Grok Build context_window 必须是正整数".into())
-        })?;
+        .ok_or_else(|| PluginError::Config("Grok Build context_window 必须是正整数".into()))?;
     Ok(())
 }
 
@@ -329,7 +327,11 @@ fn toml_server_to_json(entry: &toml::value::Table) -> Value {
 
     let mut spec = serde_json::Map::new();
     for (key, value) in entry {
-        let output_key = if key == "http_headers" { "headers" } else { key };
+        let output_key = if key == "http_headers" {
+            "headers"
+        } else {
+            key
+        };
         if let Some(v) = convert(value) {
             spec.insert(output_key.to_string(), v);
         }
@@ -380,8 +382,9 @@ impl McpPlugin for GrokBuildPlugin {
         let mut doc = if text.trim().is_empty() {
             toml_edit::DocumentMut::new()
         } else {
-            text.parse::<toml_edit::DocumentMut>()
-                .map_err(|e| PluginError::Config(format!("解析 Grok Build config.toml 失败: {e}")))?
+            text.parse::<toml_edit::DocumentMut>().map_err(|e| {
+                PluginError::Config(format!("解析 Grok Build config.toml 失败: {e}"))
+            })?
         };
         if doc
             .get("mcp_servers")
@@ -462,7 +465,7 @@ fn scan_sessions() -> Result<Vec<crate::plugin::SessionMeta>, PluginError> {
             sessions.push(meta);
         }
     }
-    sessions.sort_by(|a, b| b.last_active_at.cmp(&a.last_active_at));
+    sessions.sort_by_key(|s| std::cmp::Reverse(s.last_active_at));
     Ok(sessions)
 }
 
@@ -607,16 +610,11 @@ fn sync_usage_impl() -> Result<Vec<crate::plugin::UsageRecord>, PluginError> {
             let Ok(value) = serde_json::from_str::<Value>(line) else {
                 continue;
             };
-            let Some(update) = value
-                .get("params")
-                .and_then(|p| p.get("update"))
-            else {
+            let Some(update) = value.get("params").and_then(|p| p.get("update")) else {
                 continue;
             };
             // 只认 turn_completed（usage_snapshot 等是中途快照，导入会双算）。
-            if update.get("sessionUpdate").and_then(Value::as_str)
-                != Some("turn_completed")
-            {
+            if update.get("sessionUpdate").and_then(Value::as_str) != Some("turn_completed") {
                 continue;
             }
             let Some(usage) = update.get("usage") else {
@@ -699,7 +697,7 @@ fn sync_usage_impl() -> Result<Vec<crate::plugin::UsageRecord>, PluginError> {
             }
         }
     }
-    records.sort_by(|a, b| b.timestamp_ms.cmp(&a.timestamp_ms));
+    records.sort_by_key(|r| std::cmp::Reverse(r.timestamp_ms));
     Ok(records)
 }
 
@@ -804,9 +802,7 @@ context_window = 500000
             icon: None,
             website: None,
             api_key: None,
-            settings_config: Some(
-                serde_json::json!({ "config": config_text }).to_string(),
-            ),
+            settings_config: Some(serde_json::json!({ "config": config_text }).to_string()),
             meta: None,
             sort_order: 0,
             live_config_managed: true,
@@ -829,7 +825,8 @@ context_window = 500000
         );
 
         // 官方条目：空 config 可写（回落官方 OAuth）
-        p.apply(&provider("official", "official", ""), true).unwrap();
+        p.apply(&provider("official", "official", ""), true)
+            .unwrap();
         assert_eq!(
             std::fs::read_to_string(temp.path().join(".grok").join("config.toml")).unwrap(),
             ""
@@ -850,8 +847,15 @@ context_window = 500000
         assert_eq!(imported.len(), 1);
 
         // 官方态（仅 mcp_servers）→ import 为空
-        p.apply(&provider("official", "official", "[mcp_servers.echo]\ncommand = \"echo\"\n"), true)
-            .unwrap();
+        p.apply(
+            &provider(
+                "official",
+                "official",
+                "[mcp_servers.echo]\ncommand = \"echo\"\n",
+            ),
+            true,
+        )
+        .unwrap();
         assert!(p.import().unwrap().is_empty());
     }
 
@@ -932,7 +936,10 @@ context_window = 500000
         assert_eq!(records.len(), 2, "usage_snapshot 不得导入");
         records.sort_by(|a, b| a.source_id.cmp(&b.source_id));
 
-        let p1 = records.iter().find(|r| r.source_id == "grok_turn:p1").unwrap();
+        let p1 = records
+            .iter()
+            .find(|r| r.source_id == "grok_turn:p1")
+            .unwrap();
         assert_eq!(p1.model, "grok-4.5-build");
         assert_eq!(p1.session_id, session_id);
         assert_eq!(p1.input_tokens, 16632);
@@ -943,7 +950,10 @@ context_window = 500000
             .timestamp_millis();
         assert_eq!(p1.timestamp_ms, expected_ts);
 
-        let p2 = records.iter().find(|r| r.source_id == "grok_turn:p2").unwrap();
+        let p2 = records
+            .iter()
+            .find(|r| r.source_id == "grok_turn:p2")
+            .unwrap();
         assert_eq!(p2.model, "unknown");
         // xAI 口径 inputTokens 含 cached → fresh = 500 - 100
         assert_eq!(p2.input_tokens, 400);
@@ -995,7 +1005,9 @@ context_window = 500000
         assert_eq!(msgs.len(), 2, "reasoning 记录不是对话消息");
         assert_eq!(msgs[0].content, "hello");
 
-        assert!(p.delete_session("wrong", sessions[0].source_path.as_deref().unwrap()).is_err());
+        assert!(p
+            .delete_session("wrong", sessions[0].source_path.as_deref().unwrap())
+            .is_err());
         assert!(p
             .delete_session(session_id, sessions[0].source_path.as_deref().unwrap())
             .unwrap());

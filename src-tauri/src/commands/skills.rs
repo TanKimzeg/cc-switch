@@ -9,7 +9,7 @@ use crate::registry::PluginRegistry;
 use crate::services::skills::{
     remove_skill_from_dir, search_skills_sh, ssot_dir, sync_skill_to_dir, validate_repo_ref,
     DiscoverableSkill, ImportSkillSelection, MigrationResult, SkillBackupEntry, SkillRecord,
-    SkillRepo, SkillService, SkillsShSearchResult, SkillStorageLocation, SkillUpdateInfo,
+    SkillRepo, SkillService, SkillStorageLocation, SkillUpdateInfo, SkillsShSearchResult,
     SyncMethod, SyncSettings, UnmanagedSkill,
 };
 use crate::AppPaths;
@@ -149,7 +149,8 @@ pub fn skills_remove_repo(
     owner: String,
     name: String,
 ) -> Result<(), String> {
-    db.delete_skill_repo(&owner, &name).map_err(|e| e.to_string())
+    db.delete_skill_repo(&owner, &name)
+        .map_err(|e| e.to_string())
 }
 
 /// 搜索 skills.sh 公共注册表。
@@ -189,10 +190,7 @@ pub fn skills_list_backups(paths: State<'_, AppPaths>) -> Result<Vec<SkillBackup
 
 /// 删除技能备份。
 #[tauri::command]
-pub fn skills_delete_backup(
-    paths: State<'_, AppPaths>,
-    backup_id: String,
-) -> Result<(), String> {
+pub fn skills_delete_backup(paths: State<'_, AppPaths>, backup_id: String) -> Result<(), String> {
     SkillService::delete_backup(&paths.data_dir, &backup_id)
 }
 
@@ -238,10 +236,7 @@ pub fn skills_get_sync_settings(db: State<'_, Database>) -> Result<SyncSettings,
 
 /// 设置同步方式。
 #[tauri::command]
-pub fn skills_set_sync_method(
-    db: State<'_, Database>,
-    method: SyncMethod,
-) -> Result<(), String> {
+pub fn skills_set_sync_method(db: State<'_, Database>, method: SyncMethod) -> Result<(), String> {
     SkillService::set_sync_method(&db, method)
 }
 
@@ -278,7 +273,10 @@ fn scan_sources(
 ) -> Vec<(String, PathBuf)> {
     let mut sources = registry_skills_dirs(registry);
     if let Ok(settings) = SkillService::get_sync_settings(db) {
-        sources.push(("agentswitch".to_string(), ssot_dir(&paths.data_dir, settings.storage_location)));
+        sources.push((
+            "agentswitch".to_string(),
+            ssot_dir(&paths.data_dir, settings.storage_location),
+        ));
     }
     sources
 }

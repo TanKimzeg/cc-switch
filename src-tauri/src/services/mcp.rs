@@ -48,10 +48,7 @@ pub fn validate_server_spec(spec: &serde_json::Value) -> Result<(), String> {
     if !spec.is_object() {
         return Err("MCP 配置必须是 JSON 对象".to_string());
     }
-    let spec_type = spec
-        .get("type")
-        .and_then(|v| v.as_str())
-        .unwrap_or("stdio");
+    let spec_type = spec.get("type").and_then(|v| v.as_str()).unwrap_or("stdio");
     match spec_type {
         "stdio" => {
             let cmd = spec
@@ -348,10 +345,7 @@ impl McpService {
         let servers = db.list_mcp_servers().map_err(|e| e.to_string())?;
         let mut errors = Vec::new();
         for server in servers {
-            let enabled = server
-                .apps
-                .iter()
-                .any(|(pid, en)| pid == plugin_id && *en);
+            let enabled = server.apps.iter().any(|(pid, en)| pid == plugin_id && *en);
             if !enabled {
                 continue;
             }
@@ -460,8 +454,7 @@ mod tests {
     fn upsert_full_rejects_invalid_spec() {
         let dir = tempfile::tempdir().unwrap();
         let db = Database::new(&dir.path().join("test.db")).unwrap();
-        let registry =
-            crate::registry::PluginRegistry::new(dir.path().join("plugins"), db.clone());
+        let registry = crate::registry::PluginRegistry::new(dir.path().join("plugins"), db.clone());
 
         let mut server = sample_server();
         server.spec = serde_json::json!({ "type": "stdio" });
@@ -473,10 +466,7 @@ mod tests {
     fn sync_skips_plugins_without_mcp_capability() {
         let dir = tempfile::tempdir().unwrap();
         let db = Database::new(&dir.path().join("test.db")).unwrap();
-        let registry = crate::registry::PluginRegistry::new(
-            dir.path().join("plugins"),
-            db.clone(),
-        );
+        let registry = crate::registry::PluginRegistry::new(dir.path().join("plugins"), db.clone());
 
         // TS 插件（TsPluginStub 无 as_mcp）：同步应跳过而非报错。
         let plugins = dir.path().join("plugins/ts-demo");
@@ -504,10 +494,7 @@ mod tests {
         // 复现「添加 MCP 点击保存报错」：apps 为空时同步循环为空，应成功落库。
         let dir = tempfile::tempdir().unwrap();
         let db = Database::new(&dir.path().join("test.db")).unwrap();
-        let registry = crate::registry::PluginRegistry::new(
-            dir.path().join("plugins"),
-            db.clone(),
-        );
+        let registry = crate::registry::PluginRegistry::new(dir.path().join("plugins"), db.clone());
 
         let server = McpServer {
             id: "fs".into(),
@@ -550,11 +537,7 @@ mod tests {
         }
     }
 
-    fn home_env() -> (
-        TestEnv,
-        Database,
-        crate::registry::PluginRegistry,
-    ) {
+    fn home_env() -> (TestEnv, Database, crate::registry::PluginRegistry) {
         let lock = crate::test_support::env_lock().lock().unwrap();
         let temp = tempfile::tempdir().unwrap();
         let previous = std::env::var_os("AGENT_SWITCH_TEST_HOME");
@@ -600,19 +583,13 @@ mod tests {
         updated.apps = vec![];
         McpService::upsert_server_full(&db, &registry, &updated).unwrap();
         let config = opencode_config(env.path());
-        assert!(
-            config["mcp"].is_null()
-                || config["mcp"]
-                    .get("filesystem")
-                    .is_none()
-        );
-        assert!(
-            db.get_mcp_server("filesystem")
-                .unwrap()
-                .unwrap()
-                .apps
-                .is_empty()
-        );
+        assert!(config["mcp"].is_null() || config["mcp"].get("filesystem").is_none());
+        assert!(db
+            .get_mcp_server("filesystem")
+            .unwrap()
+            .unwrap()
+            .apps
+            .is_empty());
     }
 
     #[test]
@@ -644,8 +621,7 @@ mod tests {
 
         let stored = db.get_mcp_server("shared").unwrap().unwrap();
         // get_mcp_server 的 apps 按 plugin_id 排序，做无序比较。
-        let apps: std::collections::BTreeMap<String, bool> =
-            stored.apps.iter().cloned().collect();
+        let apps: std::collections::BTreeMap<String, bool> = stored.apps.iter().cloned().collect();
         assert_eq!(stored.name, "Old Name");
         assert_eq!(stored.spec["command"], "old");
         assert_eq!(apps.get("opencode"), Some(&true));

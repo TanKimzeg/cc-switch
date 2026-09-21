@@ -3,7 +3,9 @@ use crate::services::http_client;
 
 #[tauri::command]
 pub fn get_global_proxy_url(db: tauri::State<'_, Database>) -> Result<Option<String>, String> {
-    let url = db.get_setting(http_client::KEY_GLOBAL_PROXY_URL).map_err(|e| e.to_string())?;
+    let url = db
+        .get_setting(http_client::KEY_GLOBAL_PROXY_URL)
+        .map_err(|e| e.to_string())?;
     let trimmed = url.map(|s| s.trim().to_string()).filter(|s| !s.is_empty());
     Ok(trimmed)
 }
@@ -14,7 +16,11 @@ pub async fn set_global_proxy_url(
     db: tauri::State<'_, Database>,
 ) -> Result<(), String> {
     let trimmed = url.trim();
-    let effective = if trimmed.is_empty() { None } else { Some(trimmed) };
+    let effective = if trimmed.is_empty() {
+        None
+    } else {
+        Some(trimmed)
+    };
 
     // 先校验格式。
     http_client::validate_proxy(effective)?;
@@ -40,18 +46,24 @@ pub async fn test_global_proxy_url(
     _db: tauri::State<'_, Database>,
 ) -> Result<ProxyTestResult, String> {
     let trimmed = url.trim();
-    let effective = if trimmed.is_empty() { None } else { Some(trimmed) };
+    let effective = if trimmed.is_empty() {
+        None
+    } else {
+        Some(trimmed)
+    };
     http_client::validate_proxy(effective)?;
 
     // 用指定代理构建临时客户端（不改全局客户端）。
-    let mut builder = reqwest::Client::builder()
-        .connect_timeout(std::time::Duration::from_secs(10));
+    let mut builder =
+        reqwest::Client::builder().connect_timeout(std::time::Duration::from_secs(10));
     if let Some(proxy_url) = effective {
         let proxy = reqwest::Proxy::all(proxy_url)
             .map_err(|e| format!("代理 URL '{}': {e}", http_client::mask_url(proxy_url)))?;
         builder = builder.proxy(proxy);
     }
-    let client = builder.build().map_err(|e| format!("构建测试客户端失败: {e}"))?;
+    let client = builder
+        .build()
+        .map_err(|e| format!("构建测试客户端失败: {e}"))?;
 
     let test_url = "https://models.dev/api.json";
     let start = std::time::Instant::now();

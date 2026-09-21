@@ -45,10 +45,8 @@ impl Database {
         let d = AppBehavior::default();
         AppBehavior {
             show_in_tray: self.get_bool_setting(KEY_SHOW_IN_TRAY, d.show_in_tray),
-            minimize_to_tray_on_close: self.get_bool_setting(
-                KEY_MINIMIZE_TO_TRAY_ON_CLOSE,
-                d.minimize_to_tray_on_close,
-            ),
+            minimize_to_tray_on_close: self
+                .get_bool_setting(KEY_MINIMIZE_TO_TRAY_ON_CLOSE, d.minimize_to_tray_on_close),
             silent_startup: self.get_bool_setting(KEY_SILENT_STARTUP, d.silent_startup),
             launch_on_startup: self.get_bool_setting(KEY_LAUNCH_ON_STARTUP, d.launch_on_startup),
         }

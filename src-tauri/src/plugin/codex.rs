@@ -15,8 +15,8 @@ use serde_json::{json, Value};
 use crate::plugin::error::PluginError;
 use crate::plugin::mcp::{McpPlugin, McpServerSpec};
 use crate::plugin::session_utils::{
-    collect_files_with_ext, extract_text, parse_timestamp_to_ms, path_basename, read_head_tail_lines,
-    truncate_summary, TITLE_MAX_CHARS,
+    collect_files_with_ext, extract_text, parse_timestamp_to_ms, path_basename,
+    read_head_tail_lines, truncate_summary, TITLE_MAX_CHARS,
 };
 use crate::plugin::{AgentPlugin, ImportCandidate, LiveConfig, LiveProvider, PluginCapabilities};
 use crate::types::Provider;
@@ -98,7 +98,8 @@ fn write_live_atomic(auth: &Value, config_text: &str) -> Result<(), PluginError>
         None
     };
 
-    let auth_json = serde_json::to_string_pretty(auth).map_err(|e| PluginError::json(&auth_p, e))?;
+    let auth_json =
+        serde_json::to_string_pretty(auth).map_err(|e| PluginError::json(&auth_p, e))?;
     std::fs::write(&auth_p, format!("{auth_json}\n")).map_err(|e| PluginError::io(&auth_p, e))?;
 
     if let Err(e) = std::fs::write(&config_p, config_text) {
@@ -171,28 +172,20 @@ impl AgentPlugin for CodexPlugin {
                 ))
             })?
             .unwrap_or_else(|| json!({}));
-        let settings = raw
-            .as_object()
-            .ok_or_else(|| {
-                PluginError::Config(format!(
-                    "provider '{}' 的 settings_config 必须是 JSON 对象",
-                    provider.id
-                ))
-            })?;
-        let auth = settings
-            .get("auth")
-            .cloned()
-            .unwrap_or_else(|| json!({}));
+        let settings = raw.as_object().ok_or_else(|| {
+            PluginError::Config(format!(
+                "provider '{}' 的 settings_config 必须是 JSON 对象",
+                provider.id
+            ))
+        })?;
+        let auth = settings.get("auth").cloned().unwrap_or_else(|| json!({}));
         if !auth.is_object() {
             return Err(PluginError::Config(format!(
                 "provider '{}' 的 Codex auth 配置必须是 JSON 对象",
                 provider.id
             )));
         }
-        let config_text = settings
-            .get("config")
-            .and_then(Value::as_str)
-            .unwrap_or("");
+        let config_text = settings.get("config").and_then(Value::as_str).unwrap_or("");
         write_live_atomic(&auth, config_text)
     }
 
@@ -280,10 +273,7 @@ impl McpPlugin for CodexPlugin {
             .map_err(|e| PluginError::Config(format!("解析 config.toml 失败: {e}")))?;
         // 官方标准 [mcp_servers.*]；容错读取 [mcp.servers.*]（历史错误写入）。
         for section_key in ["mcp_servers", "mcp.servers"] {
-            let Some(entries) = root
-                .get(section_key)
-                .and_then(toml::Value::as_table)
-            else {
+            let Some(entries) = root.get(section_key).and_then(toml::Value::as_table) else {
                 continue;
             };
             for (id, entry) in entries {
@@ -502,7 +492,11 @@ fn toml_server_to_json(entry: &toml::value::Table) -> Value {
 
     let mut spec = serde_json::Map::new();
     for (key, value) in entry {
-        let output_key = if key == "http_headers" { "headers" } else { key };
+        let output_key = if key == "http_headers" {
+            "headers"
+        } else {
+            key
+        };
         if let Some(v) = convert(value) {
             spec.insert(output_key.to_string(), v);
         }
@@ -538,7 +532,7 @@ fn scan_sessions() -> Result<Vec<crate::plugin::SessionMeta>, PluginError> {
             sessions.push(meta);
         }
     }
-    sessions.sort_by(|a, b| b.last_active_at.cmp(&a.last_active_at));
+    sessions.sort_by_key(|s| std::cmp::Reverse(s.last_active_at));
     Ok(sessions)
 }
 
@@ -700,7 +694,10 @@ fn request_heading_payload(line: &str) -> Option<&str> {
         return None;
     }
     let heading = trimmed.trim_start_matches('#').trim_start();
-    if !heading.to_ascii_lowercase().starts_with(CODEX_REQUEST_MARKER) {
+    if !heading
+        .to_ascii_lowercase()
+        .starts_with(CODEX_REQUEST_MARKER)
+    {
         return None;
     }
     let suffix = heading[CODEX_REQUEST_MARKER.len()..].trim_start();
@@ -907,7 +904,7 @@ fn sync_usage_impl() -> Result<Vec<crate::plugin::UsageRecord>, PluginError> {
             timestamp_ms: last_ts.unwrap_or(0),
         });
     }
-    records.sort_by(|a, b| b.timestamp_ms.cmp(&a.timestamp_ms));
+    records.sort_by_key(|r| std::cmp::Reverse(r.timestamp_ms));
     Ok(records)
 }
 
@@ -999,7 +996,8 @@ mod tests {
         let _guard = HomeGuard::set(temp.path());
         let p = CodexPlugin::new();
 
-        p.apply(&provider("default", &sample_settings()), true).unwrap();
+        p.apply(&provider("default", &sample_settings()), true)
+            .unwrap();
 
         assert_eq!(
             std::fs::read_to_string(temp.path().join(".codex").join("config.toml")).unwrap(),
@@ -1078,7 +1076,8 @@ mod tests {
         assert_eq!(fs_server.spec["env"]["KEY"], "value");
 
         // 写入保注释：手工注释行不得丢失
-        let config = std::fs::read_to_string(temp.path().join(".codex").join("config.toml")).unwrap();
+        let config =
+            std::fs::read_to_string(temp.path().join(".codex").join("config.toml")).unwrap();
         assert!(config.contains("[mcp_servers.fs]"));
         assert!(config.contains("http_headers"));
 
@@ -1184,7 +1183,10 @@ mod tests {
         let records = p.sync_usage().unwrap();
         assert_eq!(records.len(), 1);
         let r = &records[0];
-        assert_eq!(r.source_id, "codex_session:019f6af2-18b0-7673-958e-d25be650e172");
+        assert_eq!(
+            r.source_id,
+            "codex_session:019f6af2-18b0-7673-958e-d25be650e172"
+        );
         assert_eq!(r.model, "gpt-5.5");
         // 最后一次累计快照；OpenAI 口径 input 含 cached → fresh = 2000 - 900
         assert_eq!(r.input_tokens, 1100);
@@ -1218,7 +1220,8 @@ mod tests {
     }
 
     #[test]
-    fn session_title_skips_agents_md_and_extracts_vscode_request() {        let temp = tempfile::tempdir().unwrap();
+    fn session_title_skips_agents_md_and_extracts_vscode_request() {
+        let temp = tempfile::tempdir().unwrap();
         let _guard = HomeGuard::set(temp.path());
         let dir = temp.path().join(".codex").join("sessions").join("d");
         std::fs::create_dir_all(&dir).unwrap();

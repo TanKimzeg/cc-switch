@@ -33,10 +33,7 @@ pub fn settings_set_minimize_to_tray_on_close(
 
 /// 设置「静默启动」。
 #[tauri::command]
-pub fn settings_set_silent_startup(
-    db: State<'_, Database>,
-    enabled: bool,
-) -> Result<(), String> {
+pub fn settings_set_silent_startup(db: State<'_, Database>, enabled: bool) -> Result<(), String> {
     db.set_bool_setting(KEY_SILENT_STARTUP, enabled)
         .map_err(|e| e.to_string())
 }
@@ -53,9 +50,13 @@ pub fn settings_set_launch_on_startup(
         .map_err(|e| e.to_string())?;
     let autostart = app.autolaunch();
     if enabled {
-        autostart.enable().map_err(|e| format!("设置开机自启失败: {e}"))
+        autostart
+            .enable()
+            .map_err(|e| format!("设置开机自启失败: {e}"))
     } else {
-        autostart.disable().map_err(|e| format!("取消开机自启失败: {e}"))
+        autostart
+            .disable()
+            .map_err(|e| format!("取消开机自启失败: {e}"))
     }
 }
 
@@ -96,8 +97,7 @@ pub fn settings_set_override(
 #[tauri::command]
 pub fn get_app_data_dir_override(app: tauri::AppHandle) -> Result<Option<String>, String> {
     let config_dir = app.path().app_config_dir().map_err(|e| e.to_string())?;
-    Ok(overrides::get_app_data_dir_override(&config_dir)
-        .map(|p| p.to_string_lossy().to_string()))
+    Ok(overrides::get_app_data_dir_override(&config_dir).map(|p| p.to_string_lossy().to_string()))
 }
 
 /// 设置/清除 AgentSwitch 数据目录覆盖（返回 true = 需要重启生效）。

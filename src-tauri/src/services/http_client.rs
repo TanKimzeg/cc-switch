@@ -96,7 +96,9 @@ fn build_client(proxy_url: Option<&str>) -> Result<Client, String> {
         log::debug!("[GlobalProxy] 未配置代理，跟随系统代理");
     }
 
-    builder.build().map_err(|e| format!("构建 HTTP 客户端失败: {e}"))
+    builder
+        .build()
+        .map_err(|e| format!("构建 HTTP 客户端失败: {e}"))
 }
 
 /// 隐藏 URL 中的用户名密码（用于日志与错误信息）。
@@ -134,7 +136,10 @@ mod tests {
         // 全局静态状态：env_lock 串行化，测试后恢复直连。
         let _lock = crate::test_support::env_lock().lock().unwrap();
         apply(Some("http://127.0.0.1:7890")).unwrap();
-        assert_eq!(current_proxy_url().as_deref(), Some("http://127.0.0.1:7890"));
+        assert_eq!(
+            current_proxy_url().as_deref(),
+            Some("http://127.0.0.1:7890")
+        );
         let _ = get(); // 客户端可用
         apply(None).unwrap();
         assert_eq!(current_proxy_url(), None);

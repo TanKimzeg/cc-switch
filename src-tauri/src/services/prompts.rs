@@ -66,10 +66,7 @@ impl PromptService {
             .file_name()
             .map(|n| n.to_string_lossy().to_string())
             .unwrap_or_else(|| "prompt".to_string());
-        let tmp = path.with_file_name(format!(
-            ".{file_name}.tmp-{}-{nonce}",
-            std::process::id()
-        ));
+        let tmp = path.with_file_name(format!(".{file_name}.tmp-{}-{nonce}", std::process::id()));
         if let Err(e) = std::fs::write(&tmp, content) {
             let _ = std::fs::remove_file(&tmp);
             return Err(e.to_string());
@@ -81,21 +78,14 @@ impl PromptService {
     }
 
     /// 启用 prompt：回填 live 文件 → 互斥禁用其他 → 启用目标 → 写文件。
-    pub fn enable(
-        db: &Database,
-        file: &Path,
-        plugin_id: &str,
-        id: &str,
-    ) -> Result<(), String> {
+    pub fn enable(db: &Database, file: &Path, plugin_id: &str, id: &str) -> Result<(), String> {
         // 回填：把当前 live 文件内容保存到已启用项，或创建备份。
         if let Ok(live_content) = std::fs::read_to_string(file) {
             if !live_content.trim().is_empty() {
-                let prompts = db.list_prompts(Some(plugin_id)).map_err(|e| e.to_string())?;
-                if let Some(mut enabled) = prompts
-                    .iter()
-                    .find(|p| p.enabled)
-                    .cloned()
-                {
+                let prompts = db
+                    .list_prompts(Some(plugin_id))
+                    .map_err(|e| e.to_string())?;
+                if let Some(mut enabled) = prompts.iter().find(|p| p.enabled).cloned() {
                     enabled.content = live_content.clone();
                     db.save_prompt(&enabled).map_err(|e| e.to_string())?;
                     log::info!("回填 live 提示词内容到已启用项: {}", enabled.id);
@@ -126,7 +116,9 @@ impl PromptService {
         }
 
         // 互斥禁用同插件其他 prompt。
-        let prompts = db.list_prompts(Some(plugin_id)).map_err(|e| e.to_string())?;
+        let prompts = db
+            .list_prompts(Some(plugin_id))
+            .map_err(|e| e.to_string())?;
         for prompt in &prompts {
             if prompt.id != id {
                 db.set_prompt_enabled(&prompt.id, false)
@@ -144,14 +136,12 @@ impl PromptService {
     }
 
     /// 停用 prompt：若该插件不再有启用项，则清空记忆文件。
-    pub fn disable(
-        db: &Database,
-        file: &Path,
-        plugin_id: &str,
-        id: &str,
-    ) -> Result<(), String> {
-        db.set_prompt_enabled(id, false).map_err(|e| e.to_string())?;
-        let remaining = db.list_prompts(Some(plugin_id)).map_err(|e| e.to_string())?;
+    pub fn disable(db: &Database, file: &Path, plugin_id: &str, id: &str) -> Result<(), String> {
+        db.set_prompt_enabled(id, false)
+            .map_err(|e| e.to_string())?;
+        let remaining = db
+            .list_prompts(Some(plugin_id))
+            .map_err(|e| e.to_string())?;
         if !remaining.iter().any(|p| p.enabled) && file.exists() {
             Self::write_text_file(file, "")?;
         }
@@ -389,8 +379,10 @@ mod tests {
         let db = Database::new(&dir.path().join("cc.db")).unwrap();
         let file = write_skill(dir.path(), "AGENTS.md", "old live");
 
-        db.upsert_prompt("a", "opencode", "A", "content A", None).unwrap();
-        db.upsert_prompt("b", "opencode", "B", "content B", None).unwrap();
+        db.upsert_prompt("a", "opencode", "A", "content A", None)
+            .unwrap();
+        db.upsert_prompt("b", "opencode", "B", "content B", None)
+            .unwrap();
 
         PromptService::enable(&db, &file, "opencode", "a").unwrap();
         assert_eq!(std::fs::read_to_string(&file).unwrap(), "content A");
@@ -413,7 +405,8 @@ mod tests {
         let file = write_skill(dir.path(), "AGENTS.md", "user edited");
 
         // 无启用项时启用 → 创建禁用的备份 prompt
-        db.upsert_prompt("a", "opencode", "A", "content A", None).unwrap();
+        db.upsert_prompt("a", "opencode", "A", "content A", None)
+            .unwrap();
         PromptService::enable(&db, &file, "opencode", "a").unwrap();
         let backup = db
             .list_prompts(Some("opencode"))
@@ -434,7 +427,8 @@ mod tests {
         let db = Database::new(&dir.path().join("cc.db")).unwrap();
         let file = write_skill(dir.path(), "AGENTS.md", "x");
 
-        db.upsert_prompt("a", "opencode", "A", "content A", None).unwrap();
+        db.upsert_prompt("a", "opencode", "A", "content A", None)
+            .unwrap();
         PromptService::enable(&db, &file, "opencode", "a").unwrap();
         assert_eq!(std::fs::read_to_string(&file).unwrap(), "content A");
 
@@ -461,7 +455,8 @@ mod tests {
         let db = Database::new(&dir.path().join("cc.db")).unwrap();
         let file = write_skill(dir.path(), "AGENTS.md", "x");
 
-        db.upsert_prompt("a", "opencode", "A", "content", None).unwrap();
+        db.upsert_prompt("a", "opencode", "A", "content", None)
+            .unwrap();
         PromptService::enable(&db, &file, "opencode", "a").unwrap();
         assert!(PromptService::delete(&db, "a").is_err());
 

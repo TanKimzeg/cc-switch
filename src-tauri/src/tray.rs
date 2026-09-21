@@ -251,8 +251,11 @@ mod tests {
             "capabilities": { "apply": true },
             "entry": { "type": "ts", "main": "main.js" }
         });
-        std::fs::write(plugin_dir.join("manifest.json"), serde_json::to_vec(&manifest).unwrap())
-            .unwrap();
+        std::fs::write(
+            plugin_dir.join("manifest.json"),
+            serde_json::to_vec(&manifest).unwrap(),
+        )
+        .unwrap();
         (dir, registry)
     }
 

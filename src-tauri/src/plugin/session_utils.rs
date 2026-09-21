@@ -188,7 +188,9 @@ mod tests {
     fn extract_text_handles_array_and_object() {
         assert_eq!(extract_text(&json!("plain")), "plain");
         assert_eq!(
-            extract_text(&json!([{"type": "text", "text": "a"}, {"type": "tool_use", "name": "W"}])),
+            extract_text(
+                &json!([{"type": "text", "text": "a"}, {"type": "tool_use", "name": "W"}])
+            ),
             "a\n[Tool: W]"
         );
         assert_eq!(extract_text(&json!({"text": "x"})), "x");

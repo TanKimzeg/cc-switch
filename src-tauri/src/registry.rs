@@ -881,15 +881,9 @@ mod tests {
         assert_eq!(list.len(), 7);
         let openclaw = list.iter().find(|p| p.manifest.id == "openclaw").unwrap();
         let opencode = list.iter().find(|p| p.manifest.id == "opencode").unwrap();
-        let claudecode = list
-            .iter()
-            .find(|p| p.manifest.id == "claudecode")
-            .unwrap();
+        let claudecode = list.iter().find(|p| p.manifest.id == "claudecode").unwrap();
         let codex = list.iter().find(|p| p.manifest.id == "codex").unwrap();
-        let grokbuild = list
-            .iter()
-            .find(|p| p.manifest.id == "grokbuild")
-            .unwrap();
+        let grokbuild = list.iter().find(|p| p.manifest.id == "grokbuild").unwrap();
         let hermes = list.iter().find(|p| p.manifest.id == "hermes").unwrap();
         let demo = list.iter().find(|p| p.manifest.id == "demo").unwrap();
         assert_eq!(openclaw.source, "builtin");
@@ -954,11 +948,7 @@ mod tests {
             skills_dir.ends_with("skills"),
             "skills_dir 应由 trait 回填，实际: {skills_dir}"
         );
-        let prompt_file = opencode
-            .manifest
-            .prompt_file
-            .as_deref()
-            .unwrap_or_default();
+        let prompt_file = opencode.manifest.prompt_file.as_deref().unwrap_or_default();
         assert!(
             prompt_file.ends_with("AGENTS.md"),
             "prompt_file 应由 trait 回填，实际: {prompt_file}"

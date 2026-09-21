@@ -397,8 +397,7 @@ pub fn validate_repo_ref(owner: &str, name: &str, branch: &str) -> Result<(), St
 
 /// 出口断言：URL 拼好后再确认它确实指向预期的 github.com 路径（纵深防御）。
 fn assert_github_archive_url(url: &str, owner: &str, name: &str) -> Result<(), String> {
-    let parsed =
-        url::Url::parse(url).map_err(|e| format!("Invalid archive URL: {e}"))?;
+    let parsed = url::Url::parse(url).map_err(|e| format!("Invalid archive URL: {e}"))?;
     let expected_prefix = format!("/{owner}/{name}/archive/refs/heads/");
     if parsed.scheme() != "https"
         || parsed.host_str() != Some("github.com")
@@ -556,7 +555,9 @@ fn copy_entry_within_budget<R: std::io::Read, W: std::io::Write>(
             return Ok(());
         }
         charge_archive_budget(total_bytes, read as u64)?;
-        writer.write_all(&buffer[..read]).map_err(|e| e.to_string())?;
+        writer
+            .write_all(&buffer[..read])
+            .map_err(|e| e.to_string())?;
     }
 }
 
@@ -821,8 +822,7 @@ fn find_skill_dir_by_name(root: &Path, target_name: &str) -> Option<PathBuf> {
         if depth > 3 {
             return None;
         }
-        let entries: Vec<std::fs::DirEntry> =
-            std::fs::read_dir(dir).ok()?.flatten().collect();
+        let entries: Vec<std::fs::DirEntry> = std::fs::read_dir(dir).ok()?.flatten().collect();
         for entry in &entries {
             let path = entry.path();
             if !path.is_dir() {
@@ -899,12 +899,7 @@ fn extract_doc_path_from_url(url: &str) -> Option<String> {
 }
 
 /// 构建指向仓库内 SKILL.md 的 GitHub 链接。
-fn build_skill_doc_url(
-    owner: &str,
-    repo: &str,
-    branch: &str,
-    doc_path: &str,
-) -> Option<String> {
+fn build_skill_doc_url(owner: &str, repo: &str, branch: &str, doc_path: &str) -> Option<String> {
     if validate_repo_ref(owner, repo, branch).is_err() {
         return None;
     }
@@ -914,11 +909,7 @@ fn build_skill_doc_url(
 }
 
 /// 选择文档路径：真实解析出的优先，其次旧 readme_url，最后 directory 拼接。
-fn choose_doc_path(
-    resolved: Option<String>,
-    readme_url: Option<&str>,
-    directory: &str,
-) -> String {
+fn choose_doc_path(resolved: Option<String>, readme_url: Option<&str>, directory: &str) -> String {
     resolved.unwrap_or_else(|| {
         readme_url
             .and_then(extract_doc_path_from_url)
@@ -934,11 +925,10 @@ fn http_client() -> reqwest::Client {
 
 /// 下载并卡住压缩体大小，返回完整字节。
 async fn download_archive(client: &reqwest::Client, url: &str) -> Result<Vec<u8>, String> {
-    let response = client
-        .get(url)
-        .send()
-        .await
-        .map_err(|_e| skill_error("DOWNLOAD_FAILED", &[("status", "0")], Some("checkNetwork")))?;
+    let response =
+        client.get(url).send().await.map_err(|_e| {
+            skill_error("DOWNLOAD_FAILED", &[("status", "0")], Some("checkNetwork"))
+        })?;
     if !response.status().is_success() {
         let status = response.status().as_u16().to_string();
         return Err(skill_error(
@@ -1000,8 +990,8 @@ async fn download_repo(
         match download_archive(client, &url).await {
             Ok(bytes) => {
                 let cursor = std::io::Cursor::new(bytes);
-                let archive = zip::ZipArchive::new(cursor)
-                    .map_err(|e| format!("归档解析失败: {e}"))?;
+                let archive =
+                    zip::ZipArchive::new(cursor).map_err(|e| format!("归档解析失败: {e}"))?;
                 match extract_repo_archive(archive, temp.path()) {
                     Ok(()) => return Ok((temp, branch.clone())),
                     Err(e) => last_err = Some(e),
@@ -1149,7 +1139,11 @@ fn replace_dest_with_copy(source: &Path, dest: &Path, directory: &str) -> Result
     }
     std::fs::rename(&tmp, dest).map_err(|e| {
         let _ = remove_path(&tmp);
-        format!("替换技能目录失败: {} -> {}: {e}", tmp.display(), dest.display())
+        format!(
+            "替换技能目录失败: {} -> {}: {e}",
+            tmp.display(),
+            dest.display()
+        )
     })
 }
 
@@ -1186,9 +1180,7 @@ pub fn sync_skill_to_dir(
             }
             create_symlink(&source, &dest)
         }
-        SyncMethod::Copy => {
-            replace_dest_with_copy(&source, &dest, &directory.to_string_lossy())
-        }
+        SyncMethod::Copy => replace_dest_with_copy(&source, &dest, &directory.to_string_lossy()),
     }
 }
 
@@ -1245,7 +1237,11 @@ fn cleanup_old_skill_backups(dir: &Path) -> Result<(), String> {
 }
 
 /// 创建卸载/更新备份，返回备份目录路径。
-fn create_backup(data_dir: &Path, directory: &str, source: &Path) -> Result<Option<PathBuf>, String> {
+fn create_backup(
+    data_dir: &Path,
+    directory: &str,
+    source: &Path,
+) -> Result<Option<PathBuf>, String> {
     let backup_root = backup_dir(data_dir);
     std::fs::create_dir_all(&backup_root).map_err(|e| e.to_string())?;
     let timestamp = chrono::Utc::now().format("%Y%m%d_%H%M%S");
@@ -1462,22 +1458,20 @@ impl SkillService {
                 enabled: true,
             };
             let client = http_client();
-            let (temp_guard, used_branch) = tokio::time::timeout(
-                REPO_DOWNLOAD_TIMEOUT,
-                download_repo(&client, &repo),
-            )
-            .await
-            .map_err(|_| {
-                skill_error(
-                    "DOWNLOAD_TIMEOUT",
-                    &[
-                        ("owner", &repo.owner),
-                        ("name", &repo.name),
-                        ("timeout", "60"),
-                    ],
-                    Some("checkNetwork"),
-                )
-            })??;
+            let (temp_guard, used_branch) =
+                tokio::time::timeout(REPO_DOWNLOAD_TIMEOUT, download_repo(&client, &repo))
+                    .await
+                    .map_err(|_| {
+                        skill_error(
+                            "DOWNLOAD_TIMEOUT",
+                            &[
+                                ("owner", &repo.owner),
+                                ("name", &repo.name),
+                                ("timeout", "60"),
+                            ],
+                            Some("checkNetwork"),
+                        )
+                    })??;
             let temp_dir = temp_guard.path();
             repo_branch = used_branch;
 
@@ -1557,7 +1551,11 @@ impl SkillService {
         let temp_dir = temp_guard.path();
         let skill_dirs = scan_skills_in_dir(temp_dir)?;
         if skill_dirs.is_empty() {
-            return Err(skill_error("NO_SKILLS_IN_ZIP", &[], Some("checkZipContent")));
+            return Err(skill_error(
+                "NO_SKILLS_IN_ZIP",
+                &[],
+                Some("checkZipContent"),
+            ));
         }
 
         let existing = db.list_skills().map_err(|e| e.to_string())?;
@@ -1708,15 +1706,10 @@ impl SkillService {
                     }
                     skills.extend(repo_skills);
                 }
-                Err(e) => log::warn!(
-                    "获取仓库 {}/{} 技能失败: {}",
-                    repo.owner,
-                    repo.name,
-                    e
-                ),
+                Err(e) => log::warn!("获取仓库 {}/{} 技能失败: {}", repo.owner, repo.name, e),
             }
         }
-        skills.sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase()));
+        skills.sort_by_key(|s| std::cmp::Reverse(s.name.to_lowercase()));
         Ok(skills)
     }
 
@@ -1732,11 +1725,9 @@ impl SkillService {
         let mut groups: std::collections::HashMap<(String, String, String), Vec<SkillRecord>> =
             std::collections::HashMap::new();
         for skill in &skills {
-            let (Some(owner), Some(name), Some(branch)) = (
-                &skill.repo_owner,
-                &skill.repo_name,
-                &skill.repo_branch,
-            ) else {
+            let (Some(owner), Some(name), Some(branch)) =
+                (&skill.repo_owner, &skill.repo_name, &skill.repo_branch)
+            else {
                 continue;
             };
             groups
@@ -1754,15 +1745,13 @@ impl SkillService {
                 branch: branch.clone(),
                 enabled: true,
             };
-            let (temp_guard, _) = match tokio::time::timeout(
-                REPO_DOWNLOAD_TIMEOUT,
-                download_repo(&client, &repo),
-            )
-            .await
-            {
-                Ok(Ok(result)) => result,
-                _ => continue,
-            };
+            let (temp_guard, _) =
+                match tokio::time::timeout(REPO_DOWNLOAD_TIMEOUT, download_repo(&client, &repo))
+                    .await
+                {
+                    Ok(Ok(result)) => result,
+                    _ => continue,
+                };
             let temp_dir = temp_guard.path();
             let mut remote_skills = Vec::new();
             let _ = scan_dir_recursive(temp_dir, temp_dir, &repo, &mut remote_skills);
@@ -1848,18 +1837,16 @@ impl SkillService {
         let ssot = ssot_dir(data_dir, settings.storage_location);
 
         let client = http_client();
-        let (temp_guard, used_branch) = tokio::time::timeout(
-            REPO_DOWNLOAD_TIMEOUT,
-            download_repo(&client, &repo),
-        )
-        .await
-        .map_err(|_| {
-            skill_error(
-                "DOWNLOAD_TIMEOUT",
-                &[("owner", owner), ("name", name), ("timeout", "60")],
-                Some("checkNetwork"),
-            )
-        })??;
+        let (temp_guard, used_branch) =
+            tokio::time::timeout(REPO_DOWNLOAD_TIMEOUT, download_repo(&client, &repo))
+                .await
+                .map_err(|_| {
+                    skill_error(
+                        "DOWNLOAD_TIMEOUT",
+                        &[("owner", owner), ("name", name), ("timeout", "60")],
+                        Some("checkNetwork"),
+                    )
+                })??;
         let temp_dir = temp_guard.path();
 
         let mut remote_skills = Vec::new();
@@ -1935,7 +1922,8 @@ impl SkillService {
             content_hash: new_hash,
             updated_at: now_ts(),
         };
-        db.update_skill_metadata(&updated).map_err(|e| e.to_string())?;
+        db.update_skill_metadata(&updated)
+            .map_err(|e| e.to_string())?;
         Ok(updated)
     }
 
@@ -2050,10 +2038,10 @@ impl SkillService {
 
         let directory = require_valid_directory(&metadata.directory)?;
         let existing = db.list_skills().map_err(|e| e.to_string())?;
-        if existing
-            .iter()
-            .any(|s| s.directory.eq_ignore_ascii_case(&directory.to_string_lossy()))
-        {
+        if existing.iter().any(|s| {
+            s.directory
+                .eq_ignore_ascii_case(&directory.to_string_lossy())
+        }) {
             return Err(format!(
                 "技能已存在，请先卸载当前同名技能: {}",
                 directory.to_string_lossy()
@@ -2065,10 +2053,7 @@ impl SkillService {
         std::fs::create_dir_all(&ssot).map_err(|e| e.to_string())?;
         let restore_path = ssot.join(&directory);
         if restore_path.exists() || is_symlink(&restore_path) {
-            return Err(format!(
-                "恢复目标已存在: {}",
-                restore_path.display()
-            ));
+            return Err(format!("恢复目标已存在: {}", restore_path.display()));
         }
 
         copy_dir_recursive(&skill_dir, &restore_path)?;
@@ -2358,9 +2343,8 @@ impl Database {
     /// 列出全部技能（含启用插件）。
     pub fn list_skills(&self) -> rusqlite::Result<Vec<SkillRecord>> {
         let conn = self.lock();
-        let mut stmt = conn.prepare(&format!(
-            "SELECT {SKILL_COLUMNS} FROM skills ORDER BY name"
-        ))?;
+        let mut stmt =
+            conn.prepare(&format!("SELECT {SKILL_COLUMNS} FROM skills ORDER BY name"))?;
         let skills = stmt
             .query_map([], row_to_skill)?
             .collect::<rusqlite::Result<Vec<_>>>()?;
@@ -2389,9 +2373,8 @@ impl Database {
     /// 读取单个技能。
     pub fn get_skill(&self, id: &str) -> rusqlite::Result<Option<SkillRecord>> {
         let conn = self.lock();
-        let mut stmt = conn.prepare(&format!(
-            "SELECT {SKILL_COLUMNS} FROM skills WHERE id = ?1"
-        ))?;
+        let mut stmt =
+            conn.prepare(&format!("SELECT {SKILL_COLUMNS} FROM skills WHERE id = ?1"))?;
         let mut rows = stmt.query_map(params![id], row_to_skill)?;
         let Some(skill) = rows.next().transpose()? else {
             return Ok(None);
@@ -2459,7 +2442,12 @@ impl Database {
     }
 
     /// 更新技能内容哈希。
-    pub fn update_skill_hash(&self, id: &str, hash: &str, updated_at: i64) -> rusqlite::Result<bool> {
+    pub fn update_skill_hash(
+        &self,
+        id: &str,
+        hash: &str,
+        updated_at: i64,
+    ) -> rusqlite::Result<bool> {
         let affected = self.lock().execute(
             "UPDATE skills SET content_hash = ?2, updated_at = ?3 WHERE id = ?1",
             params![id, hash, updated_at],
@@ -2492,9 +2480,8 @@ impl Database {
     /// 列出全部技能仓库。
     pub fn list_skill_repos(&self) -> rusqlite::Result<Vec<SkillRepo>> {
         let conn = self.lock();
-        let mut stmt = conn.prepare(
-            "SELECT owner, name, branch, enabled FROM skill_repos ORDER BY owner, name",
-        )?;
+        let mut stmt = conn
+            .prepare("SELECT owner, name, branch, enabled FROM skill_repos ORDER BY owner, name")?;
         let rows = stmt
             .query_map([], |row| {
                 Ok(SkillRepo {
@@ -2534,11 +2521,7 @@ impl Database {
             return Ok(());
         }
         let conn = self.lock();
-        let count: i64 = conn.query_row(
-            "SELECT COUNT(*) FROM skill_repos",
-            [],
-            |r| r.get(0),
-        )?;
+        let count: i64 = conn.query_row("SELECT COUNT(*) FROM skill_repos", [], |r| r.get(0))?;
         if count == 0 {
             for repo in [
                 ("anthropics", "skills", "main"),
@@ -2565,7 +2548,11 @@ mod tests {
 
     fn write_skill(dir: &Path, name: &str, body: &str) {
         std::fs::create_dir_all(dir).unwrap();
-        std::fs::write(dir.join("SKILL.md"), format!("---\nname: {name}\n---\n{body}")).unwrap();
+        std::fs::write(
+            dir.join("SKILL.md"),
+            format!("---\nname: {name}\n---\n{body}"),
+        )
+        .unwrap();
     }
 
     /// 把 SSOT/备份目录隔离到临时主目录（对齐 v1 的 `~/.agentswitch`）。
@@ -2660,30 +2647,24 @@ mod tests {
 
     #[test]
     fn assert_github_archive_url_guards() {
-        assert!(
-            assert_github_archive_url(
-                "https://github.com/o/r/archive/refs/heads/main.zip",
-                "o",
-                "r"
-            )
-            .is_ok()
-        );
-        assert!(
-            assert_github_archive_url(
-                "https://github.com/o/r/releases/download/v1/evil.zip",
-                "o",
-                "r"
-            )
-            .is_err()
-        );
-        assert!(
-            assert_github_archive_url(
-                "https://evil.com/o/r/archive/refs/heads/main.zip",
-                "o",
-                "r"
-            )
-            .is_err()
-        );
+        assert!(assert_github_archive_url(
+            "https://github.com/o/r/archive/refs/heads/main.zip",
+            "o",
+            "r"
+        )
+        .is_ok());
+        assert!(assert_github_archive_url(
+            "https://github.com/o/r/releases/download/v1/evil.zip",
+            "o",
+            "r"
+        )
+        .is_err());
+        assert!(assert_github_archive_url(
+            "https://evil.com/o/r/archive/refs/heads/main.zip",
+            "o",
+            "r"
+        )
+        .is_err());
     }
 
     #[test]
@@ -2721,7 +2702,10 @@ mod tests {
         let mut zip_writer = zip::ZipWriter::new(std::io::Cursor::new(Vec::new()));
         // GitHub 归档带一层根目录；`repo-main/../evil` 剥根后含 `..`
         zip_writer
-            .start_file("repo-main/../evil.txt", zip::write::SimpleFileOptions::default())
+            .start_file(
+                "repo-main/../evil.txt",
+                zip::write::SimpleFileOptions::default(),
+            )
             .unwrap();
         zip_writer.write_all(b"pwned").unwrap();
         let bytes = zip_writer.finish().unwrap().into_inner();
@@ -2738,11 +2722,12 @@ mod tests {
         use std::io::Write;
         let mut zip_writer = zip::ZipWriter::new(std::io::Cursor::new(Vec::new()));
         zip_writer
-            .start_file("myrepo-main/SKILL.md", zip::write::SimpleFileOptions::default())
+            .start_file(
+                "myrepo-main/SKILL.md",
+                zip::write::SimpleFileOptions::default(),
+            )
             .unwrap();
-        zip_writer
-            .write_all(b"---\nname: Demo\n---\nbody")
-            .unwrap();
+        zip_writer.write_all(b"---\nname: Demo\n---\nbody").unwrap();
         let bytes = zip_writer.finish().unwrap().into_inner();
         let archive = zip::ZipArchive::new(std::io::Cursor::new(bytes)).unwrap();
         let dest = tempfile::tempdir().unwrap();
@@ -2755,9 +2740,14 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let mut zip_writer = zip::ZipWriter::new(std::io::Cursor::new(Vec::new()));
         zip_writer
-            .start_file("my-skill/SKILL.md", zip::write::SimpleFileOptions::default())
+            .start_file(
+                "my-skill/SKILL.md",
+                zip::write::SimpleFileOptions::default(),
+            )
             .unwrap();
-        zip_writer.write_all(b"---\nname: My Skill\n---\nbody").unwrap();
+        zip_writer
+            .write_all(b"---\nname: My Skill\n---\nbody")
+            .unwrap();
         let bytes = zip_writer.finish().unwrap().into_inner();
         let zip_path = dir.path().join("skills.zip");
         std::fs::write(&zip_path, bytes).unwrap();
@@ -2779,7 +2769,10 @@ mod tests {
         assert_eq!(record.name, "Test Skill");
         assert!(db.get_skill("test-skill").unwrap().is_some());
         // SSOT 位于 ~/.agentswitch/skills（对齐 v1）
-        assert!(th.agentswitch_skills().join("test-skill/SKILL.md").is_file());
+        assert!(th
+            .agentswitch_skills()
+            .join("test-skill/SKILL.md")
+            .is_file());
 
         db.set_skill_plugin_enabled("test-skill", "opencode", true)
             .unwrap();
@@ -2792,7 +2785,12 @@ mod tests {
         assert!(backup.is_some());
         assert!(db.get_skill("test-skill").unwrap().is_none());
         // 备份位于 ~/.agentswitch/skill-backups（对齐 v1）
-        assert!(th.agentswitch_backups().read_dir().unwrap().next().is_some());
+        assert!(th
+            .agentswitch_backups()
+            .read_dir()
+            .unwrap()
+            .next()
+            .is_some());
     }
 
     #[test]
@@ -2815,7 +2813,8 @@ mod tests {
         let backup_id = backups[0].backup_id.clone();
 
         // 从备份恢复，并重新启用插件
-        let restored = SkillService::restore_backup(&db, dir.path(), &backup_id, "opencode").unwrap();
+        let restored =
+            SkillService::restore_backup(&db, dir.path(), &backup_id, "opencode").unwrap();
         assert_eq!(restored.name, "My Skill");
         assert!(db.get_skill(&restored.id).unwrap().is_some());
         assert!(th.agentswitch_skills().join("my-skill/SKILL.md").is_file());
@@ -2856,7 +2855,10 @@ mod tests {
         .unwrap();
         assert_eq!(imported.len(), 1);
         assert_eq!(imported[0].enabled_plugins, vec!["opencode".to_string()]);
-        assert!(th.agentswitch_skills().join("find-skill/SKILL.md").is_file());
+        assert!(th
+            .agentswitch_skills()
+            .join("find-skill/SKILL.md")
+            .is_file());
     }
 
     #[test]
@@ -2872,7 +2874,8 @@ mod tests {
         // 默认 SSOT 在 ~/.agentswitch/skills（对齐 v1）
         assert!(th.agentswitch_skills().join("migrate/SKILL.md").is_file());
 
-        let result = SkillService::migrate_storage(&db, dir.path(), SkillStorageLocation::Unified).unwrap();
+        let result =
+            SkillService::migrate_storage(&db, dir.path(), SkillStorageLocation::Unified).unwrap();
         assert_eq!(result.migrated_count, 1);
         // 文件移到 ~/.agents/skills/（测试主目录）
         assert!(th.agents_skills().join("migrate/SKILL.md").is_file());
@@ -2918,11 +2921,15 @@ mod tests {
         zip_writer
             .start_file("skill-a/SKILL.md", zip::write::SimpleFileOptions::default())
             .unwrap();
-        zip_writer.write_all(b"---\nname: Skill A\n---\nbody").unwrap();
+        zip_writer
+            .write_all(b"---\nname: Skill A\n---\nbody")
+            .unwrap();
         zip_writer
             .start_file("skill-b/SKILL.md", zip::write::SimpleFileOptions::default())
             .unwrap();
-        zip_writer.write_all(b"---\nname: Skill B\n---\nbody").unwrap();
+        zip_writer
+            .write_all(b"---\nname: Skill B\n---\nbody")
+            .unwrap();
         let bytes = zip_writer.finish().unwrap().into_inner();
         let zip_path = dir.path().join("skills.zip");
         std::fs::write(&zip_path, bytes).unwrap();
@@ -3004,13 +3011,21 @@ mod tests {
         let src = dir.path().join("src-skill");
         write_skill(&src, "Hash", "body");
         SkillService::install_local_dir(&db, dir.path(), &src, "hash-skill").unwrap();
-        assert!(th.agentswitch_skills().join("hash-skill/SKILL.md").is_file());
+        assert!(th
+            .agentswitch_skills()
+            .join("hash-skill/SKILL.md")
+            .is_file());
         // 手动清空哈希
         db.lock()
             .execute("UPDATE skills SET content_hash = NULL", [])
             .unwrap();
         let n = SkillService::backfill_content_hashes(&db, dir.path()).unwrap();
         assert_eq!(n, 1);
-        assert!(db.get_skill("hash-skill").unwrap().unwrap().content_hash.is_some());
+        assert!(db
+            .get_skill("hash-skill")
+            .unwrap()
+            .unwrap()
+            .content_hash
+            .is_some());
     }
 }

@@ -525,7 +525,7 @@ fn scan_sessions() -> Result<Vec<SessionMeta>, PluginError> {
             sessions.push(s);
         }
     }
-    sessions.sort_by(|a, b| b.last_active_at.cmp(&a.last_active_at));
+    sessions.sort_by_key(|s| std::cmp::Reverse(s.last_active_at));
     Ok(sessions)
 }
 
@@ -1440,7 +1440,10 @@ mod tests {
         let temp = tempfile::tempdir().unwrap();
         let original = std::env::var_os("AGENT_SWITCH_OPENCODE_DATA_DIR");
         // override 指向数据目录本身（data_dir() 返回它，再 join opencode.db）。
-        std::env::set_var("AGENT_SWITCH_OPENCODE_DATA_DIR", temp.path().join("opencode"));
+        std::env::set_var(
+            "AGENT_SWITCH_OPENCODE_DATA_DIR",
+            temp.path().join("opencode"),
+        );
 
         let base = temp.path().join("opencode");
         std::fs::create_dir_all(&base).unwrap();

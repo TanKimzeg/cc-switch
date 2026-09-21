@@ -24,7 +24,10 @@ pub fn profiles_list(
         .into_iter()
         .map(|p| {
             let is_current = current.as_deref() == Some(p.id.as_str());
-            ProfileWithCurrent { profile: p, is_current }
+            ProfileWithCurrent {
+                profile: p,
+                is_current,
+            }
         })
         .collect())
 }
@@ -93,11 +96,5 @@ pub fn profiles_apply(
     id: String,
     plugin_id: String,
 ) -> Result<Vec<String>, String> {
-    crate::services::profiles::ProfileService::apply(
-        &db,
-        &registry,
-        &paths,
-        &id,
-        &plugin_id,
-    )
+    crate::services::profiles::ProfileService::apply(&db, &registry, &paths, &id, &plugin_id)
 }
