@@ -1,201 +1,117 @@
-#![allow(non_snake_case)]
+//! MCP 服务器管理命令（全局统一服务）。
 
-use indexmap::IndexMap;
-use std::collections::HashMap;
-
-use serde::Serialize;
 use tauri::State;
 
-use crate::app_config::AppType;
-use crate::claude_mcp;
-use crate::services::McpService;
-use crate::store::AppState;
+use crate::db::Database;
+use crate::registry::PluginRegistry;
+use crate::services::mcp::{McpServer, McpService};
 
-/// 获取 Claude MCP 状态
+/// 读取一个插件的 live 配置中的 MCP 服务器（供导入预览）。
 #[tauri::command]
-pub async fn get_claude_mcp_status() -> Result<claude_mcp::McpStatus, String> {
-    claude_mcp::get_mcp_status().map_err(|e| e.to_string())
-}
-
-/// 读取 mcp.json 文本内容
-#[tauri::command]
-pub async fn read_claude_mcp_config() -> Result<Option<String>, String> {
-    claude_mcp::read_mcp_json().map_err(|e| e.to_string())
-}
-
-/// 新增或更新一个 MCP 服务器条目
-#[tauri::command]
-pub async fn upsert_claude_mcp_server(id: String, spec: serde_json::Value) -> Result<bool, String> {
-    claude_mcp::upsert_mcp_server(&id, spec).map_err(|e| e.to_string())
-}
-
-/// 删除一个 MCP 服务器条目
-#[tauri::command]
-pub async fn delete_claude_mcp_server(id: String) -> Result<bool, String> {
-    claude_mcp::delete_mcp_server(&id).map_err(|e| e.to_string())
-}
-
-/// 校验命令是否在 PATH 中可用（不执行）
-#[tauri::command]
-pub async fn validate_mcp_command(cmd: String) -> Result<bool, String> {
-    claude_mcp::validate_command_in_path(&cmd).map_err(|e| e.to_string())
-}
-
-#[derive(Serialize)]
-pub struct McpConfigResponse {
-    pub config_path: String,
-    pub servers: HashMap<String, serde_json::Value>,
-}
-
-/// 获取 MCP 配置（来自 ~/.cc-switch/config.json）
-use std::str::FromStr;
-
-#[tauri::command]
-#[allow(deprecated)] // 兼容层命令，内部调用已废弃的 Service 方法
-pub async fn get_mcp_config(
-    state: State<'_, AppState>,
-    app: String,
-) -> Result<McpConfigResponse, String> {
-    let config_path = crate::config::get_app_config_path()
-        .to_string_lossy()
-        .to_string();
-    let app_ty = AppType::from_str(&app).map_err(|e| e.to_string())?;
-    let servers = McpService::get_servers(&state, app_ty).map_err(|e| e.to_string())?;
-    Ok(McpConfigResponse {
-        config_path,
-        servers,
-    })
-}
-
-/// 在 config.json 中新增或更新一个 MCP 服务器定义
-/// [已废弃] 该命令仍然使用旧的分应用API，会转换为统一结构
-#[tauri::command]
-pub async fn upsert_mcp_server_in_config(
-    state: State<'_, AppState>,
-    app: String,
+pub fn import_mcp_from_plugin(
+    registry: State<'_, PluginRegistry>,
     id: String,
-    spec: serde_json::Value,
-    sync_other_side: Option<bool>,
-) -> Result<bool, String> {
-    use crate::app_config::McpServer;
-
-    let app_ty = AppType::from_str(&app).map_err(|e| e.to_string())?;
-
-    // 读取现有的服务器（如果存在）
-    let existing_server = {
-        let servers = state.db.get_all_mcp_servers().map_err(|e| e.to_string())?;
-        servers.get(&id).cloned()
-    };
-
-    // 构建新的统一服务器结构
-    let mut new_server = if let Some(mut existing) = existing_server {
-        // 更新现有服务器
-        existing.server = spec.clone();
-        existing.apps.set_enabled_for(&app_ty, true);
-        existing
-    } else {
-        // 创建新服务器
-        let mut apps = crate::app_config::McpApps::default();
-        apps.set_enabled_for(&app_ty, true);
-
-        // 尝试从 spec 中提取 name，否则使用 id
-        let name = spec
-            .get("name")
-            .and_then(|v| v.as_str())
-            .unwrap_or(&id)
-            .to_string();
-
-        McpServer {
-            id: id.clone(),
-            name,
-            server: spec,
-            apps,
-            description: None,
-            homepage: None,
-            docs: None,
-            tags: Vec::new(),
-        }
-    };
-
-    // 如果 sync_other_side 为 true，也启用其他应用
-    if sync_other_side.unwrap_or(false) {
-        new_server.apps.claude = true;
-        new_server.apps.codex = true;
-        new_server.apps.gemini = true;
-        new_server.apps.opencode = true;
-    }
-
-    McpService::upsert_server(&state, new_server)
-        .map(|_| true)
+) -> Result<Vec<crate::plugin::mcp::McpServerSpec>, String> {
+    let plugin = registry.resolve_plugin(&id).map_err(|e| e.to_string())?;
+    require_mcp(plugin.as_ref(), &id)?;
+    plugin
+        .as_mcp()
+        .unwrap()
+        .get_mcp_servers()
         .map_err(|e| e.to_string())
 }
 
-/// 在 config.json 中删除一个 MCP 服务器定义
+/// 从插件 live 配置导入 MCP 服务器到统一表。
+///
+/// 对齐 v1 合并语义：记录已存在时仅置位当前插件的启用标志，
+/// 不覆盖其它插件的启用状态，也不覆盖已有配置。
 #[tauri::command]
-pub async fn delete_mcp_server_in_config(
-    state: State<'_, AppState>,
-    _app: String, // 参数保留用于向后兼容，但在统一结构中不再需要
+pub fn import_mcp_servers_from_plugin(
+    db: State<'_, Database>,
+    registry: State<'_, PluginRegistry>,
     id: String,
-) -> Result<bool, String> {
-    McpService::delete_server(&state, &id).map_err(|e| e.to_string())
+) -> Result<usize, String> {
+    let plugin = registry.resolve_plugin(&id).map_err(|e| e.to_string())?;
+    require_mcp(plugin.as_ref(), &id)?;
+    let servers = plugin
+        .as_mcp()
+        .unwrap()
+        .get_mcp_servers()
+        .map_err(|e| e.to_string())?;
+    let mut imported = 0;
+    for spec in servers {
+        McpService::import_spec_with_merge(&db, &id, &spec)?;
+        imported += 1;
+    }
+    Ok(imported)
 }
 
-/// 设置启用状态并同步到客户端配置
-#[tauri::command]
-#[allow(deprecated)] // 兼容层命令，内部调用已废弃的 Service 方法
-pub async fn set_mcp_enabled(
-    state: State<'_, AppState>,
-    app: String,
-    id: String,
-    enabled: bool,
-) -> Result<bool, String> {
-    let app_ty = AppType::from_str(&app).map_err(|e| e.to_string())?;
-    McpService::set_enabled(&state, app_ty, &id, enabled).map_err(|e| e.to_string())
+fn require_mcp(plugin: &dyn crate::plugin::AgentPlugin, id: &str) -> Result<(), String> {
+    if !plugin.capabilities().mcp {
+        return Err(format!("插件 '{id}' 不支持 MCP 管理"));
+    }
+    if plugin.as_mcp().is_none() {
+        return Err(format!("插件 '{id}' 不支持 MCP 管理"));
+    }
+    Ok(())
 }
 
-// ============================================================================
-// v3.7.0 新增：统一 MCP 管理命令
-// ============================================================================
-
-use crate::app_config::McpServer;
-
-/// 获取所有 MCP 服务器（统一结构）
+/// 列出全部 MCP 服务器。
 #[tauri::command]
-pub async fn get_mcp_servers(
-    state: State<'_, AppState>,
-) -> Result<IndexMap<String, McpServer>, String> {
-    McpService::get_all_servers(&state).map_err(|e| e.to_string())
+pub fn mcp_list(db: State<'_, Database>) -> Result<Vec<McpServer>, String> {
+    db.list_mcp_servers().map_err(|e| e.to_string())
 }
 
-/// 添加或更新 MCP 服务器
+/// 新增或更新 MCP 服务器，并同步到启用插件的 live 配置。
+///
+/// 对齐 v1：编辑时被取消勾选的插件，需从其 live 配置移除该服务器，
+/// 避免残留脏数据。
 #[tauri::command]
-pub async fn upsert_mcp_server(
-    state: State<'_, AppState>,
+pub fn mcp_upsert(
+    db: State<'_, Database>,
+    registry: State<'_, PluginRegistry>,
     server: McpServer,
 ) -> Result<(), String> {
-    McpService::upsert_server(&state, server).map_err(|e| e.to_string())
+    McpService::upsert_server_full(&db, &registry, &server)
 }
 
-/// 删除 MCP 服务器
+/// 删除 MCP 服务器，并从所有启用插件的 live 配置移除。
 #[tauri::command]
-pub async fn delete_mcp_server(state: State<'_, AppState>, id: String) -> Result<bool, String> {
-    McpService::delete_server(&state, &id).map_err(|e| e.to_string())
+pub fn mcp_delete(
+    db: State<'_, Database>,
+    registry: State<'_, PluginRegistry>,
+    id: String,
+) -> Result<(), String> {
+    let server = db.get_mcp_server(&id).map_err(|e| e.to_string())?;
+    if let Some(server) = server {
+        McpService::remove_server_from_enabled(&db, &registry, &server)?;
+    }
+    db.delete_mcp_server(&id).map_err(|e| e.to_string())?;
+    Ok(())
 }
 
-/// 切换 MCP 服务器在指定应用的启用状态
+/// 切换某个 MCP 服务器在指定插件的启用状态。
 #[tauri::command]
-pub async fn toggle_mcp_app(
-    state: State<'_, AppState>,
-    server_id: String,
-    app: String,
+pub fn mcp_toggle_app(
+    db: State<'_, Database>,
+    registry: State<'_, PluginRegistry>,
+    id: String,
+    plugin_id: String,
     enabled: bool,
 ) -> Result<(), String> {
-    let app_ty = AppType::from_str(&app).map_err(|e| e.to_string())?;
-    McpService::toggle_app(&state, &server_id, app_ty, enabled).map_err(|e| e.to_string())
-}
-
-/// 从所有应用导入 MCP 服务器（复用已有的导入逻辑）
-#[tauri::command]
-pub async fn import_mcp_from_apps(state: State<'_, AppState>) -> Result<usize, String> {
-    McpService::import_from_all_apps(&state).map_err(|e| e.to_string())
+    let exists = db.get_mcp_server(&id).map_err(|e| e.to_string())?.is_some();
+    if !exists {
+        return Err(format!("MCP 服务器不存在: {id}"));
+    }
+    if enabled {
+        db.set_mcp_server_app_enabled(&id, &plugin_id, true)
+            .map_err(|e| e.to_string())?;
+        let updated = db.get_mcp_server(&id).map_err(|e| e.to_string())?.unwrap();
+        McpService::sync_server_to_plugin(&db, &registry, &updated, &plugin_id)?;
+    } else {
+        McpService::remove_server_from_plugin(&db, &registry, &id, &plugin_id)?;
+        db.set_mcp_server_app_enabled(&id, &plugin_id, false)
+            .map_err(|e| e.to_string())?;
+    }
+    Ok(())
 }

@@ -4,17 +4,14 @@ import react from "@vitejs/plugin-react";
 
 export default defineConfig({
   plugins: [react()],
+  test: {
+    environment: "jsdom",
+    globals: true,
+    setupFiles: ["./tests/setup.ts"],
+  },
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./src"),
-    },
-  },
-  test: {
-    environment: "jsdom",
-    setupFiles: ["./tests/setupGlobals.ts", "./tests/setupTests.ts"],
-    globals: true,
-    coverage: {
-      reporter: ["text", "lcov"],
     },
   },
 });

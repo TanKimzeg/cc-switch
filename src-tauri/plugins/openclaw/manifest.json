@@ -1,0 +1,19 @@
+{
+  "id": "openclaw",
+  "name": "OpenClaw",
+  "version": "0.1.0",
+  "apiVersion": "1",
+  "author": "cc-switch",
+  "description": "OpenClaw 插件：管理 openclaw 命令的配置与切换。",
+  "capabilities": {
+    "readLive": true,
+    "apply": true,
+    "import": true,
+    "sessions": false
+  },
+  "entry": {
+    "type": "shell",
+    "command": "openclaw",
+    "args": []
+  }
+}

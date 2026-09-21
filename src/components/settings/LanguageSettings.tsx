@@ -2,7 +2,7 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { useTranslation } from "react-i18next";
 
-type LanguageOption = "zh" | "zh-TW" | "en" | "ja";
+export type LanguageOption = "zh" | "en";
 
 interface LanguageSettingsProps {
   value: LanguageOption;
@@ -24,17 +24,8 @@ export function LanguageSettings({ value, onChange }: LanguageSettingsProps) {
         <LanguageButton active={value === "zh"} onClick={() => onChange("zh")}>
           {t("settings.languageOptionChinese")}
         </LanguageButton>
-        <LanguageButton
-          active={value === "zh-TW"}
-          onClick={() => onChange("zh-TW")}
-        >
-          {t("settings.languageOptionTraditionalChinese")}
-        </LanguageButton>
         <LanguageButton active={value === "en"} onClick={() => onChange("en")}>
           {t("settings.languageOptionEnglish")}
-        </LanguageButton>
-        <LanguageButton active={value === "ja"} onClick={() => onChange("ja")}>
-          {t("settings.languageOptionJapanese")}
         </LanguageButton>
       </div>
     </section>

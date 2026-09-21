@@ -1,0 +1,21 @@
+{
+  "id": "grokbuild",
+  "name": "Grok Build",
+  "version": "0.1.0",
+  "apiVersion": "1",
+  "author": "cc-switch",
+  "description": "Grok Build 插件：读写 ~/.grok/config.toml、MCP 与会话。",
+  "capabilities": {
+    "readLive": true,
+    "apply": true,
+    "import": true,
+    "sessions": true,
+    "mcp": true
+  },
+  "promptFile": "~/.grok/AGENTS.md",
+  "skillsDir": "~/.grok/skills",
+  "entry": {
+    "type": "native",
+    "module": "grokbuild"
+  }
+}
