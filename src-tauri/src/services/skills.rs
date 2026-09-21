@@ -316,6 +316,9 @@ fn sanitize_skill_source_path(directory: &str) -> Option<PathBuf> {
 /// 校验 DB 中的 directory 字段：单段、不含分隔符/前导点、字节级往返一致
 /// （拦截 Unicode 规范化不一致的脏值）。用于任何 join 后会有删除/复制风险的地方。
 fn require_valid_directory(directory: &str) -> Result<PathBuf, String> {
+    if directory.contains('\\') || directory.contains('/') {
+        return Err(format!("非法技能目录: {}", directory.escape_debug()));
+    }
     let sanitized = sanitize_skill_source_path(directory)
         .ok_or_else(|| format!("非法技能目录: {}", directory.escape_debug()))?;
     if sanitized.components().count() != 1 {
